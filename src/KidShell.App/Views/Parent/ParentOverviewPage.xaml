@@ -1,0 +1,125 @@
+<UserControl
+    x:Class="KidShell.App.Views.Parent.ParentOverviewPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="26,24,26,24" Spacing="18">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Overview.Title}" />
+                <TextBlock
+                    x:Name="SubtitleText"
+                    Margin="0,4,0,0"
+                    Style="{StaticResource SecondaryTextStyle}" />
+            </StackPanel>
+
+            <!-- Four metric cards -->
+            <Grid ColumnSpacing="16" RowSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource BrandBlueBrush}"
+                                Glyph="&#xE8A9;"
+                                VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.AppsTitle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="AppsValueText" Style="{StaticResource MetricValueTextStyle}" />
+                        <TextBlock x:Name="AppsHintText" Style="{StaticResource CaptionTextStyle}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Glyph="&#xE823;"
+                                VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.ScreenTimeTitle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="ScreenTimeValueText" Style="{StaticResource MetricValueTextStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.ScreenTimeHint}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource TextSecondaryBrush}"
+                                Glyph="&#xE774;"
+                                VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.WebTitle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="WebValueText" Style="{StaticResource MetricValueTextStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.WebHint}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource TintRoseBrush}" Style="{StaticResource InfoPanelStyle}">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource StatusAlertBrush}"
+                                Glyph="&#xEA18;"
+                                VerticalAlignment="Center" />
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.SecurityTitle}" />
+                        </StackPanel>
+                        <TextBlock x:Name="SecurityValueText" Style="{StaticResource MetricValueTextStyle}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.SecurityHint}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!--
+                The honesty banner. MVP 0.1 has applied no Windows lockdown and
+                this screen says so where a parent cannot miss it.
+            -->
+            <Border Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Grid.Column="0"
+                        FontFamily="{StaticResource SymbolFontFamily}"
+                        FontSize="22"
+                        Foreground="{StaticResource StatusWarningBrush}"
+                        Glyph="&#xE7BA;"
+                        VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="1" Spacing="5">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.BannerTitle}" />
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="{loc:Str Key=Overview.BannerBody}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

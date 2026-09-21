@@ -1,0 +1,38 @@
+<Application
+    x:Class="KidShell.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:conv="using:KidShell.App.Converters"
+    RequestedTheme="Light">
+
+    <!--
+        KidShell is a light-only design: the child screen is an illustrated
+        daytime scene and the parent screen is its calmer sibling. The theme is
+        pinned so the artwork and the accent palette stay legible whatever the
+        system theme is set to.
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+
+                <!-- Design system, in dependency order -->
+                <ResourceDictionary Source="ms-appx:///Themes/Tokens.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Typography.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Surfaces.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Buttons.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Cards.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Navigation.xaml" />
+
+                <!-- Vector artwork -->
+                <ResourceDictionary Source="ms-appx:///Themes/AppIcons.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Avatars.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <conv:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+            <conv:StringToVisibilityConverter x:Key="StringToVisibility" />
+            <conv:InverseBooleanConverter x:Key="InverseBoolean" />
+            <conv:SelectionThicknessConverter x:Key="SelectionThickness" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

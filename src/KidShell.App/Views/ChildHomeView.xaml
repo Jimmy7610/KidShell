@@ -1,0 +1,289 @@
+<UserControl
+    x:Class="KidShell.App.Views.ChildHomeView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:KidShell.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:views="using:KidShell.App.Views"
+    xmlns:vm="using:KidShell.App.ViewModels"
+    x:Name="RootControl"
+    mc:Ignorable="d">
+
+    <Grid Padding="{StaticResource StagePadding}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================= Header ============================= -->
+        <Grid Grid.Row="0" ColumnSpacing="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Wordmark -->
+            <StackPanel Grid.Column="0" VerticalAlignment="Top">
+                <Grid HorizontalAlignment="Left">
+                    <TextBlock
+                        Style="{StaticResource WordmarkTextStyle}"
+                        Text="{loc:Str Key=Child.Wordmark}" />
+                    <Canvas
+                        Width="46" Height="34"
+                        Margin="0,-6,-40,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top">
+                        <Path
+                            Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
+                            StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                            Data="M 10,26 L 6,6 M 24,20 L 28,2 M 36,28 L 44,14" />
+                    </Canvas>
+                </Grid>
+                <TextBlock
+                    Margin="4,2,0,0"
+                    Style="{StaticResource TaglineTextStyle}"
+                    Text="{loc:Str Key=Child.Tagline}" />
+            </StackPanel>
+
+            <!-- Child identity -->
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="16"
+                VerticalAlignment="Top"
+                Margin="0,6,0,0">
+                <Border
+                    Width="76" Height="76"
+                    Background="{StaticResource PanelStrongBrush}"
+                    BorderBrush="{StaticResource BrandBlueLightBrush}"
+                    BorderThickness="4"
+                    CornerRadius="{StaticResource RadiusPill}">
+                    <Border CornerRadius="{StaticResource RadiusPill}">
+                        <Viewbox>
+                            <controls:AvatarPresenter x:Name="Avatar" Width="100" Height="100" />
+                        </Viewbox>
+                    </Border>
+                </Border>
+
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock
+                        x:Name="GreetingText"
+                        FontFamily="{StaticResource DisplayFontFamily}"
+                        FontSize="23"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="{loc:Str Key=Child.Encouragement}" />
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="14"
+                            Foreground="{StaticResource BrandSparkBrush}"
+                            Glyph="&#xE735;"
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- System status -->
+            <views:StatusStrip
+                x:Name="Status"
+                Grid.Column="2"
+                Margin="0,12,4,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top" />
+        </Grid>
+
+        <!-- ============================= App grid ============================= -->
+        <Grid Grid.Row="1" Margin="0,22,0,10">
+            <ScrollViewer
+                x:Name="GridScroller"
+                HorizontalScrollMode="Disabled"
+                VerticalScrollBarVisibility="Auto"
+                Padding="0,6,0,6">
+                <ItemsRepeater
+                    x:Name="AppGrid"
+                    MaxWidth="1180"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout
+                            ItemsStretch="Fill"
+                            MinColumnSpacing="22"
+                            MinItemHeight="186"
+                            MinItemWidth="232"
+                            MinRowSpacing="22" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ChildAppTileViewModel">
+                            <Button
+                                AutomationProperties.Name="{x:Bind AutomationName}"
+                                Background="{x:Bind AccentBrush}"
+                                Click="OnTileClick"
+                                Style="{StaticResource ChildAppCardStyle}"
+                                Tag="{x:Bind}"
+                                ToolTipService.ToolTip="{x:Bind DisplayName}">
+                                <Grid Padding="16,18,16,16">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Viewbox
+                                        Grid.Row="0"
+                                        MaxHeight="96"
+                                        Margin="0,0,0,10">
+                                        <controls:AppIconPresenter
+                                            Width="100" Height="100"
+                                            IconKey="{x:Bind IconKey}" />
+                                    </Viewbox>
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        Style="{StaticResource CardLabelTextStyle}"
+                                        Text="{x:Bind DisplayName}" />
+                                </Grid>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <!-- Shown when a parent has switched everything off -->
+            <Border
+                x:Name="EmptyState"
+                MaxWidth="460"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Style="{StaticResource PanelStyle}"
+                Translation="0,0,22"
+                Visibility="Collapsed">
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        Text="{loc:Str Key=Child.EmptyGridTitle}" />
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SecondaryTextStyle}"
+                        TextAlignment="Center"
+                        Text="{loc:Str Key=Child.EmptyGridBody}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- ============================= Footer ============================= -->
+        <Grid Grid.Row="2" VerticalAlignment="Bottom">
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="10"
+                VerticalAlignment="Center"
+                HorizontalAlignment="Left">
+                <Border
+                    Width="26" Height="26"
+                    Background="{StaticResource BrandBlueLightBrush}"
+                    CornerRadius="{StaticResource RadiusSm}">
+                    <Grid Margin="5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0" Grid.Column="0" Margin="0,0,1,1" Fill="White" />
+                        <Rectangle Grid.Row="0" Grid.Column="1" Margin="1,0,0,1" Fill="White" />
+                        <Rectangle Grid.Row="1" Grid.Column="0" Margin="0,1,1,0" Fill="White" />
+                        <Rectangle Grid.Row="1" Grid.Column="1" Margin="1,1,0,0" Fill="White" />
+                    </Grid>
+                </Border>
+                <TextBlock
+                    Style="{StaticResource SecondaryTextStyle}"
+                    Text="{loc:Str Key=Child.FooterTagline}"
+                    VerticalAlignment="Center" />
+                <FontIcon
+                    FontFamily="{StaticResource SymbolFontFamily}"
+                    FontSize="14"
+                    Foreground="{StaticResource BrandBlueLightBrush}"
+                    Glyph="&#xEB52;"
+                    VerticalAlignment="Center" />
+
+                <Border
+                    x:Name="DeveloperBadge"
+                    Margin="14,0,0,0"
+                    Background="{StaticResource TintAmberBrush}"
+                    Style="{StaticResource StatusChipStyle}"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Glyph="&#xE7BA;"
+                            Style="{StaticResource StatusGlyphStyle}" />
+                        <TextBlock
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Style="{StaticResource StatusChipTextStyle}"
+                            Text="{loc:Str Key=Dev.Badge}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="14"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center">
+                <Button
+                    x:Name="SettingsButton"
+                    Click="OnSettingsClick"
+                    Style="{StaticResource ChildChromeButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="9">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="17"
+                            Glyph="&#xE713;" />
+                        <TextBlock Text="{loc:Str Key=Child.Settings}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- The adult door: hold for three seconds -->
+                <controls:HoldButton
+                    x:Name="ParentAccessButton"
+                    AutomationProperties.Name="{loc:Str Key=Child.ParentAccessAutomation}"
+                    Background="Transparent"
+                    Held="OnParentAccessHeld"
+                    HoldSeconds="3"
+                    Padding="6,2"
+                    Style="{StaticResource QuietButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Str Key=Child.ParentAccessHint}">
+                    <StackPanel Spacing="4">
+                        <Grid Width="52" Height="52" HorizontalAlignment="Center">
+                            <Ellipse Fill="{StaticResource PanelStrongBrush}" />
+                            <ProgressRing
+                                x:Name="HoldRing"
+                                Width="52" Height="52"
+                                Foreground="{StaticResource BrandBlueLightBrush}"
+                                IsActive="True"
+                                IsIndeterminate="False"
+                                Maximum="100"
+                                Value="{x:Bind ParentAccessButton.Progress, Mode=OneWay}" />
+                            <FontIcon
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource TextPrimaryBrush}"
+                                Glyph="&#xE72E;" />
+                        </Grid>
+                        <TextBlock
+                            FontSize="12"
+                            Foreground="{StaticResource TextSecondaryBrush}"
+                            HorizontalAlignment="Center"
+                            Text="{loc:Str Key=Child.ParentAccess}" />
+                    </StackPanel>
+                </controls:HoldButton>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

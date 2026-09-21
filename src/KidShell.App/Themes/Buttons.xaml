@@ -1,0 +1,145 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============ Shared button chrome ============ -->
+    <Style x:Key="KidShellButtonBaseStyle" TargetType="Button">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Padding" Value="22,11" />
+        <Setter Property="MinHeight" Value="44" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusPill}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-4" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="3" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="2" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{StaticResource FocusOuterBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{StaticResource FocusInnerBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="LayoutRoot">
+                        <Border
+                            x:Name="Surface"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}" />
+                        <Border
+                            x:Name="Overlay"
+                            Background="#FF000000"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Opacity="0" />
+                        <ContentPresenter
+                            x:Name="ContentPresenter"
+                            Padding="{TemplateBinding Padding}"
+                            HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                            VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}" />
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualStateGroup.Transitions>
+                                    <VisualTransition GeneratedDuration="0:0:0.1" />
+                                </VisualStateGroup.Transitions>
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="Overlay"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.06"
+                                            Duration="0:0:0.1" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="Overlay"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.14"
+                                            Duration="0:0:0.06" />
+                                    </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="LayoutRoot"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.4"
+                                            Duration="0" />
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============ Primary ============ -->
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="{StaticResource PrimaryActionBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextOnAccentBrush}" />
+        <Setter Property="Padding" Value="26,12" />
+    </Style>
+
+    <!-- ============ Secondary (white pill) ============ -->
+    <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="{StaticResource PanelStrongBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource HairlineBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- ============ Quiet (transparent until touched) ============ -->
+    <Style x:Key="QuietButtonStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="#00FFFFFF" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="MinHeight" Value="36" />
+    </Style>
+
+    <!-- ============ Soft tinted (used inside info panels) ============ -->
+    <Style x:Key="SoftButtonStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="#FFDCEBFA" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource BrandBlueBrush}" />
+        <Setter Property="Padding" Value="18,8" />
+        <Setter Property="MinHeight" Value="38" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- ============ Child-mode chrome pill (Inställningar) ============ -->
+    <Style x:Key="ChildChromeButtonStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="{StaticResource PanelStrongBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="Padding" Value="18,10" />
+        <Setter Property="MinHeight" Value="46" />
+        <Setter Property="FontSize" Value="14" />
+    </Style>
+
+    <!-- ============ Numeric keypad key ============ -->
+    <Style x:Key="PinKeyStyle" TargetType="Button" BasedOn="{StaticResource KidShellButtonBaseStyle}">
+        <Setter Property="Background" Value="{StaticResource TintNeutralBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusLg}" />
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" />
+        <Setter Property="FontSize" Value="26" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Width" Value="84" />
+        <Setter Property="Height" Value="64" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+</ResourceDictionary>

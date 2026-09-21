@@ -1,0 +1,47 @@
+<UserControl
+    x:Class="KidShell.App.Views.StatusStrip"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        Clock, network and battery. Read-only system state; KidShell changes
+        nothing about either. Every readout has a text or glyph fallback so
+        that a machine without a battery simply shows less, never an error.
+    -->
+    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+
+        <FontIcon
+            x:Name="NetworkGlyph"
+            FontFamily="{StaticResource SymbolFontFamily}"
+            FontSize="20"
+            Foreground="{StaticResource TextPrimaryBrush}"
+            Glyph="&#xE701;"
+            VerticalAlignment="Center" />
+
+        <TextBlock
+            x:Name="ClockText"
+            Style="{StaticResource StatusStripTextStyle}" />
+
+        <StackPanel
+            x:Name="BatteryPanel"
+            Orientation="Horizontal"
+            Spacing="8"
+            VerticalAlignment="Center">
+            <FontIcon
+                x:Name="BatteryGlyph"
+                FontFamily="{StaticResource SymbolFontFamily}"
+                FontSize="20"
+                Foreground="{StaticResource TextPrimaryBrush}"
+                Glyph="&#xE83F;"
+                VerticalAlignment="Center" />
+            <TextBlock
+                x:Name="BatteryText"
+                Style="{StaticResource StatusStripTextStyle}" />
+        </StackPanel>
+
+    </StackPanel>
+</UserControl>

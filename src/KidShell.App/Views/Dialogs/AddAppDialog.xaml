@@ -1,0 +1,140 @@
+<ContentDialog
+    x:Class="KidShell.App.Views.Dialogs.AddAppDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:KidShell.App.ViewModels"
+    Title="{loc:Str Key=AddApp.Title}"
+    CloseButtonText="{loc:Str Key=AddApp.Cancel}"
+    DefaultButton="Primary"
+    PrimaryButtonText="{loc:Str Key=AddApp.Save}"
+    mc:Ignorable="d">
+
+    <ScrollViewer MaxHeight="420" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Width="440" Padding="0,0,6,0" Spacing="12">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.NameLabel}" />
+                <TextBox
+                    x:Name="NameBox"
+                    AutomationProperties.Name="{loc:Str Key=AddApp.NameLabel}"
+                    PlaceholderText="{loc:Str Key=AddApp.NamePlaceholder}"
+                    Style="{StaticResource FormTextBoxStyle}"
+                    TextChanged="OnFieldChanged" />
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.ProgramLabel}" />
+                <TextBox
+                    x:Name="ProgramBox"
+                    AutomationProperties.Name="{loc:Str Key=AddApp.ProgramLabel}"
+                    PlaceholderText="{loc:Str Key=AddApp.ProgramPlaceholder}"
+                    Style="{StaticResource FormTextBoxStyle}"
+                    TextChanged="OnFieldChanged" />
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.PathLabel}" />
+                <Grid ColumnSpacing="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="PathBox"
+                        AutomationProperties.Name="{loc:Str Key=AddApp.PathLabel}"
+                        PlaceholderText="{loc:Str Key=AddApp.PathPlaceholder}"
+                        Style="{StaticResource FormTextBoxStyle}"
+                        TextChanged="OnFieldChanged" />
+                    <Button
+                        x:Name="BrowseButton"
+                        Grid.Column="1"
+                        Content="{loc:Str Key=AddApp.Browse}"
+                        Style="{StaticResource SecondaryButtonStyle}" />
+                </Grid>
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.ArgumentsLabel}" />
+                <TextBox
+                    x:Name="ArgumentsBox"
+                    AutomationProperties.Name="{loc:Str Key=AddApp.ArgumentsLabel}"
+                    Style="{StaticResource FormTextBoxStyle}"
+                    TextChanged="OnFieldChanged" />
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.CategoryLabel}" />
+                <TextBox
+                    x:Name="CategoryBox"
+                    AutomationProperties.Name="{loc:Str Key=AddApp.CategoryLabel}"
+                    Style="{StaticResource FormTextBoxStyle}"
+                    TextChanged="OnFieldChanged" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.IconLabel}" />
+                    <ComboBox
+                        x:Name="IconBox"
+                        AutomationProperties.Name="{loc:Str Key=AddApp.IconLabel}"
+                        CornerRadius="{StaticResource RadiusMd}"
+                        DisplayMemberPath="Label"
+                        HorizontalAlignment="Stretch"
+                        MinHeight="42"
+                        SelectionChanged="OnFieldSelectionChanged" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.ColorLabel}" />
+                    <ComboBox
+                        x:Name="AccentBox"
+                        AutomationProperties.Name="{loc:Str Key=AddApp.ColorLabel}"
+                        CornerRadius="{StaticResource RadiusMd}"
+                        HorizontalAlignment="Stretch"
+                        MinHeight="42"
+                        SelectionChanged="OnFieldSelectionChanged">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AccentChoice">
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Border
+                                        Width="22" Height="22"
+                                        Background="{x:Bind Brush}"
+                                        CornerRadius="{StaticResource RadiusSm}"
+                                        VerticalAlignment="Center" />
+                                    <TextBlock Text="{x:Bind Label}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+            </Grid>
+
+            <StackPanel
+                x:Name="ValidationPanel"
+                Orientation="Horizontal"
+                Spacing="9"
+                Visibility="Collapsed">
+                <FontIcon
+                    FontFamily="{StaticResource SymbolFontFamily}"
+                    FontSize="15"
+                    Foreground="{StaticResource StatusAlertBrush}"
+                    Glyph="&#xEA39;"
+                    VerticalAlignment="Center" />
+                <TextBlock
+                    x:Name="ValidationText"
+                    Foreground="{StaticResource StatusAlertBrush}"
+                    Style="{StaticResource BodyTextStyle}"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

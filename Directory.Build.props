@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Shared build settings for every KidShell project.
+    Keeping these central avoids per-project drift as the solution grows.
+  -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <Product>KidShell</Product>
+    <Company>KidShell</Company>
+    <Version>0.1.0</Version>
+    <NeutralLanguage>sv-SE</NeutralLanguage>
+    <!-- Source files are UTF-8 without a BOM and contain Swedish text. -->
+    <CodePage>65001</CodePage>
+  </PropertyGroup>
+
+</Project>

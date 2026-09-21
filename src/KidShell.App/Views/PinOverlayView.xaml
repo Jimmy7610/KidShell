@@ -1,0 +1,150 @@
+<UserControl
+    x:Class="KidShell.App.Views.PinOverlayView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    IsTabStop="False"
+    mc:Ignorable="d">
+
+    <!--
+        The PIN gate. A modal scrim over Child Mode; nothing behind it is
+        reachable by pointer or keyboard while it is up.
+    -->
+    <Grid Background="{StaticResource ScrimBrush}">
+
+        <Border
+            MaxWidth="420"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Background="{StaticResource PanelStrongBrush}"
+            CornerRadius="{StaticResource RadiusXl}"
+            Padding="34,30,34,26"
+            Shadow="{StaticResource OverlayShadow}"
+            Translation="0,0,64">
+
+            <StackPanel Spacing="6">
+
+                <Border
+                    Width="62" Height="62"
+                    HorizontalAlignment="Center"
+                    Background="{StaticResource TintBlueBrush}"
+                    CornerRadius="{StaticResource RadiusPill}">
+                    <FontIcon
+                        FontFamily="{StaticResource SymbolFontFamily}"
+                        FontSize="26"
+                        Foreground="{StaticResource BrandBlueBrush}"
+                        Glyph="&#xE72E;" />
+                </Border>
+
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Margin="0,12,0,0"
+                    Style="{StaticResource PageTitleTextStyle}"
+                    Text="{loc:Str Key=Pin.Title}" />
+
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource SecondaryTextStyle}"
+                    Text="{loc:Str Key=Pin.Prompt}" />
+
+                <!-- Entry indicator -->
+                <StackPanel
+                    x:Name="Dots"
+                    HorizontalAlignment="Center"
+                    Margin="0,18,0,4"
+                    Orientation="Horizontal"
+                    Spacing="12" />
+
+                <!-- Error line: text, not just colour -->
+                <StackPanel
+                    x:Name="ErrorPanel"
+                    HorizontalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="Collapsed">
+                    <FontIcon
+                        FontFamily="{StaticResource SymbolFontFamily}"
+                        FontSize="15"
+                        Foreground="{StaticResource StatusAlertBrush}"
+                        Glyph="&#xEA39;"
+                        VerticalAlignment="Center" />
+                    <TextBlock
+                        Foreground="{StaticResource StatusAlertBrush}"
+                        FontWeight="SemiBold"
+                        Text="{loc:Str Key=Pin.Wrong}"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Keypad -->
+                <Grid
+                    x:Name="Keypad"
+                    HorizontalAlignment="Center"
+                    Margin="0,16,0,0"
+                    ColumnSpacing="12"
+                    RowSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Button Grid.Row="0" Grid.Column="0" Click="OnDigitClick" Content="1" Style="{StaticResource PinKeyStyle}" Tag="1" />
+                    <Button Grid.Row="0" Grid.Column="1" Click="OnDigitClick" Content="2" Style="{StaticResource PinKeyStyle}" Tag="2" />
+                    <Button Grid.Row="0" Grid.Column="2" Click="OnDigitClick" Content="3" Style="{StaticResource PinKeyStyle}" Tag="3" />
+                    <Button Grid.Row="1" Grid.Column="0" Click="OnDigitClick" Content="4" Style="{StaticResource PinKeyStyle}" Tag="4" />
+                    <Button Grid.Row="1" Grid.Column="1" Click="OnDigitClick" Content="5" Style="{StaticResource PinKeyStyle}" Tag="5" />
+                    <Button Grid.Row="1" Grid.Column="2" Click="OnDigitClick" Content="6" Style="{StaticResource PinKeyStyle}" Tag="6" />
+                    <Button Grid.Row="2" Grid.Column="0" Click="OnDigitClick" Content="7" Style="{StaticResource PinKeyStyle}" Tag="7" />
+                    <Button Grid.Row="2" Grid.Column="1" Click="OnDigitClick" Content="8" Style="{StaticResource PinKeyStyle}" Tag="8" />
+                    <Button Grid.Row="2" Grid.Column="2" Click="OnDigitClick" Content="9" Style="{StaticResource PinKeyStyle}" Tag="9" />
+
+                    <Button
+                        Grid.Row="3" Grid.Column="0"
+                        AutomationProperties.Name="{loc:Str Key=Pin.Clear}"
+                        Click="OnClearClick"
+                        FontSize="14"
+                        Content="{loc:Str Key=Pin.Clear}"
+                        Style="{StaticResource PinKeyStyle}" />
+                    <Button Grid.Row="3" Grid.Column="1" Click="OnDigitClick" Content="0" Style="{StaticResource PinKeyStyle}" Tag="0" />
+                    <Button
+                        Grid.Row="3" Grid.Column="2"
+                        AutomationProperties.Name="{loc:Str Key=Pin.Delete}"
+                        Click="OnBackspaceClick"
+                        Style="{StaticResource PinKeyStyle}">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="20"
+                            Glyph="&#xE750;" />
+                    </Button>
+                </Grid>
+
+                <Button
+                    x:Name="CancelButton"
+                    HorizontalAlignment="Center"
+                    Margin="0,18,0,0"
+                    Click="OnCancelClick"
+                    Content="{loc:Str Key=Pin.Cancel}"
+                    Style="{StaticResource QuietButtonStyle}" />
+
+                <TextBlock
+                    x:Name="DeveloperHint"
+                    HorizontalAlignment="Center"
+                    Margin="0,8,0,0"
+                    MaxWidth="330"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{loc:Str Key=Pin.DeveloperHint}"
+                    TextAlignment="Center"
+                    Visibility="Collapsed" />
+
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

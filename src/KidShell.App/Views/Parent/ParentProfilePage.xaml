@@ -1,0 +1,163 @@
+<UserControl
+    x:Class="KidShell.App.Views.Parent.ParentProfilePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:KidShell.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:KidShell.App.ViewModels.Parent"
+    mc:Ignorable="d">
+
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="26,24,26,24" Spacing="20">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Profile.Title}" />
+                <TextBlock
+                    Margin="0,4,0,0"
+                    Style="{StaticResource SecondaryTextStyle}"
+                    Text="{loc:Str Key=Profile.Subtitle}" />
+            </StackPanel>
+
+            <Grid ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Spacing="16">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.NameLabel}" />
+                        <TextBox
+                            x:Name="NameBox"
+                            AutomationProperties.Name="{loc:Str Key=Profile.NameLabel}"
+                            MaxLength="24"
+                            Style="{StaticResource FormTextBoxStyle}"
+                            TextChanged="OnNameChanged" />
+                    </StackPanel>
+
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AgeLabel}" />
+                            <TextBlock
+                                x:Name="AgeValueText"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource BrandBlueBrush}"
+                                HorizontalAlignment="Right"
+                                Style="{StaticResource BodyTextStyle}" />
+                        </Grid>
+                        <Slider
+                            x:Name="AgeSlider"
+                            AutomationProperties.Name="{loc:Str Key=Profile.AgeLabel}"
+                            Maximum="14"
+                            Minimum="2"
+                            StepFrequency="1"
+                            TickFrequency="1"
+                            TickPlacement="Outside"
+                            ValueChanged="OnAgeChanged" />
+                    </StackPanel>
+
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.ThemeLabel}" />
+                        <ComboBox
+                            x:Name="ThemeBox"
+                            AutomationProperties.Name="{loc:Str Key=Profile.ThemeLabel}"
+                            CornerRadius="{StaticResource RadiusMd}"
+                            DisplayMemberPath="Label"
+                            HorizontalAlignment="Stretch"
+                            MinHeight="42"
+                            SelectionChanged="OnThemeChanged" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Live preview of what the child will see -->
+                <Border
+                    Grid.Column="1"
+                    Width="248"
+                    Background="{StaticResource TintBlueBrush}"
+                    Style="{StaticResource InfoPanelStyle}"
+                    VerticalAlignment="Top">
+                    <StackPanel HorizontalAlignment="Center" Spacing="10">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource FormLabelStyle}"
+                            Text="{loc:Str Key=Profile.PreviewTitle}" />
+                        <Border
+                            Width="96" Height="96"
+                            Background="{StaticResource PanelStrongBrush}"
+                            BorderBrush="{StaticResource BrandBlueLightBrush}"
+                            BorderThickness="4"
+                            CornerRadius="{StaticResource RadiusPill}"
+                            HorizontalAlignment="Center">
+                            <Viewbox>
+                                <controls:AvatarPresenter x:Name="PreviewAvatar" Width="100" Height="100" />
+                            </Viewbox>
+                        </Border>
+                        <TextBlock
+                            x:Name="PreviewGreetingText"
+                            FontFamily="{StaticResource DisplayFontFamily}"
+                            FontSize="20"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource TextPrimaryBrush}"
+                            HorizontalAlignment="Center" />
+                        <TextBlock
+                            x:Name="PreviewSummaryText"
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource SecondaryTextStyle}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AvatarLabel}" />
+                <ItemsRepeater x:Name="AvatarList">
+                    <ItemsRepeater.Layout>
+                        <UniformGridLayout MinColumnSpacing="14" MinItemHeight="104" MinItemWidth="104" MinRowSpacing="14" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AvatarChoiceViewModel">
+                            <Button
+                                AutomationProperties.Name="{x:Bind AutomationName}"
+                                Background="Transparent"
+                                Click="OnAvatarClick"
+                                CornerRadius="{StaticResource RadiusPill}"
+                                Padding="0"
+                                Style="{StaticResource QuietButtonStyle}"
+                                Tag="{x:Bind}">
+                                <Border
+                                    Width="92" Height="92"
+                                    Background="{StaticResource PanelStrongBrush}"
+                                    BorderBrush="{StaticResource BrandBlueLightBrush}"
+                                    BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThickness}}"
+                                    CornerRadius="{StaticResource RadiusPill}">
+                                    <Grid>
+                                        <Viewbox Margin="4">
+                                            <controls:AvatarPresenter AvatarId="{x:Bind Id}" Width="100" Height="100" />
+                                        </Viewbox>
+                                        <!-- Selection is shown by a badge as well as the ring. -->
+                                        <Border
+                                            Width="26" Height="26"
+                                            Background="{StaticResource BrandBlueBrush}"
+                                            CornerRadius="{StaticResource RadiusPill}"
+                                            HorizontalAlignment="Right"
+                                            Margin="0,0,2,2"
+                                            VerticalAlignment="Bottom"
+                                            Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
+                                            <FontIcon
+                                                FontFamily="{StaticResource SymbolFontFamily}"
+                                                FontSize="12"
+                                                Foreground="White"
+                                                Glyph="&#xE73E;" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

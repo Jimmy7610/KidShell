@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    KidShell.Core deliberately targets plain net10.0 (no Windows TFM).
+    Everything in here must stay unit-testable without WinUI, without a
+    package identity and without launching real processes.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>KidShell.Core</RootNamespace>
+    <AssemblyName>KidShell.Core</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KidShell.Core.Tests" />
+  </ItemGroup>
+
+</Project>

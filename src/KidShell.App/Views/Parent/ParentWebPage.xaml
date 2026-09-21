@@ -1,0 +1,149 @@
+<UserControl
+    x:Class="KidShell.App.Views.Parent.ParentWebPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="26,24,26,24" Spacing="20">
+
+            <StackPanel>
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Web.Title}" />
+                <TextBlock
+                    x:Name="SubtitleText"
+                    Margin="0,4,0,0"
+                    Style="{StaticResource SecondaryTextStyle}" />
+            </StackPanel>
+
+            <StackPanel Spacing="12">
+                <RadioButton
+                    x:Name="ModeNone"
+                    Checked="OnModeChecked"
+                    GroupName="WebMode"
+                    Tag="None">
+                    <StackPanel Margin="4,0,0,0" Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=Web.ModeNone}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Web.ModeNoneHint}" />
+                    </StackPanel>
+                </RadioButton>
+
+                <RadioButton
+                    x:Name="ModeAllowlist"
+                    Checked="OnModeChecked"
+                    GroupName="WebMode"
+                    Tag="Allowlist">
+                    <StackPanel Margin="4,0,0,0" Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=Web.ModeAllowlist}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Web.ModeAllowlistHint}" />
+                    </StackPanel>
+                </RadioButton>
+
+                <RadioButton
+                    x:Name="ModeOpen"
+                    Checked="OnModeChecked"
+                    GroupName="WebMode"
+                    Tag="Open">
+                    <StackPanel Margin="4,0,0,0" Spacing="2">
+                        <TextBlock FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=Web.ModeOpen}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Web.ModeOpenHint}" />
+                    </StackPanel>
+                </RadioButton>
+            </StackPanel>
+
+            <!-- Allowlist editor -->
+            <Border x:Name="AllowlistPanel" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Web.AllowlistTitle}" />
+
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="DomainBox"
+                            AutomationProperties.Name="{loc:Str Key=Web.AddDomainPlaceholder}"
+                            KeyDown="OnDomainKeyDown"
+                            PlaceholderText="{loc:Str Key=Web.AddDomainPlaceholder}"
+                            Style="{StaticResource FormTextBoxStyle}" />
+                        <Button
+                            x:Name="AddDomainButton"
+                            Grid.Column="1"
+                            Click="OnAddDomainClick"
+                            Content="{loc:Str Key=Web.AddDomain}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                    </Grid>
+
+                    <ItemsRepeater x:Name="DomainList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Border
+                                    Background="{StaticResource PanelStrongBrush}"
+                                    CornerRadius="{StaticResource RadiusMd}"
+                                    Padding="14,9">
+                                    <Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                            <FontIcon
+                                                FontFamily="{StaticResource SymbolFontFamily}"
+                                                FontSize="14"
+                                                Foreground="{StaticResource BrandBlueBrush}"
+                                                Glyph="&#xE774;" />
+                                            <TextBlock Style="{StaticResource BodyTextStyle}" Text="{x:Bind}" />
+                                        </StackPanel>
+                                        <Button
+                                            Click="OnRemoveDomainClick"
+                                            HorizontalAlignment="Right"
+                                            Padding="8,4"
+                                            Style="{StaticResource QuietButtonStyle}"
+                                            Tag="{x:Bind}">
+                                            <FontIcon
+                                                FontFamily="{StaticResource SymbolFontFamily}"
+                                                FontSize="13"
+                                                Foreground="{StaticResource TextSecondaryBrush}"
+                                                Glyph="&#xE74D;" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <TextBlock
+                        x:Name="EmptyAllowlistText"
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="{loc:Str Key=Web.EmptyAllowlist}"
+                        Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <Border Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Grid.Column="0"
+                        FontFamily="{StaticResource SymbolFontFamily}"
+                        FontSize="22"
+                        Foreground="{StaticResource StatusWarningBrush}"
+                        Glyph="&#xE7BA;"
+                        VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="1" Spacing="5">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Web.NoticeTitle}" />
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="{loc:Str Key=Web.NoticeBody}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

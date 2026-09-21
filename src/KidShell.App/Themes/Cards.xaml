@@ -1,0 +1,137 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Child Mode app card.
+
+        A real Button underneath, so mouse, touch, Enter/Space, narrator and
+        the system focus visual all work without extra code. The template adds
+        the soft raised look from the approved design plus lift-on-hover and
+        press-down feedback.
+    -->
+    <Style x:Key="ChildAppCardStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource AccentSkyBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="CornerRadius" Value="{StaticResource RadiusCard}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="VerticalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-6" />
+        <Setter Property="FocusVisualPrimaryThickness" Value="3" />
+        <Setter Property="FocusVisualSecondaryThickness" Value="2" />
+        <Setter Property="FocusVisualPrimaryBrush" Value="{StaticResource FocusOuterBrush}" />
+        <Setter Property="FocusVisualSecondaryBrush" Value="{StaticResource FocusInnerBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid x:Name="LayoutRoot" Background="Transparent" RenderTransformOrigin="0.5,0.55">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="CardScale" ScaleX="1" ScaleY="1" />
+                        </Grid.RenderTransform>
+
+                        <Border
+                            x:Name="CardSurface"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Shadow="{StaticResource CardShadow}"
+                            Translation="0,0,14">
+                            <Grid>
+                                <!-- Soft highlight so the flat accent reads as a rounded object. -->
+                                <Border CornerRadius="{TemplateBinding CornerRadius}">
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                            <GradientStop Offset="0" Color="#33FFFFFF" />
+                                            <GradientStop Offset="0.55" Color="#00FFFFFF" />
+                                            <GradientStop Offset="1" Color="#14000000" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+
+                                <Border
+                                    x:Name="HoverSheen"
+                                    Background="#FFFFFFFF"
+                                    CornerRadius="{TemplateBinding CornerRadius}"
+                                    Opacity="0" />
+
+                                <ContentPresenter
+                                    x:Name="ContentPresenter"
+                                    Padding="{TemplateBinding Padding}"
+                                    HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}" />
+                            </Grid>
+                        </Border>
+
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualStateGroup.Transitions>
+                                    <VisualTransition GeneratedDuration="0:0:0.12" />
+                                </VisualStateGroup.Transitions>
+
+                                <VisualState x:Name="Normal" />
+
+                                <VisualState x:Name="PointerOver">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="CardScale"
+                                            Storyboard.TargetProperty="ScaleX"
+                                            To="1.035"
+                                            Duration="0:0:0.14" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="CardScale"
+                                            Storyboard.TargetProperty="ScaleY"
+                                            To="1.035"
+                                            Duration="0:0:0.14" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="HoverSheen"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.16"
+                                            Duration="0:0:0.14" />
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="Pressed">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="CardScale"
+                                            Storyboard.TargetProperty="ScaleX"
+                                            To="0.965"
+                                            Duration="0:0:0.08" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="CardScale"
+                                            Storyboard.TargetProperty="ScaleY"
+                                            To="0.965"
+                                            Duration="0:0:0.08" />
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="HoverSheen"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.06"
+                                            Duration="0:0:0.08" />
+                                    </Storyboard>
+                                </VisualState>
+
+                                <VisualState x:Name="Disabled">
+                                    <Storyboard>
+                                        <DoubleAnimation
+                                            Storyboard.TargetName="LayoutRoot"
+                                            Storyboard.TargetProperty="Opacity"
+                                            To="0.45"
+                                            Duration="0" />
+                                    </Storyboard>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

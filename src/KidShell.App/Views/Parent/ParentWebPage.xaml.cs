@@ -1,0 +1,109 @@
+using KidShell.App.ViewModels.Parent;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Windows.System;
+
+namespace KidShell.App.Views.Parent;
+
+/// <summary>Föräldraläge → Webb.</summary>
+public sealed partial class ParentWebPage : UserControl
+{
+    private ParentWebViewModel? _viewModel;
+    private bool _loading;
+
+    public ParentWebPage() => InitializeComponent();
+
+    public void Initialize(ParentWebViewModel viewModel)
+    {
+        _viewModel = viewModel;
+        DomainList.ItemsSource = viewModel.AllowedDomains;
+        viewModel.AllowedDomains.CollectionChanged += (_, _) => RenderAllowlist();
+        viewModel.PropertyChanged += (_, _) => Render();
+        Render();
+    }
+
+    private void Render()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        _loading = true;
+
+        SubtitleText.Text = _viewModel.Subtitle;
+        ModeNone.IsChecked = _viewModel.IsNoBrowser;
+        ModeAllowlist.IsChecked = _viewModel.IsAllowlist;
+        ModeOpen.IsChecked = _viewModel.IsOpenWeb;
+        DomainBox.Text = _viewModel.NewDomain;
+
+        // The allowlist editor is only meaningful in allowlist mode.
+        AllowlistPanel.Opacity = _viewModel.IsAllowlist ? 1 : 0.55;
+        AllowlistPanel.IsHitTestVisible = _viewModel.IsAllowlist;
+
+        RenderAllowlist();
+
+        _loading = false;
+    }
+
+    private void RenderAllowlist() =>
+        EmptyAllowlistText.Visibility = _viewModel?.AllowedDomains.Count > 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+    private void OnModeChecked(object sender, RoutedEventArgs e)
+    {
+        if (_loading || _viewModel is null || sender is not RadioButton { Tag: string tag })
+        {
+            return;
+        }
+
+        switch (tag)
+        {
+            case "None":
+                _viewModel.IsNoBrowser = true;
+                break;
+            case "Allowlist":
+                _viewModel.IsAllowlist = true;
+                break;
+            case "Open":
+                _viewModel.IsOpenWeb = true;
+                break;
+        }
+    }
+
+    private void OnAddDomainClick(object sender, RoutedEventArgs e) => AddDomain();
+
+    private void OnDomainKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            AddDomain();
+            e.Handled = true;
+        }
+    }
+
+    private void AddDomain()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        _viewModel.NewDomain = DomainBox.Text;
+        _viewModel.AddDomain();
+        DomainBox.Text = string.Empty;
+    }
+
+    private void OnRemoveDomainClick(object sender, RoutedEventArgs e)
+    {
+        var domain = (sender as FrameworkElement)?.Tag as string
+                     ?? (sender as FrameworkElement)?.DataContext as string;
+
+        if (!string.IsNullOrEmpty(domain))
+        {
+            _viewModel?.RemoveDomain(domain);
+        }
+    }
+}

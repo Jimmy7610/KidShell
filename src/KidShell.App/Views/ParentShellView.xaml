@@ -1,0 +1,438 @@
+<UserControl
+    x:Class="KidShell.App.Views.ParentShellView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:KidShell.App.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:parent="using:KidShell.App.Views.Parent"
+    xmlns:views="using:KidShell.App.Views"
+    x:Name="RootControl"
+    mc:Ignorable="d">
+
+    <Grid Padding="{StaticResource StagePadding}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================= Header ============================= -->
+        <Grid Grid.Row="0" ColumnSpacing="24">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Top">
+                <Grid HorizontalAlignment="Left">
+                    <TextBlock
+                        Style="{StaticResource WordmarkTextStyle}"
+                        Text="{loc:Str Key=Parent.Title}" />
+                    <Canvas
+                        Width="46" Height="34"
+                        Margin="0,-6,-40,0"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top">
+                        <Path
+                            Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
+                            StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                            Data="M 10,26 L 6,6 M 24,20 L 28,2 M 36,28 L 44,14" />
+                    </Canvas>
+                </Grid>
+                <TextBlock
+                    Margin="4,2,0,0"
+                    Style="{StaticResource TaglineTextStyle}"
+                    Text="{loc:Str Key=Parent.Subtitle}" />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Column="1"
+                Margin="0,6,0,0"
+                Orientation="Horizontal"
+                Spacing="16"
+                VerticalAlignment="Top">
+                <Border
+                    Width="76" Height="76"
+                    Background="{StaticResource PanelStrongBrush}"
+                    BorderBrush="{StaticResource BrandBlueLightBrush}"
+                    BorderThickness="4"
+                    CornerRadius="{StaticResource RadiusPill}">
+                    <Border CornerRadius="{StaticResource RadiusPill}">
+                        <Viewbox>
+                            <controls:AvatarPresenter x:Name="Avatar" Width="100" Height="100" />
+                        </Viewbox>
+                    </Border>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock
+                        x:Name="ChildSummaryText"
+                        FontFamily="{StaticResource DisplayFontFamily}"
+                        FontSize="23"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TextPrimaryBrush}" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock
+                            Style="{StaticResource SecondaryTextStyle}"
+                            Text="{loc:Str Key=Parent.ChildMotto}" />
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="13"
+                            Foreground="#FFE0574F"
+                            Glyph="&#xEB52;"
+                            VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+
+            <views:StatusStrip
+                x:Name="Status"
+                Grid.Column="2"
+                Margin="0,12,4,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top" />
+        </Grid>
+
+        <!-- ============================= Body ============================= -->
+        <Grid Grid.Row="1" Margin="0,20,0,14" ColumnSpacing="18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="AsideColumn" Width="352" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ========== Sidebar ========== -->
+            <Border Grid.Column="0" Width="218" Style="{StaticResource PanelStyle}" Padding="12" Translation="0,0,22">
+                <StackPanel AutomationProperties.Name="{loc:Str Key=Nav.Automation}">
+                    <RadioButton
+                        x:Name="NavOverview"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="Overview">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton
+                        x:Name="NavApps"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="Apps">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton
+                        x:Name="NavScreenTime"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="ScreenTime">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton
+                        x:Name="NavWeb"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="Web">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton
+                        x:Name="NavSecurity"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="Security">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton
+                        x:Name="NavProfile"
+                        Checked="OnNavChecked"
+                        GroupName="ParentNav"
+                        Style="{StaticResource NavigationItemStyle}"
+                        Tag="Profile">
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" />
+                            <TextBlock Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+                </StackPanel>
+            </Border>
+
+            <!-- ========== Page host ========== -->
+            <Border Grid.Column="1" Style="{StaticResource PanelStyle}" Padding="0" Translation="0,0,22">
+                <Grid>
+                    <parent:ParentOverviewPage x:Name="PageOverview" />
+                    <parent:ParentAppsPage x:Name="PageApps" Visibility="Collapsed" />
+                    <parent:ParentScreenTimePage x:Name="PageScreenTime" Visibility="Collapsed" />
+                    <parent:ParentWebPage x:Name="PageWeb" Visibility="Collapsed" />
+                    <parent:ParentSecurityPage x:Name="PageSecurity" Visibility="Collapsed" />
+                    <parent:ParentProfilePage x:Name="PageProfile" Visibility="Collapsed" />
+                </Grid>
+            </Border>
+
+            <!-- ========== At-a-glance column ========== -->
+            <ScrollViewer
+                x:Name="Aside"
+                Grid.Column="2"
+                HorizontalScrollMode="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="14">
+
+                    <Border Background="{StaticResource TintGreenBrush}" Style="{StaticResource InfoPanelStyle}">
+                        <StackPanel Spacing="10">
+                            <StackPanel Orientation="Horizontal" Spacing="14">
+                                <Border Background="#FFD7F0E0" Style="{StaticResource PanelBadgeStyle}">
+                                    <FontIcon
+                                        FontFamily="{StaticResource SymbolFontFamily}"
+                                        FontSize="22"
+                                        Foreground="{StaticResource StatusOkBrush}"
+                                        Glyph="&#xE72E;" />
+                                </Border>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.ParentPin}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,3,0,0">
+                                        <FontIcon
+                                            Foreground="{StaticResource StatusOkBrush}"
+                                            Glyph="&#xE73E;"
+                                            Style="{StaticResource StatusGlyphStyle}" />
+                                        <TextBlock
+                                            x:Name="PinStatusText"
+                                            Style="{StaticResource StatusChipTextStyle}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Krävs för att ändra inställningar." />
+                            <Button
+                                x:Name="ChangePinButton"
+                                Content="{loc:Str Key=Security.ChangePin}"
+                                HorizontalAlignment="Left"
+                                Style="{StaticResource SoftButtonStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
+                        <StackPanel Spacing="10">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="14">
+                                    <Border Background="#FFFCEBC4" Style="{StaticResource PanelBadgeStyle}">
+                                        <FontIcon
+                                            FontFamily="{StaticResource SymbolFontFamily}"
+                                            FontSize="22"
+                                            Foreground="{StaticResource StatusWarningBrush}"
+                                            Glyph="&#xE823;" />
+                                    </Border>
+                                    <TextBlock
+                                        Style="{StaticResource SectionTitleTextStyle}"
+                                        Text="{loc:Str Key=ScreenTime.Title}"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="GoToScreenTimeButton"
+                                    Click="OnGoToScreenTime"
+                                    Content="Ändra"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource SoftButtonStyle}"
+                                    VerticalAlignment="Top" />
+                            </Grid>
+                            <Grid ColumnSpacing="10">
+                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" />
+                                <TextBlock
+                                    x:Name="AsideWeekdayText"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource BodyTextStyle}" />
+                            </Grid>
+                            <Grid ColumnSpacing="10">
+                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" />
+                                <TextBlock
+                                    x:Name="AsideWeekendText"
+                                    FontWeight="SemiBold"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource BodyTextStyle}" />
+                            </Grid>
+                            <TextBlock
+                                x:Name="AsideScreenTimeNotice"
+                                Style="{StaticResource CaptionTextStyle}"
+                                Text="{loc:Str Key=Overview.ScreenTimeHint}" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
+                        <StackPanel Spacing="10">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" Spacing="14">
+                                    <Border Background="#FFD9EAFB" Style="{StaticResource PanelBadgeStyle}">
+                                        <FontIcon
+                                            FontFamily="{StaticResource SymbolFontFamily}"
+                                            FontSize="22"
+                                            Foreground="{StaticResource BrandBlueBrush}"
+                                            Glyph="&#xE774;" />
+                                    </Border>
+                                    <TextBlock
+                                        Style="{StaticResource SectionTitleTextStyle}"
+                                        Text="{loc:Str Key=Web.Title}"
+                                        VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="GoToWebButton"
+                                    Click="OnGoToWeb"
+                                    Content="Ändra"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource SoftButtonStyle}"
+                                    VerticalAlignment="Top" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <FontIcon
+                                    x:Name="AsideWebGlyph"
+                                    Foreground="{StaticResource BrandBlueBrush}"
+                                    Glyph="&#xE73E;"
+                                    Style="{StaticResource StatusGlyphStyle}" />
+                                <TextBlock
+                                    x:Name="AsideWebText"
+                                    Style="{StaticResource StatusChipTextStyle}" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.WebHint}" />
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- ============================= Footer ============================= -->
+        <Grid Grid.Row="2">
+            <StackPanel
+                HorizontalAlignment="Left"
+                Orientation="Horizontal"
+                Spacing="10"
+                VerticalAlignment="Center">
+                <Border
+                    Width="26" Height="26"
+                    Background="{StaticResource BrandBlueLightBrush}"
+                    CornerRadius="{StaticResource RadiusSm}">
+                    <Grid Margin="5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition />
+                            <ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition />
+                            <RowDefinition />
+                        </Grid.RowDefinitions>
+                        <Rectangle Grid.Row="0" Grid.Column="0" Margin="0,0,1,1" Fill="White" />
+                        <Rectangle Grid.Row="0" Grid.Column="1" Margin="1,0,0,1" Fill="White" />
+                        <Rectangle Grid.Row="1" Grid.Column="0" Margin="0,1,1,0" Fill="White" />
+                        <Rectangle Grid.Row="1" Grid.Column="1" Margin="1,1,0,0" Fill="White" />
+                    </Grid>
+                </Border>
+                <TextBlock
+                    Style="{StaticResource SecondaryTextStyle}"
+                    Text="{loc:Str Key=Child.FooterTagline}"
+                    VerticalAlignment="Center" />
+
+                <Border
+                    x:Name="UnsavedBadge"
+                    Margin="12,0,0,0"
+                    Background="{StaticResource TintAmberBrush}"
+                    Style="{StaticResource StatusChipStyle}"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Glyph="&#xE7BA;"
+                            Style="{StaticResource StatusGlyphStyle}" />
+                        <TextBlock
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Style="{StaticResource StatusChipTextStyle}"
+                            Text="{loc:Str Key=Parent.UnsavedBadge}" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    x:Name="SavedBadge"
+                    Margin="12,0,0,0"
+                    Background="{StaticResource TintGreenBrush}"
+                    Style="{StaticResource StatusChipStyle}"
+                    Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon
+                            Foreground="{StaticResource StatusOkBrush}"
+                            Glyph="&#xE73E;"
+                            Style="{StaticResource StatusGlyphStyle}" />
+                        <TextBlock
+                            x:Name="StatusMessageText"
+                            Foreground="{StaticResource StatusOkBrush}"
+                            Style="{StaticResource StatusChipTextStyle}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="12"
+                VerticalAlignment="Center">
+                <Button
+                    x:Name="BackButton"
+                    Style="{StaticResource SecondaryButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="9">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="15"
+                            Glyph="&#xE72B;" />
+                        <TextBlock Text="{loc:Str Key=Parent.BackToChild}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button
+                    x:Name="ExitButton"
+                    Content="{loc:Str Key=Parent.ExitToWindows}"
+                    Style="{StaticResource SecondaryButtonStyle}" />
+                <Button
+                    x:Name="SaveButton"
+                    Content="{loc:Str Key=Parent.Save}"
+                    Style="{StaticResource PrimaryButtonStyle}" />
+            </StackPanel>
+        </Grid>
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="WidthStates">
+                <VisualState x:Name="Wide">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="1320" />
+                    </VisualState.StateTriggers>
+                </VisualState>
+                <VisualState x:Name="Narrow">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="Aside.Visibility" Value="Collapsed" />
+                        <Setter Target="AsideColumn.Width" Value="0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+    </Grid>
+</UserControl>
