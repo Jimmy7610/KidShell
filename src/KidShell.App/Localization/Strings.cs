@@ -281,9 +281,25 @@ public static class Strings
         ["Security.CapAssignedAccessAvailable"] = "Kan användas i en senare säkerhetsinstallation.",
         ["Security.CapAssignedAccessUnavailable"] = "Kräver Windows 11 Pro eller senare.",
 
-        ["Security.CapAppControl"] = "Appkontroll i Windows",
-        ["Security.CapAppControlAvailable"] = "Kan användas i en senare säkerhetsinstallation.",
-        ["Security.CapAppControlUnavailable"] = "Kräver Windows Enterprise eller Education.",
+        ["Security.CapAppControl"] = "Appkontroll i Windows (AppLocker)",
+        ["Security.CapAppControlEnforceable"] =
+            "Den här Windows-versionen kan spärra andra program. Stöds på alla utgåvor.",
+        ["Security.CapAppControlNoChannel"] =
+            "Windows kan spärra program här, men saknar inbyggt sätt att installera reglerna på Home.",
+        ["Security.CapAppControlUnavailable"] =
+            "Den här Windows-versionen stöder inte AppLocker.",
+        ["Security.CapAppControlPartial"] = "Delvis",
+
+        // Advanced breakdown of the AppLocker surface
+        ["Security.DiagAppLockerEnforcement"] = "AppLocker-spärr",
+        ["Security.DiagAppLockerService"] = "Application Identity (AppIDSvc)",
+        ["Security.DiagAppLockerPowerShell"] = "AppLocker PowerShell-modul",
+        ["Security.DiagAppLockerLocalPolicy"] = "Lokal AppLocker-policy läsbar",
+        ["Security.DiagAppLockerStore"] = "Lokal policylagring",
+        ["Security.DiagAppLockerUi"] = "Principhanterare (secpol/gpedit)",
+        ["Security.DiagAppLockerCsp"] = "AppLocker CSP (MDM)",
+        ["Security.DiagAppLockerChannel"] = "Installationsväg för regler",
+        ["Security.DiagChannelNone"] = "Ingen inbyggd",
 
         ["Security.CapKidShellAllowlist"] = "KidShells applista",
         ["Security.CapKidShellAllowlistHint"] =

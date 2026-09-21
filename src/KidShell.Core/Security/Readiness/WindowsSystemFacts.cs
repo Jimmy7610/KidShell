@@ -60,6 +60,29 @@ public sealed record WindowsSystemFacts
     /// <summary>Whether the process is running with a package identity (MSIX).</summary>
     public bool HasPackageIdentity { get; init; }
 
+    // ---------------- AppLocker management surface, probed read-only ------
+    // These are properties of THIS MACHINE, not of the edition. Whether
+    // AppLocker can be enforced is a version question; whether a policy can
+    // be installed depends on what is actually present here.
+
+    /// <summary>The AppLocker PowerShell module and its cmdlets are available.</summary>
+    public bool AppLockerModuleAvailable { get; init; }
+
+    /// <summary>Get-AppLockerPolicy -Local could be read without error.</summary>
+    public bool AppLockerLocalPolicyReadable { get; init; }
+
+    /// <summary>Application Identity (AppIDSvc), the rule evaluation service, exists.</summary>
+    public bool AppIdentityServicePresent { get; init; }
+
+    /// <summary>AppIDSvc start mode, for diagnostics only. Never changed.</summary>
+    public string AppIdentityServiceStartMode { get; init; } = string.Empty;
+
+    /// <summary>The %windir%\System32\AppLocker policy store directory exists.</summary>
+    public bool AppLockerPolicyStorePresent { get; init; }
+
+    /// <summary>secpol.msc or gpedit.msc is present. Absent on Home.</summary>
+    public bool LocalSecurityPolicyUiPresent { get; init; }
+
     /// <summary>True when detection itself failed; the reason is in <see cref="DetectionError"/>.</summary>
     public bool DetectionFailed { get; init; }
 

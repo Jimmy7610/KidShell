@@ -25,19 +25,28 @@ public static class WindowsCapabilityAnalyzer
     ];
 
     /// <summary>
-    /// Editions where AppLocker is a supported, enforceable feature.
+    /// Editions where the AppLocker CSP - the MDM management channel - is
+    /// documented as available.
     ///
-    /// Narrower than <see cref="AssignedAccessEditions"/>: Pro can author
-    /// AppLocker rules but Microsoft supports enforcement only on Enterprise,
-    /// Education and IoT Enterprise. KidShell reports what is supported, not
-    /// what can be made to run.
+    /// This is a DEPLOYMENT channel, not an enforcement requirement. Since
+    /// KB 5024351, enforcement itself needs no particular edition; only the
+    /// ways of installing a policy still differ. Home is absent here.
     /// </summary>
-    private static readonly HashSet<WindowsEdition> AppLockerEditions =
+    private static readonly HashSet<WindowsEdition> AppLockerCspEditions =
     [
+        WindowsEdition.Pro,
+        WindowsEdition.ProEducation,
+        WindowsEdition.ProForWorkstations,
         WindowsEdition.Enterprise,
         WindowsEdition.Education,
         WindowsEdition.IoTEnterprise
     ];
+
+    /// <summary>
+    /// First Windows 10 build that enforces AppLocker on every edition.
+    /// Version 2004 (build 19041) with KB 5024351.
+    /// </summary>
+    private const int AppLockerAllEditionsMinimumWindows10Build = 19041;
 
     /// <summary>
     /// Maps facts to capabilities.
@@ -69,9 +78,7 @@ public static class WindowsCapabilityAnalyzer
             ? CapabilityState.Unknown
             : AssignedAccessEditions.Contains(edition) ? CapabilityState.Available : CapabilityState.Unavailable;
 
-        var appLocker = unknownPlatform
-            ? CapabilityState.Unknown
-            : AppLockerEditions.Contains(edition) ? CapabilityState.Available : CapabilityState.Unavailable;
+        var appControl = AnalyzeAppControl(facts, edition, generation, unknownPlatform);
 
         // KidShell's own allowlist is part of the app, so it works anywhere
         // KidShell runs at all.
@@ -133,7 +140,7 @@ public static class WindowsCapabilityAnalyzer
             UpdateBuildRevision = facts.UpdateBuildRevision,
 
             AssignedAccess = assignedAccess,
-            AppLocker = appLocker,
+            AppControl = appControl,
             KidShellAppAllowlist = ownAllowlist,
             SupportsSecureMode = supportsSecure,
 
@@ -151,6 +158,71 @@ public static class WindowsCapabilityAnalyzer
             Warnings = warnings,
             Blockers = blockers
         };
+    }
+
+    /// <summary>
+    /// Works out the AppLocker picture, keeping enforcement and deployment
+    /// apart.
+    ///
+    /// Enforcement follows Microsoft's requirements table: Windows 10 version
+    /// 2004 and newer and all Windows 11 versions enforce AppLocker policies
+    /// on every edition (KB 5024351). It is therefore decided by the build
+    /// number, NOT by the edition - the previous edition-gated version of this
+    /// code was simply wrong, and told Home users a capability they have was
+    /// missing.
+    ///
+    /// Deployment is the part that still varies. The CSP has edition
+    /// requirements; the PowerShell module and the policy console are either
+    /// installed on a given machine or they are not, so those are probed
+    /// rather than inferred.
+    /// </summary>
+    private static AppControlCapabilities AnalyzeAppControl(
+        WindowsSystemFacts facts,
+        WindowsEdition edition,
+        WindowsGeneration generation,
+        bool unknownPlatform)
+    {
+        if (facts.DetectionFailed)
+        {
+            return AppControlCapabilities.Unknown;
+        }
+
+        var enforcement = generation switch
+        {
+            WindowsGeneration.Windows11 => CapabilityState.Available,
+            WindowsGeneration.Windows10 when facts.BuildNumber >= AppLockerAllEditionsMinimumWindows10Build
+                => CapabilityState.Available,
+
+            // Older Windows 10 enforced AppLocker only on Enterprise and
+            // Education, and only through Group Policy.
+            WindowsGeneration.Windows10 => LegacyEnforcement(edition),
+
+            _ => CapabilityState.Unknown
+        };
+
+        var csp = unknownPlatform
+            ? CapabilityState.Unknown
+            : AppLockerCspEditions.Contains(edition) ? CapabilityState.Available : CapabilityState.Unavailable;
+
+        return new AppControlCapabilities
+        {
+            Enforcement = enforcement,
+            EnforcementService = State(facts.AppIdentityServicePresent),
+            EnforcementServiceStartMode = facts.AppIdentityServiceStartMode,
+            PowerShellManagement = State(facts.AppLockerModuleAvailable),
+            LocalPolicyReadable = State(facts.AppLockerLocalPolicyReadable),
+            LocalPolicyStore = State(facts.AppLockerPolicyStorePresent),
+            ManagementUi = State(facts.LocalSecurityPolicyUiPresent),
+            Csp = csp
+        };
+
+        static CapabilityState LegacyEnforcement(WindowsEdition edition) =>
+            edition is WindowsEdition.Enterprise or WindowsEdition.Education or WindowsEdition.IoTEnterprise
+                ? CapabilityState.Available
+                : CapabilityState.Unavailable;
+
+        static CapabilityState State(bool present) =>
+            present ? CapabilityState.Available : CapabilityState.Unavailable;
     }
 
     /// <summary>

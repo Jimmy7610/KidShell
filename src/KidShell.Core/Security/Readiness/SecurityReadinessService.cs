@@ -84,7 +84,11 @@ public sealed class SecurityReadinessService : ISecurityReadinessService
             SecurityAuditEvents.Category,
             $"{SecurityAuditEvents.CapabilityDetected}: edition={capabilities.EditionDisplayName}, " +
             $"build={capabilities.BuildNumber}, assignedAccess={capabilities.AssignedAccess}, " +
-            $"appLocker={capabilities.AppLocker}, uac={Describe(capabilities.IsUacEnabled)}, " +
+            $"appLockerEnforce={capabilities.AppControl.Enforcement}, " +
+            $"appLockerService={capabilities.AppControl.EnforcementService}, " +
+            $"appLockerPosh={capabilities.AppControl.PowerShellManagement}, " +
+            $"appLockerCsp={capabilities.AppControl.Csp}, " +
+            $"uac={Describe(capabilities.IsUacEnabled)}, " +
             $"admin={capabilities.CurrentUserIsAdministrator}, mode={_execution.Mode}");
 
         _logger.Info(

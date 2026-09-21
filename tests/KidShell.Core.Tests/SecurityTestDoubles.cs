@@ -93,7 +93,25 @@ internal static class SecurityFixtures
         IsProcessElevated = false,
         CurrentUserName = "Jimmy",
         CurrentUserSid = AdminSid,
-        HasPackageIdentity = true
+        HasPackageIdentity = true,
+
+        // The real shape of a stock Home machine, as probed on the development
+        // box: the enforcement engine is present and every first-party way of
+        // installing a policy is not.
+        AppIdentityServicePresent = true,
+        AppIdentityServiceStartMode = "Manual",
+        AppLockerPolicyStorePresent = true,
+        AppLockerModuleAvailable = false,
+        AppLockerLocalPolicyReadable = false,
+        LocalSecurityPolicyUiPresent = false
+    };
+
+    /// <summary>The same machine with the AppLocker tooling installed too.</summary>
+    public static WindowsSystemFacts WithAppLockerTooling(WindowsSystemFacts facts) => facts with
+    {
+        AppLockerModuleAvailable = true,
+        AppLockerLocalPolicyReadable = true,
+        LocalSecurityPolicyUiPresent = true
     };
 
     /// <summary>SID shared by the fixture's signed-in user and admin account.</summary>

@@ -125,26 +125,64 @@ granting administrator on that basis would be a real vulnerability.
 
 ### Assigned Access and AppLocker are separate
 
-They are different features with different edition requirements, and conflating
-them would overstate what a Pro machine can do.
+They are different features with different requirements, and conflating them
+misreports both.
 
-| Edition | Assigned Access | AppLocker enforcement |
+> **Correction.** An earlier version of this document and of the code claimed
+> AppLocker enforcement required Enterprise or Education, and that Home and Pro
+> could not enforce it. That was **wrong**. Microsoft's current requirements
+> table states that as of [KB 5024351](https://support.microsoft.com/help/5024351),
+> Windows 10 version 2004 and newer and **all** Windows 11 versions no longer
+> require a specific edition of Windows to enforce AppLocker policies. The
+> table lists Windows 10 and Windows 11 as *Can be configured: Yes* and *Can be
+> enforced: Yes*, with the note "Policies are supported on all editions".
+
+#### AppLocker is five questions, not one
+
+Collapsing them into a single `SupportsAppLocker` boolean was the underlying
+architectural mistake — it made two independent facts unable to disagree.
+
+| Question | Depends on | Home |
 | --- | --- | --- |
-| Home | no | no |
-| Pro / Pro Education / Pro for Workstations | **yes** | no |
-| Enterprise / Education / IoT Enterprise | **yes** | **yes** |
-| Unknown | unknown (treated as no) | unknown (treated as no) |
+| **1. Enforcement** — will rules be applied? | Windows *version* (10 2004+ / all 11) | **yes** |
+| **2. Enforcement service** — is AppIDSvc present? | the machine | **yes** |
+| **3. Local policy / PowerShell** — is the AppLocker module installed? | the machine | no |
+| **4. Management console** — secpol.msc / gpedit.msc | the edition | no |
+| **5. AppLocker CSP** — the MDM channel | the *edition* (Pro+) | no |
 
-Pro can author AppLocker rules, but Microsoft supports enforcement only on
-Enterprise, Education and IoT Enterprise. KidShell reports what is supported,
-not what can be made to run.
+Only question 5 is genuinely edition-gated by documentation; questions 2–4 are
+properties of the individual machine and are **probed**, not inferred.
 
-A third capability is tracked separately: **KidShell's own app allowlist**,
-which gates the child grid. It works on every edition and is the app-control
-story for Standard mode. The UI labels it *"KidShells applista"* with the
-explicit note *"Ersätter inte Windows egen appkontroll"*, because letting a
-parent read it as an OS guarantee would be the exact overclaim this milestone
-exists to avoid.
+This produces the case that matters on a retail laptop:
+
+> **Windows 11 Home can enforce an AppLocker policy it has no supported way to
+> install.**
+
+`AppControlCapabilities.CanEnforceButCannotDeploy` names that state explicitly,
+and the UI reports it as *Delvis* rather than as either "available" or
+"unavailable" — both of which would be misleading.
+
+#### Assigned Access, by contrast, really is edition-gated
+
+Microsoft documents the supported editions as Pro, Enterprise / Enterprise
+LTSC, Education, and IoT Enterprise / IoT Enterprise LTSC. Home is not among
+them, and a kiosk experience additionally requires UAC.
+
+| Edition | Assigned Access | AppLocker enforcement | AppLocker CSP |
+| --- | --- | --- | --- |
+| Home | no | **yes** | no |
+| Pro / Pro Education / Pro for Workstations | **yes** | **yes** | **yes** |
+| Enterprise / Education / IoT Enterprise | **yes** | **yes** | **yes** |
+| Unknown edition | unknown → no | from the build number | unknown → no |
+
+Note the last row: an unknown *edition* does not make the Windows *version*
+unknown. Enforcement is still knowable from the build; only the edition-gated
+CSP fails safe.
+
+A further capability is tracked separately: **KidShell's own app allowlist**,
+which gates the child grid. It works wherever KidShell runs and is not an OS
+guarantee. The UI labels it *"KidShells applista"* with the explicit note
+*"Ersätter inte Windows egen appkontroll"*.
 
 ---
 
@@ -165,6 +203,8 @@ them, Home being the default on retail laptops.
 
 * a separate standard Windows account for the child
 * KidShell's own app allowlist
+* **AppLocker enforcement where a deployment route exists** — available on
+  Home as a Windows capability, pending a safe way to install the policy
 * UAC separation between the child's account and the parent's
 * KidShell autostart on the child's account
 * browser restrictions
@@ -350,7 +390,7 @@ carries its `RequiresAdmin`, `CapabilityRequired`, `ChangeRiskLevel` and
 | 2 | Verify it is a standard user | admin | Medium |
 | 3 | Verify the parent's recovery account | admin | Low |
 | 4 | Write the allowed-app list | — | Low |
-| 5 | Configure AppLocker *(Enterprise/Education only)* | admin, AppLocker | High |
+| 5 | Configure AppLocker *(wherever enforcement is supported, Home included)* | admin, AppLocker enforcement | High |
 | 6 | Configure Assigned Access *(Secure only)* | admin, Assigned Access | High |
 | 7 | Configure KidShell autostart | — | Medium |
 | 8 | Configure browser policy | admin | Medium |
@@ -363,7 +403,10 @@ To make any of it run, 0.2 must:
    unless handed one;
 3. register it in DI, where its absence is currently conspicuous;
 4. implement rollback for every step that claims `CanRollback`;
-5. re-verify after applying, and only then let `CurrentMode` leave
+5. establish a safe deployment route for AppLocker on machines with no
+   first-party channel — writing the policy store directly is possible but
+   unsupported, and must not be attempted without understanding the rollback;
+6. re-verify after applying, and only then let `CurrentMode` leave
    `Development`.
 
 Until all five happen, the honest answer stays the one this milestone reports.
@@ -388,7 +431,25 @@ where a parent would see them anyway — SIDs are not written to the log.
 
 ---
 
-## 10. Testing
+## 10. Sources
+
+Current Microsoft documentation, checked when this model was corrected:
+
+* [Requirements to use AppLocker](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/applocker/requirements-to-use-applocker)
+  — the requirements table and the KB 5024351 note.
+* [KB 5024351](https://support.microsoft.com/help/5024351) — the update that
+  removed the edition requirement for enforcement.
+* [AppLocker CSP](https://learn.microsoft.com/en-us/windows/client-management/mdm/applocker-csp)
+  — the Pro / Enterprise / Education / IoT Enterprise edition list.
+* [Assigned Access overview](https://learn.microsoft.com/en-us/windows/configuration/assigned-access/)
+  — supported editions and the UAC requirement.
+
+Pre-KB5024351 blog posts and older edition tables are **not** a valid source
+for this model; they are what produced the original error.
+
+---
+
+## 11. Testing
 
 The security work is covered by tests that never touch the machine:
 
@@ -399,6 +460,11 @@ The security work is covered by tests that never touch the machine:
   26200 must display as *Windows 11 Home*.
 * **Capability matrix** — Home, Pro, Enterprise, Education and Unknown, with
   Assigned Access and AppLocker asserted independently.
+* **AppLocker, split five ways** — enforcement on every edition of a modern
+  build; the KB 5024351 boundary at build 19041; the pre-KB rule for older
+  Windows 10; the CSP's documented edition list; PowerShell, console and
+  service presence taken from the machine rather than the edition; and that
+  enforcement and deployment are able to disagree.
 * **UAC** — enabled, disabled (blocks Secure even on Pro) and unreadable.
 * **Split token** — an unelevated administrator is still an administrator; a
   genuine standard user is not; SID mismatch does not fall back to name.

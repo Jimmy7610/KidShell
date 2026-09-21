@@ -80,13 +80,21 @@ public static class SecurityPlanBuilder
             ChangeRiskLevel.Low,
             canRollback: true);
 
-        if (capabilities.SupportsAppLocker && targetMode == SecurityMode.Secure)
+        // App control is planned for BOTH modes when the machine can enforce
+        // it. Since KB 5024351 that includes Home, so omitting this step just
+        // because Assigned Access is missing would hide a protection the
+        // machine genuinely supports.
+        if (capabilities.SupportsAppLockerEnforcement)
         {
             Add("configure-applocker",
                 "Konfigurera appkontroll i Windows",
-                "Lägger till regler som hindrar andra program från att starta.",
+                capabilities.SupportsAppLockerDeployment
+                    ? "Lägger till AppLocker-regler som hindrar andra program från att starta."
+                    : "AppLocker-regler kan gälla på den här datorn, men Windows saknar ett " +
+                      "inbyggt sätt att installera dem här. KidShell undersöker en säker väg " +
+                      "innan steget kan köras.",
                 requiresAdmin: true,
-                RequiredCapability.AppLocker,
+                RequiredCapability.AppLockerEnforcement,
                 ChangeRiskLevel.High,
                 canRollback: true);
         }

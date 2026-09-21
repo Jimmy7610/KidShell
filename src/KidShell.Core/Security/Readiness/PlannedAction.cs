@@ -23,9 +23,18 @@ public enum RequiredCapability
 {
     None = 0,
     AssignedAccess = 1,
-    AppLocker = 2,
+
+    /// <summary>
+    /// AppLocker rule enforcement. Edition-independent on Windows 10 2004+
+    /// and Windows 11; separate from whether a policy can be deployed.
+    /// </summary>
+    AppLockerEnforcement = 2,
+
     LocalAccountManagement = 3,
-    KidShellAppAllowlist = 4
+    KidShellAppAllowlist = 4,
+
+    /// <summary>A supported channel for installing an AppLocker policy.</summary>
+    AppLockerDeployment = 5
 }
 
 /// <summary>

@@ -39,11 +39,11 @@ public sealed record WindowsSecurityCapabilities
     public CapabilityState AssignedAccess { get; init; }
 
     /// <summary>
-    /// OS-level AppLocker enforcement. Enterprise and Education only —
-    /// deliberately narrower than <see cref="AssignedAccess"/>, since the two
-    /// are separate features with separate edition requirements.
+    /// AppLocker, split into enforcement and the separate question of whether
+    /// a policy can actually be deployed here. See
+    /// <see cref="AppControlCapabilities"/> for why one boolean was wrong.
     /// </summary>
-    public CapabilityState AppLocker { get; init; }
+    public required AppControlCapabilities AppControl { get; init; }
 
     /// <summary>
     /// KidShell's own launcher allowlist, which gates what the child grid can
@@ -54,7 +54,11 @@ public sealed record WindowsSecurityCapabilities
 
     public bool SupportsAssignedAccess => AssignedAccess == CapabilityState.Available;
 
-    public bool SupportsAppLocker => AppLocker == CapabilityState.Available;
+    /// <summary>The machine would enforce an AppLocker policy if it had one.</summary>
+    public bool SupportsAppLockerEnforcement => AppControl.CanEnforce;
+
+    /// <summary>There is a supported way to install an AppLocker policy here.</summary>
+    public bool SupportsAppLockerDeployment => AppControl.HasDeploymentChannel;
 
     /// <summary>
     /// Whether the full Secure path is possible here. Requires Assigned Access

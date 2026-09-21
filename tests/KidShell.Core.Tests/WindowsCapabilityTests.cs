@@ -111,12 +111,121 @@ public class WindowsCapabilityTests
     [Fact]
     public void Home_still_has_KidShells_own_app_allowlist()
     {
-        // Standard mode has a real app-control story; it is just KidShell's,
-        // not Windows'. Reporting it as AppLocker would be the overclaim.
         var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home());
 
         Assert.Equal(CapabilityState.Available, capabilities.KidShellAppAllowlist);
-        Assert.Equal(CapabilityState.Unavailable, capabilities.AppLocker);
+    }
+
+    [Fact]
+    public void Home_CAN_enforce_AppLocker()
+    {
+        // Per Microsoft's requirements table: since KB 5024351, Windows 10
+        // 2004+ and all Windows 11 versions enforce AppLocker policies on
+        // every edition. Gating this on the edition - as an earlier version of
+        // this code did - told Home users a capability they have was missing.
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home());
+
+        Assert.Equal(WindowsEdition.Home, capabilities.Edition);
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Enforcement);
+        Assert.True(capabilities.SupportsAppLockerEnforcement);
+    }
+
+    [Fact]
+    public void Home_has_the_enforcement_service_but_no_deployment_channel()
+    {
+        // The interesting and real case: the rules would be enforced if they
+        // could be installed, and Windows Home ships no supported way to
+        // install them.
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home());
+        var appControl = capabilities.AppControl;
+
+        Assert.Equal(CapabilityState.Available, appControl.EnforcementService);
+        Assert.Equal(CapabilityState.Available, appControl.LocalPolicyStore);
+
+        Assert.Equal(CapabilityState.Unavailable, appControl.PowerShellManagement);
+        Assert.Equal(CapabilityState.Unavailable, appControl.ManagementUi);
+        Assert.Equal(CapabilityState.Unavailable, appControl.Csp);
+
+        Assert.True(appControl.CanEnforce);
+        Assert.False(appControl.HasDeploymentChannel);
+        Assert.True(appControl.CanEnforceButCannotDeploy);
+    }
+
+    [Fact]
+    public void Home_with_the_tooling_installed_gains_a_deployment_channel()
+    {
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(
+            SecurityFixtures.WithAppLockerTooling(SecurityFixtures.Windows11Home()));
+
+        Assert.True(capabilities.AppControl.HasDeploymentChannel);
+        Assert.False(capabilities.AppControl.CanEnforceButCannotDeploy);
+
+        // Still no CSP: that one really is edition-gated.
+        Assert.Equal(CapabilityState.Unavailable, capabilities.AppControl.Csp);
+    }
+
+    [Fact]
+    public void The_AppLocker_CSP_is_the_part_that_is_edition_gated()
+    {
+        // Documented for Pro, Enterprise, Education and IoT Enterprise.
+        Assert.Equal(CapabilityState.Unavailable,
+            WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home()).AppControl.Csp);
+
+        foreach (var facts in new[]
+                 {
+                     SecurityFixtures.Windows11Pro(),
+                     SecurityFixtures.Windows11Enterprise(),
+                     SecurityFixtures.Windows11Education()
+                 })
+        {
+            Assert.Equal(CapabilityState.Available,
+                WindowsCapabilityAnalyzer.Analyze(facts).AppControl.Csp);
+        }
+    }
+
+    [Theory]
+    [InlineData(19041)]
+    [InlineData(19045)]
+    [InlineData(26200)]
+    public void Modern_builds_enforce_AppLocker_on_every_edition(int build)
+    {
+        // Windows 10 version 2004 is build 19041 - the KB 5024351 boundary.
+        foreach (var editionId in new[] { "Core", "Professional", "Enterprise", "Education" })
+        {
+            var capabilities = WindowsCapabilityAnalyzer.Analyze(
+                SecurityFixtures.Windows11Home() with { EditionId = editionId, BuildNumber = build });
+
+            Assert.Equal(CapabilityState.Available, capabilities.AppControl.Enforcement);
+        }
+    }
+
+    [Fact]
+    public void Older_Windows_10_still_follows_the_pre_KB_edition_rule()
+    {
+        // Before version 2004, Group Policy deployment was Enterprise and
+        // Education only. KidShell keeps that rule for those builds rather
+        // than pretending the fix was always there.
+        var home = WindowsCapabilityAnalyzer.Analyze(
+            SecurityFixtures.Windows11Home() with { EditionId = "Core", BuildNumber = 18363 });
+
+        var enterprise = WindowsCapabilityAnalyzer.Analyze(
+            SecurityFixtures.Windows11Home() with { EditionId = "Enterprise", BuildNumber = 18363 });
+
+        Assert.Equal(CapabilityState.Unavailable, home.AppControl.Enforcement);
+        Assert.Equal(CapabilityState.Available, enterprise.AppControl.Enforcement);
+    }
+
+    [Fact]
+    public void A_missing_enforcement_service_means_it_cannot_enforce()
+    {
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(
+            SecurityFixtures.Windows11Home() with { AppIdentityServicePresent = false });
+
+        // The version supports it, but this machine has no engine to run it.
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Enforcement);
+        Assert.Equal(CapabilityState.Unavailable, capabilities.AppControl.EnforcementService);
+        Assert.False(capabilities.AppControl.CanEnforce);
+        Assert.False(capabilities.SupportsAppLockerEnforcement);
     }
 
     // ------------------------------------------------ Pro
@@ -132,15 +241,27 @@ public class WindowsCapabilityTests
     }
 
     [Fact]
-    public void Pro_does_not_claim_AppLocker()
+    public void Pro_enforces_AppLocker_and_has_the_CSP()
     {
-        // Assigned Access and AppLocker are separate features with separate
-        // edition requirements; Pro has the first and not the second.
+        // Pro was previously reported as unable to use AppLocker at all,
+        // which was wrong on both counts: it enforces like every modern
+        // edition, and it additionally has the MDM channel.
         var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Pro());
 
         Assert.True(capabilities.SupportsAssignedAccess);
-        Assert.False(capabilities.SupportsAppLocker);
-        Assert.Equal(CapabilityState.Unavailable, capabilities.AppLocker);
+        Assert.True(capabilities.SupportsAppLockerEnforcement);
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Csp);
+        Assert.True(capabilities.SupportsAppLockerDeployment);
+    }
+
+    [Fact]
+    public void Assigned_Access_and_AppLocker_are_answered_independently()
+    {
+        // Home: enforcement yes, Assigned Access no.
+        var home = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home());
+
+        Assert.False(home.SupportsAssignedAccess);
+        Assert.True(home.SupportsAppLockerEnforcement);
     }
 
     // ------------------------------------------------ Enterprise / Education
@@ -151,7 +272,8 @@ public class WindowsCapabilityTests
         var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Enterprise());
 
         Assert.Equal(CapabilityState.Available, capabilities.AssignedAccess);
-        Assert.Equal(CapabilityState.Available, capabilities.AppLocker);
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Enforcement);
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Csp);
         Assert.Equal(SecurityMode.Secure, capabilities.RecommendedSecurityMode);
     }
 
@@ -161,7 +283,8 @@ public class WindowsCapabilityTests
         var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Education());
 
         Assert.True(capabilities.SupportsAssignedAccess);
-        Assert.True(capabilities.SupportsAppLocker);
+        Assert.True(capabilities.SupportsAppLockerEnforcement);
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Csp);
     }
 
     // ------------------------------------------------ fail-safe
@@ -173,9 +296,15 @@ public class WindowsCapabilityTests
             SecurityFixtures.Windows11Home() with { EditionId = "MysterySku" });
 
         Assert.Equal(CapabilityState.Unknown, capabilities.AssignedAccess);
-        Assert.Equal(CapabilityState.Unknown, capabilities.AppLocker);
         Assert.False(capabilities.SupportsSecureMode);
         Assert.False(capabilities.SupportsAssignedAccess);
+
+        // An unknown EDITION does not make the Windows VERSION unknown:
+        // enforcement follows the build, which is still readable. The CSP,
+        // which is edition-gated, fails safe to Unknown.
+        Assert.Equal(CapabilityState.Available, capabilities.AppControl.Enforcement);
+        Assert.Equal(CapabilityState.Unknown, capabilities.AppControl.Csp);
+        Assert.False(capabilities.SupportsAppLockerDeployment);
     }
 
     [Fact]
@@ -185,6 +314,9 @@ public class WindowsCapabilityTests
 
         Assert.True(capabilities.DetectionFailed);
         Assert.Equal(CapabilityState.Unknown, capabilities.AssignedAccess);
+        Assert.Equal(CapabilityState.Unknown, capabilities.AppControl.Enforcement);
+        Assert.False(capabilities.SupportsAppLockerEnforcement);
+        Assert.False(capabilities.SupportsAppLockerDeployment);
         Assert.False(capabilities.SupportsSecureMode);
         Assert.NotEqual(SecurityMode.Secure, capabilities.RecommendedSecurityMode);
         Assert.NotEmpty(capabilities.Warnings);

@@ -165,14 +165,23 @@ KidShell's **security** is a different question, and depends on the edition:
 
 | Edition | Best available mode | Why |
 | --- | --- | --- |
-| Windows 11 / 10 **Home** | Standard | No Assigned Access |
-| Windows 11 / 10 **Pro**, Pro Education, Pro for Workstations | Secure | Assigned Access |
-| **Enterprise**, **Education**, IoT Enterprise | Secure + AppLocker | Assigned Access and supported app control |
+| Windows 11 / 10 **Home** | Standard | No Assigned Access (AppLocker *enforcement* is supported) |
+| Windows 11 / 10 **Pro**, Pro Education, Pro for Workstations | Secure | Assigned Access, plus the AppLocker CSP |
+| **Enterprise**, **Education**, IoT Enterprise | Secure | Assigned Access, plus the AppLocker CSP |
+
+**AppLocker is not edition-gated.** Since
+[KB 5024351](https://support.microsoft.com/help/5024351), Windows 10 version
+2004 and newer and all Windows 11 versions enforce AppLocker policies on every
+edition, Home included. What still varies is how a policy gets *installed*: the
+AppLocker CSP needs Pro or above, and the PowerShell module and policy console
+are not present on every machine. A stock Home machine can therefore enforce a
+policy it has no first-party way to deploy — KidShell reports that state
+honestly rather than rounding it to "unavailable".
 
 * **Standard mode** (planned): a separate standard Windows account for the
-  child, KidShell's own app allowlist, UAC separation, autostart and a
-  watchdog. The child can still minimise KidShell and use the rest of that
-  account's desktop.
+  child, KidShell's own app allowlist, AppLocker enforcement where a
+  deployment route exists, UAC separation, autostart and a watchdog. The child
+  can still minimise KidShell and use the rest of that account's desktop.
 * **Secure mode** (planned): everything in Standard, plus Assigned Access
   restricting the child's sign-in to KidShell.
 
@@ -199,6 +208,11 @@ Standard is **not** equivalent to Secure, and KidShell never says it is.
 Open Föräldraläge → Säkerhet. It shows the detected edition and build, your
 account type, UAC state, which capabilities exist, and — under **Avancerat** —
 the raw diagnostics plus the execution mode, which reads `AuditOnly`.
+
+Under **Avancerat** the AppLocker surface is broken out in full: enforcement,
+the Application Identity service, the PowerShell module, local policy
+readability, the policy store, the management console and the CSP — because
+those are separate questions with different answers on the same machine.
 
 **Visa säkerhetsplan** prints the exact steps a future secure setup would take
 on your machine. It runs none of them.

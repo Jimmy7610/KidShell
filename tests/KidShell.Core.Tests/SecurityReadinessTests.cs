@@ -401,9 +401,49 @@ public class SecurityReadinessTests
         var ids = report.PlannedActions.Select(a => a.Id).ToArray();
 
         Assert.DoesNotContain("configure-assigned-access", ids);
-        Assert.DoesNotContain("configure-applocker", ids);
         Assert.Contains("child-account", ids);
         Assert.Contains("configure-apps", ids);
+    }
+
+    [Fact]
+    public async Task A_Home_plan_still_includes_app_control()
+    {
+        // Home enforces AppLocker, so dropping the app-control step just
+        // because Assigned Access is missing would hide a protection the
+        // machine genuinely supports. The step is planned; its detail says
+        // the deployment route still has to be established.
+        using var dir = new TempDirectory();
+        var (service, _, _) = Create(
+            dir, SecurityFixtures.Windows11Home(), developerMode: false,
+            SecurityFixtures.ConfiguredChild(), SecurityFixtures.Admin());
+
+        var report = await service.ScanAsync();
+
+        var step = Assert.Single(report.PlannedActions, a => a.Id == "configure-applocker");
+        Assert.Equal(RequiredCapability.AppLockerEnforcement, step.CapabilityRequired);
+        Assert.Contains("saknar", step.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.False(step.WasExecuted);
+    }
+
+    [Fact]
+    public void A_machine_with_a_deployment_channel_gets_the_plain_app_control_step()
+    {
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Pro());
+        var plan = SecurityPlanBuilder.Build(capabilities, SecurityMode.Secure);
+
+        var step = Assert.Single(plan, a => a.Id == "configure-applocker");
+        Assert.DoesNotContain("saknar", step.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void A_machine_that_cannot_enforce_gets_no_app_control_step()
+    {
+        var capabilities = WindowsCapabilityAnalyzer.Analyze(
+            SecurityFixtures.Windows11Home() with { AppIdentityServicePresent = false });
+
+        var plan = SecurityPlanBuilder.Build(capabilities, SecurityMode.Standard);
+
+        Assert.DoesNotContain(plan, a => a.Id == "configure-applocker");
     }
 
     [Fact]
@@ -431,7 +471,9 @@ public class SecurityReadinessTests
         var capabilities = WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Enterprise());
         var plan = SecurityPlanBuilder.Build(capabilities, SecurityMode.Secure);
 
-        Assert.Contains(plan, a => a.Id == "configure-applocker");
+        var step = Assert.Single(plan, a => a.Id == "configure-applocker");
+        Assert.Equal(RequiredCapability.AppLockerEnforcement, step.CapabilityRequired);
+        Assert.True(step.RequiresAdmin);
     }
 
     [Fact]

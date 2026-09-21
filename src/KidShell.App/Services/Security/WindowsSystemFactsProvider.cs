@@ -18,6 +18,7 @@ public sealed class WindowsSystemFactsProvider : ISystemFactsProvider
 {
     private const string CurrentVersionKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion";
     private const string PoliciesSystemKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System";
+    private const string AppIdentityServiceKey = @"SYSTEM\CurrentControlSet\Services\AppIDSvc";
 
     private readonly IKidShellLogger _logger;
 
@@ -45,6 +46,8 @@ public sealed class WindowsSystemFactsProvider : ISystemFactsProvider
 
     private WindowsSystemFacts Read()
     {
+        var appIdentity = ReadAppIdentityService();
+
         using var currentVersion = Registry.LocalMachine.OpenSubKey(CurrentVersionKey, writable: false);
 
         // EditionID, not ProductName. On Windows 11 ProductName still reads
@@ -76,7 +79,17 @@ public sealed class WindowsSystemFactsProvider : ISystemFactsProvider
             IsProcessElevated = ReadProcessIsElevated(),
             CurrentUserName = ReadCurrentUserName(),
             CurrentUserSid = ReadCurrentUserSid(),
-            HasPackageIdentity = HasPackageIdentity()
+            HasPackageIdentity = HasPackageIdentity(),
+
+            // AppLocker management surface. Probed rather than inferred from
+            // the edition: since KB 5024351 enforcement needs no particular
+            // edition, so what actually varies is which of these is installed.
+            AppLockerModuleAvailable = HasAppLockerModule(),
+            AppLockerLocalPolicyReadable = CanReadLocalAppLockerPolicy(),
+            AppIdentityServicePresent = appIdentity.Present,
+            AppIdentityServiceStartMode = appIdentity.StartMode,
+            AppLockerPolicyStorePresent = HasAppLockerPolicyStore(),
+            LocalSecurityPolicyUiPresent = HasLocalSecurityPolicyUi()
         };
     }
 
@@ -167,6 +180,128 @@ public sealed class WindowsSystemFactsProvider : ISystemFactsProvider
         {
             _logger.Warning(SecurityAuditEvents.Category, "Could not read current user name.", ex);
             return string.Empty;
+        }
+    }
+
+    // ------------------------------------------------ AppLocker probes
+    // All read-only. Nothing here starts a service, changes a start type,
+    // writes a policy, or calls Set-AppLockerPolicy. The AppLocker PowerShell
+    // module is detected by looking for it on disk rather than by invoking
+    // PowerShell, which keeps the probe cheap and side-effect free.
+
+    /// <summary>
+    /// Whether the AppLocker PowerShell module is installed.
+    ///
+    /// Checked on disk across every module root. On a stock Home machine it is
+    /// absent entirely, which is precisely the distinction this milestone
+    /// exists to report: the machine can enforce a policy it has no supported
+    /// way to install.
+    /// </summary>
+    private bool HasAppLockerModule()
+    {
+        try
+        {
+            var roots = new List<string>
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                    "WindowsPowerShell", "v1.0", "Modules"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "WindowsPowerShell", "Modules"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    "PowerShell", "Modules")
+            };
+
+            return roots
+                .Where(Directory.Exists)
+                .Any(root => Directory.Exists(Path.Combine(root, "AppLocker")));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(SecurityAuditEvents.Category, "Could not probe for the AppLocker module.", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a local AppLocker policy could be read.
+    ///
+    /// Reading needs the module, so without it the answer is no. KidShell does
+    /// not shell out to PowerShell to find out - invoking a shell to answer a
+    /// capability question is a side effect waiting to happen.
+    /// </summary>
+    private bool CanReadLocalAppLockerPolicy() => HasAppLockerModule();
+
+    /// <summary>
+    /// Application Identity - the service that evaluates AppLocker rules.
+    ///
+    /// Read from its service registry key rather than through
+    /// ServiceController, which would mean taking a package dependency to ask
+    /// one question. The key is opened read-only: the start type is never
+    /// changed and the service is never started.
+    /// </summary>
+    private (bool Present, string StartMode) ReadAppIdentityService()
+    {
+        try
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(AppIdentityServiceKey, writable: false);
+
+            if (key is null)
+            {
+                return (false, string.Empty);
+            }
+
+            // Start: 0 boot, 1 system, 2 automatic, 3 manual, 4 disabled.
+            var startMode = key.GetValue("Start") switch
+            {
+                0 => "Boot",
+                1 => "System",
+                2 => "Automatic",
+                3 => "Manual",
+                4 => "Disabled",
+                _ => "Unknown"
+            };
+
+            return (true, startMode);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(SecurityAuditEvents.Category, $"AppIDSvc not readable: {ex.GetType().Name}.");
+            return (false, string.Empty);
+        }
+    }
+
+    /// <summary>The local AppLocker policy store directory under System32.</summary>
+    private bool HasAppLockerPolicyStore()
+    {
+        try
+        {
+            return Directory.Exists(Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.System), "AppLocker"));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(SecurityAuditEvents.Category, "Could not probe the AppLocker policy store.", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The Local Security Policy / Group Policy consoles, which are the
+    /// built-in way to author AppLocker rules. Absent on Home.
+    /// </summary>
+    private bool HasLocalSecurityPolicyUi()
+    {
+        try
+        {
+            var system32 = Environment.GetFolderPath(Environment.SpecialFolder.System);
+
+            return File.Exists(Path.Combine(system32, "secpol.msc")) ||
+                   File.Exists(Path.Combine(system32, "gpedit.msc"));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning(SecurityAuditEvents.Category, "Could not probe for the policy consoles.", ex);
+            return false;
         }
     }
 

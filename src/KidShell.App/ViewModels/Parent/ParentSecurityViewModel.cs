@@ -357,11 +357,7 @@ public sealed class ParentSecurityViewModel : ObservableObject
             Strings.Get("Security.CapAssignedAccessAvailable"),
             Strings.Get("Security.CapAssignedAccessUnavailable")));
 
-        Capabilities.Add(Capability(
-            Strings.Get("Security.CapAppControl"),
-            capabilities?.AppLocker ?? CapabilityState.Unknown,
-            Strings.Get("Security.CapAppControlAvailable"),
-            Strings.Get("Security.CapAppControlUnavailable")));
+        Capabilities.Add(AppControlCapability(capabilities?.AppControl));
 
         // KidShell's own allowlist is genuinely available everywhere, and is
         // labelled so it cannot be mistaken for a Windows guarantee.
@@ -391,6 +387,41 @@ public sealed class ParentSecurityViewModel : ObservableObject
             Strings.Get("Security.NotEnabledShort"),
             SecurityState.Inactive,
             Strings.Get("Security.CapWebPolicyNone")));
+
+        // AppLocker gets its own builder because it has three outcomes, not
+        // two: enforceable and deployable, enforceable but with no way to
+        // install a policy, or not supported at all.
+        static SecurityStatusViewModel AppControlCapability(AppControlCapabilities? appControl)
+        {
+            if (appControl is null || appControl.Enforcement == CapabilityState.Unknown)
+            {
+                return new SecurityStatusViewModel(
+                    Strings.Get("Security.CapAppControl"),
+                    Strings.Get("Security.CapUnknown"),
+                    SecurityState.Warning);
+            }
+
+            if (!appControl.CanEnforce)
+            {
+                return new SecurityStatusViewModel(
+                    Strings.Get("Security.CapAppControl"),
+                    Strings.Get("Security.CapUnavailable"),
+                    SecurityState.Inactive,
+                    Strings.Get("Security.CapAppControlUnavailable"));
+            }
+
+            return appControl.HasDeploymentChannel
+                ? new SecurityStatusViewModel(
+                    Strings.Get("Security.CapAppControl"),
+                    Strings.Get("Security.CapAvailable"),
+                    SecurityState.Active,
+                    Strings.Get("Security.CapAppControlEnforceable"))
+                : new SecurityStatusViewModel(
+                    Strings.Get("Security.CapAppControl"),
+                    Strings.Get("Security.CapAppControlPartial"),
+                    SecurityState.Warning,
+                    Strings.Get("Security.CapAppControlNoChannel"));
+        }
 
         static SecurityStatusViewModel Capability(
             string label,
@@ -459,9 +490,50 @@ public sealed class ParentSecurityViewModel : ObservableObject
             Strings.Get("Security.DiagAssignedAccess"),
             DescribeCapability(capabilities?.AssignedAccess)));
 
+        // The AppLocker surface is several separate questions, so the
+        // advanced section lists them rather than collapsing them into one
+        // misleading yes/no.
+        var appControl = capabilities?.AppControl;
+
         Diagnostics.Add(new SecurityFactViewModel(
-            Strings.Get("Security.DiagAppControl"),
-            DescribeCapability(capabilities?.AppLocker)));
+            Strings.Get("Security.DiagAppLockerEnforcement"),
+            DescribeCapability(appControl?.Enforcement)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerService"),
+            appControl is null
+                ? unknown
+                : appControl.EnforcementService == CapabilityState.Available
+                    ? $"{Strings.Get("Security.CapAvailable")} ({appControl.EnforcementServiceStartMode})"
+                    : Strings.Get("Security.CapUnavailable")));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerPowerShell"),
+            DescribeCapability(appControl?.PowerShellManagement)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerLocalPolicy"),
+            DescribeCapability(appControl?.LocalPolicyReadable)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerStore"),
+            DescribeCapability(appControl?.LocalPolicyStore)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerUi"),
+            DescribeCapability(appControl?.ManagementUi)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerCsp"),
+            DescribeCapability(appControl?.Csp)));
+
+        Diagnostics.Add(new SecurityFactViewModel(
+            Strings.Get("Security.DiagAppLockerChannel"),
+            appControl is null
+                ? unknown
+                : appControl.HasDeploymentChannel
+                    ? Strings.Get("Security.CapAvailable")
+                    : Strings.Get("Security.DiagChannelNone")));
 
         Diagnostics.Add(new SecurityFactViewModel(
             Strings.Get("Security.DiagUac"),
