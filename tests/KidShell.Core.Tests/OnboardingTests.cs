@@ -13,7 +13,7 @@ public class OnboardingTests
     {
         var (state, _, logger) = TestFactory.CreateState(dir);
         state.Initialize();
-        return (new OnboardingService(state, logger), state);
+        return (new OnboardingService(state, TestRuntime.Development, logger), state);
     }
 
     private static OnboardingDraft ValidDraft(string name = "Lucas") => new()

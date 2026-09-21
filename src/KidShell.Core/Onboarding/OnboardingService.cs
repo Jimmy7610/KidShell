@@ -1,5 +1,7 @@
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
+using KidShell.Core.Runtime;
+using KidShell.Core.Security;
 
 namespace KidShell.Core.Onboarding;
 
@@ -10,6 +12,12 @@ public enum OnboardingCompletion
 
     /// <summary>Something was still missing; nothing was written.</summary>
     Incomplete = 1,
+
+    /// <summary>
+    /// A production build was asked to finish setup without a parent PIN.
+    /// Nothing was written.
+    /// </summary>
+    ParentPinRequired = 3,
 
     /// <summary>The configuration could not be persisted; nothing was changed.</summary>
     SaveFailed = 2
@@ -43,11 +51,13 @@ public interface IOnboardingService
 public sealed class OnboardingService : IOnboardingService
 {
     private readonly IAppStateService _state;
+    private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
 
-    public OnboardingService(IAppStateService state, IKidShellLogger logger)
+    public OnboardingService(IAppStateService state, IRuntimeEnvironment environment, IKidShellLogger logger)
     {
         _state = state;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -65,10 +75,26 @@ public sealed class OnboardingService : IOnboardingService
             return OnboardingCompletion.Incomplete;
         }
 
+        if (!draft.IsCompleteFor(_environment.Mode))
+        {
+            _logger.Warning("Onboarding", "Completion refused: a production build requires a parent PIN.");
+            return OnboardingCompletion.ParentPinRequired;
+        }
+
         // Commit through the ordinary state service so Child Mode is rebuilt by
         // the same ConfigurationChanged path as any other saved change.
         var config = _state.CreateDraft();
         config.Child = draft.ToProfile();
+
+        // The PIN is hashed here and the plaintext never leaves the draft,
+        // which is discarded with the setup session.
+        if (draft.ParentPin is { } pin && ParentPinPolicy.Validate(pin) == PinValidation.Ok)
+        {
+            var (hash, salt) = PinHasher.Hash(pin);
+            config.ParentPin.Hash = hash;
+            config.ParentPin.Salt = salt;
+            config.ParentPin.Iterations = PinHasher.DefaultIterations;
+        }
 
         if (!_state.Commit(config))
         {
@@ -88,6 +114,9 @@ public sealed class OnboardingService : IOnboardingService
         // Only the personal details go. The app catalogue, screen-time and web
         // settings and the parent PIN all survive, because handing the machine
         // to another child should not mean rebuilding it from scratch.
+        // The parent PIN deliberately survives: re-running setup is how a
+        // parent hands the machine to another child, and clearing their PIN
+        // would unlock Parent Mode at exactly the wrong moment.
         config.Child.ResetForOnboarding();
 
         if (!_state.Commit(config))

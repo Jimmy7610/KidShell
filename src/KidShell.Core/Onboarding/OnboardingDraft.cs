@@ -1,4 +1,6 @@
 using KidShell.Core.Configuration;
+using KidShell.Core.Runtime;
+using KidShell.Core.Security;
 
 namespace KidShell.Core.Onboarding;
 
@@ -36,6 +38,17 @@ public sealed class OnboardingDraft
 
     public string ThemeId { get; set; } = ThemeIds.Default;
 
+    /// <summary>
+    /// The parent PIN chosen during setup, held only for the length of the
+    /// session and never persisted in this form - Complete() hashes it and the
+    /// draft is discarded. Null means the parent has not set one yet.
+    /// </summary>
+    public string? ParentPin { get; set; }
+
+    /// <summary>Whether the chosen PIN passes policy.</summary>
+    public bool HasParentPin => ParentPin is not null &&
+                                ParentPinPolicy.Validate(ParentPin) == PinValidation.Ok;
+
     public bool HasName => ValidateName(Name) == NameValidation.Ok;
 
     public bool HasAvatar => !string.IsNullOrWhiteSpace(AvatarId);
@@ -44,7 +57,23 @@ public sealed class OnboardingDraft
 
     public bool HasTheme => ThemeIds.IsKnown(ThemeId);
 
+    /// <summary>
+    /// Whether the profile half of setup is finished. A production build
+    /// additionally requires a parent PIN - see
+    /// <see cref="IsCompleteFor"/>.
+    /// </summary>
     public bool IsComplete => HasName && HasAvatar && HasAge && HasTheme;
+
+    /// <summary>
+    /// Whether setup can finish in the given build.
+    ///
+    /// A production build cannot complete without a real parent PIN: finishing
+    /// without one would leave Parent Mode either unreachable or - worse, if
+    /// the fallback were ever reinstated - open to anyone who read the
+    /// documentation.
+    /// </summary>
+    public bool IsCompleteFor(KidShellRuntimeMode mode) =>
+        IsComplete && (mode == KidShellRuntimeMode.Development || HasParentPin);
 
     /// <summary>
     /// Validates a name as typed. Swedish and any other Unicode letters are

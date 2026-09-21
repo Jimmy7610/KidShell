@@ -5,6 +5,7 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Launching;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Runtime;
 using KidShell.Core.Security.Readiness;
 using KidShell.App.Services.Security;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,7 +55,10 @@ public partial class App : Application
         IKidShellLogger logger = new FileLogger(AppPaths.LogFilePath);
         services.AddSingleton(logger);
 
-        services.AddSingleton<IDeveloperOptions>(new DeveloperOptions());
+        // Decided by the compiler, not by configuration. See
+        // BuildRuntimeEnvironment for why there is no runtime switch.
+        services.AddSingleton<IRuntimeEnvironment>(BuildRuntimeEnvironment.Current);
+        services.AddSingleton<IDeveloperOptions, DeveloperOptions>();
 
         services.AddSingleton<IConfigurationStore>(
             sp => new JsonConfigurationStore(AppPaths.ConfigurationFilePath, sp.GetRequiredService<IKidShellLogger>()));

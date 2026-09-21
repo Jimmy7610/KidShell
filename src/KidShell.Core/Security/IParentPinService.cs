@@ -25,6 +25,13 @@ public interface IParentPinService
     /// <summary>True when a real PIN has been set and the development fallback is not in play.</summary>
     bool IsCustomPinConfigured { get; }
 
+    /// <summary>
+    /// True when the published development fallback PIN would currently be
+    /// accepted. Surfaced in the UI rather than hidden: a build in this state
+    /// has an effectively public Parent Mode.
+    /// </summary>
+    bool IsDevelopmentFallbackActive { get; }
+
     PinVerificationResult Verify(string pin);
 
     /// <summary>Replaces the stored PIN. Returns false if the new PIN is not valid.</summary>
