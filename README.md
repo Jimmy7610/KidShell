@@ -368,4 +368,6 @@ strictly out of 0.1 on purpose.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+Copyright © 2026 Jimmy Eliasson. All rights reserved.
+
+KidShell is proprietary software. No permission is granted to copy, modify, distribute, sublicense, sell, publish, or create derivative works from the software except with prior written permission from the copyright holder. See [LICENSE](LICENSE).
