@@ -7,7 +7,9 @@ using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 using KidShell.Core.Runtime;
 using KidShell.Core.Security.Readiness;
+using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
+using KidShell.Core.Apps;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
@@ -67,6 +69,14 @@ public partial class App : Application
         services.AddSingleton<IExecutableResolver>(new WindowsExecutableResolver());
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IAppLauncher, AppLauncher>();
+
+        // Installed-application discovery. Every scanner is read-only; the
+        // catalogue merges and de-duplicates what they find.
+        services.AddSingleton<IApplicationProfileLibrary>(ApplicationProfileLibrary.Default);
+        services.AddSingleton<IApplicationScanner, StartMenuScanner>();
+        services.AddSingleton<IApplicationScanner, RegistryApplicationScanner>();
+        services.AddSingleton<IApplicationScanner, PackagedApplicationScanner>();
+        services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
         services.AddSingleton<IParentPinService, ParentPinService>();
         services.AddSingleton<IOnboardingService, OnboardingService>();
