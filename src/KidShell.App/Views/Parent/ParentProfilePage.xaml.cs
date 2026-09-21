@@ -18,6 +18,7 @@ public sealed partial class ParentProfilePage : UserControl
         _viewModel = viewModel;
         AvatarList.ItemsSource = viewModel.Avatars;
         ThemeBox.ItemsSource = viewModel.ThemeChoices;
+        RerunOnboardingButton.Command = viewModel.RerunOnboardingCommand;
         viewModel.PropertyChanged += (_, _) => Render();
         Render();
     }

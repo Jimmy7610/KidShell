@@ -17,9 +17,11 @@ public static class ThemeLookup
 
     public static Brush Brush(string key) => Lookup(key) as Brush ?? Fallback;
 
-    /// <summary>Available avatar keys, in the order Parent Mode offers them.</summary>
-    public static IReadOnlyList<string> AvatarIds { get; } =
-        ["fox", "owl", "bear", "panda", "rocket", "blossom"];
+    /// <summary>
+    /// Available avatar keys, in the order they are offered. The list lives in
+    /// KidShell.Core so onboarding and Parent Mode cannot drift apart.
+    /// </summary>
+    public static IReadOnlyList<string> AvatarIds { get; } = Core.Configuration.AvatarIds.All;
 
     private static Brush Fallback { get; } = new SolidColorBrush(Microsoft.UI.Colors.CornflowerBlue);
 

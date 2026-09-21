@@ -3,6 +3,7 @@ using KidShell.App.ViewModels;
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Launching;
+using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -62,6 +63,7 @@ public partial class App : Application
         services.AddSingleton<IAppLauncher, AppLauncher>();
 
         services.AddSingleton<IParentPinService, ParentPinService>();
+        services.AddSingleton<IOnboardingService, OnboardingService>();
 
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
@@ -69,6 +71,7 @@ public partial class App : Application
         services.AddSingleton<IAddAppFlow, AddAppFlow>();
         services.AddSingleton<IPinChangeFlow, PinChangeFlow>();
 
+        services.AddSingleton<OnboardingViewModel>();
         services.AddSingleton<ChildHomeViewModel>();
         services.AddSingleton<PinOverlayViewModel>();
         services.AddSingleton<ParentShellViewModel>();

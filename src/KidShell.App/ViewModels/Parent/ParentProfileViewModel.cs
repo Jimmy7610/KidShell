@@ -31,7 +31,7 @@ public sealed class ParentProfileViewModel : ObservableObject
     private KidShellConfiguration _draft = KidShellConfiguration.CreateDefault();
     private bool _suppress;
 
-    public ParentProfileViewModel(Action onChanged)
+    public ParentProfileViewModel(Action onChanged, Action onRerunOnboardingRequested)
     {
         _onChanged = onChanged;
 
@@ -40,11 +40,13 @@ public sealed class ParentProfileViewModel : ObservableObject
             Avatars.Add(new AvatarChoiceViewModel(id));
         }
 
-        ThemeChoices.Add(new ThemeChoice("meadow", Strings.Get("Profile.ThemeMeadow")));
-        ThemeChoices.Add(new ThemeChoice("sunset", Strings.Get("Profile.ThemeSunset")));
-        ThemeChoices.Add(new ThemeChoice("ocean", Strings.Get("Profile.ThemeOcean")));
+        foreach (var id in ThemeIds.All)
+        {
+            ThemeChoices.Add(new ThemeChoice(id, Strings.Get($"Theme.{id}")));
+        }
 
         SelectAvatarCommand = new RelayCommand(parameter => SelectAvatar(parameter as AvatarChoiceViewModel));
+        RerunOnboardingCommand = new RelayCommand(onRerunOnboardingRequested);
     }
 
     public sealed record ThemeChoice(string Id, string Label);
@@ -54,6 +56,13 @@ public sealed class ParentProfileViewModel : ObservableObject
     public ObservableCollection<ThemeChoice> ThemeChoices { get; } = [];
 
     public RelayCommand SelectAvatarCommand { get; }
+
+    /// <summary>
+    /// Development- and handover-friendly: clears the child profile and runs
+    /// first-run setup again. Apps, screen time, web settings and the PIN are
+    /// untouched.
+    /// </summary>
+    public RelayCommand RerunOnboardingCommand { get; }
 
     public string Name
     {
@@ -97,7 +106,8 @@ public sealed class ParentProfileViewModel : ObservableObject
     {
         get
         {
-            var index = ThemeChoices.ToList().FindIndex(t => t.Id == _draft.Child.ThemeId);
+            var themeId = ThemeIds.Migrate(_draft.Child.ThemeId);
+            var index = ThemeChoices.ToList().FindIndex(t => t.Id == themeId);
             return index < 0 ? 0 : index;
         }
         set

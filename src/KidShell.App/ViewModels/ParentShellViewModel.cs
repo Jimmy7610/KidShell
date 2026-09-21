@@ -4,6 +4,7 @@ using KidShell.App.ViewModels.Parent;
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
+using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 
 namespace KidShell.App.ViewModels;
@@ -31,6 +32,7 @@ public sealed class ParentShellViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IParentPinService _pinService;
     private readonly IPinChangeFlow _pinChangeFlow;
+    private readonly IOnboardingService _onboarding;
     private readonly IDeveloperOptions _developerOptions;
     private readonly IKidShellLogger _logger;
 
@@ -45,6 +47,7 @@ public sealed class ParentShellViewModel : ObservableObject
         IParentPinService pinService,
         IAddAppFlow addAppFlow,
         IPinChangeFlow pinChangeFlow,
+        IOnboardingService onboarding,
         IDeveloperOptions developerOptions,
         IKidShellLogger logger)
     {
@@ -52,6 +55,7 @@ public sealed class ParentShellViewModel : ObservableObject
         _dialogs = dialogs;
         _pinService = pinService;
         _pinChangeFlow = pinChangeFlow;
+        _onboarding = onboarding;
         _developerOptions = developerOptions;
         _logger = logger;
 
@@ -62,7 +66,7 @@ public sealed class ParentShellViewModel : ObservableObject
         ScreenTime = new ParentScreenTimeViewModel(MarkDirty);
         Web = new ParentWebViewModel(MarkDirty);
         Security = new ParentSecurityViewModel(pinService, developerOptions);
-        Profile = new ParentProfileViewModel(MarkDirty);
+        Profile = new ParentProfileViewModel(MarkDirty, () => _ = RerunOnboardingAsync());
 
         SelectPageCommand = new RelayCommand(parameter =>
         {
@@ -111,6 +115,9 @@ public sealed class ParentShellViewModel : ObservableObject
 
     /// <summary>Raised when the parent confirmed "Avsluta till Windows".</summary>
     public event EventHandler? ExitRequested;
+
+    /// <summary>Raised when the child profile was cleared and setup should run again.</summary>
+    public event EventHandler? RestartOnboardingRequested;
 
     public bool DeveloperMode => _developerOptions.DeveloperMode;
 
@@ -267,6 +274,46 @@ public sealed class ParentShellViewModel : ObservableObject
         {
             ExitRequested?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    /// <summary>
+    /// Clears the child profile and hands control back to first-run setup.
+    /// Deliberately keeps the app catalogue: this is also how a parent hands
+    /// the computer to a different child.
+    /// </summary>
+    private async Task RerunOnboardingAsync()
+    {
+        if (HasUnsavedChanges)
+        {
+            // Restarting commits through the same store, so unsaved edits would
+            // be silently lost. Ask the parent to resolve them first.
+            await _dialogs.ShowMessageAsync(
+                Strings.Get("Profile.RerunTitle"),
+                Strings.Get("Profile.RerunUnsaved"));
+            return;
+        }
+
+        var choice = await _dialogs.ShowConfirmAsync(
+            Strings.Get("Profile.RerunTitle"),
+            Strings.Get("Profile.RerunBody"),
+            Strings.Get("Profile.RerunPrimary"));
+
+        if (choice != ConfirmChoice.Primary)
+        {
+            return;
+        }
+
+        if (!_onboarding.Restart())
+        {
+            await _dialogs.ShowMessageAsync(
+                Strings.Get("Profile.RerunTitle"),
+                Strings.Get("Profile.RerunFailed"));
+            return;
+        }
+
+        _logger.Info("Parent", "Child profile cleared; first-run setup will run again.");
+        Reset();
+        RestartOnboardingRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private async Task ChangePinAsync()

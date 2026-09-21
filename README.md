@@ -1,12 +1,14 @@
 # KidShell / Barnläge
 
 KidShell turns an ordinary Windows laptop into something a six-year-old can use
-on their own. The child sees **Barnläge** — a bright, illustrated home screen
-with a handful of large, obvious cards. A parent holds one button for three
-seconds, enters a PIN, and gets **Föräldraläge**: a calmer screen for deciding
-what the child may use.
+on their own. On first launch a parent runs a short setup that names the child
+and chooses their avatar and theme. After that the child sees **Barnläge** — a
+bright, illustrated home screen with a handful of large, obvious cards. A parent
+holds one button for three seconds, enters a PIN, and gets **Föräldraläge**: a
+calmer screen for deciding what the child may use.
 
-> **Development status: MVP 0.1 — visual application shell.**
+> **Development status: MVP 0.1 — visual application shell, plus first-run
+> child profile onboarding.**
 >
 > **WINDOWS LOCKDOWN STATUS: NOT ENABLED.**
 > KidShell has not changed anything about this machine's Windows configuration
@@ -16,6 +18,11 @@ what the child may use.
 ---
 
 ## Screenshots
+
+| First run | |
+| --- | --- |
+| ![Welcome](docs/screenshots/setup-welcome.png) | ![Child name](docs/screenshots/setup-name.png) |
+| ![Avatar](docs/screenshots/setup-avatar.png) | ![Theme](docs/screenshots/setup-theme.png) |
 
 | Barnläge | Föräldraläge |
 | --- | --- |
@@ -33,9 +40,13 @@ Every screen in the app is built against those two images.
 ## What MVP 0.1 does
 
 * A real, packaged WinUI 3 desktop application on .NET 10 and Windows App SDK 2.5.1.
-* **Barnläge** — illustrated vector scene, child profile, live clock/battery/network
-  readout and a responsive 4x2 grid of large app cards with hover, pressed and
-  keyboard-focus states.
+* **First-run setup.** KidShell ships with no child configured. On first launch
+  a parent walks six screens — welcome, name, avatar, age, theme, finish — and
+  only the last one writes anything. There is no placeholder child and no
+  pretend profile; close the window half-way and setup simply runs again.
+* **Barnläge** — illustrated vector scene in one of five themes, the configured
+  child profile, live clock/battery/network readout and a responsive 4x2 grid of
+  large app cards with hover, pressed and keyboard-focus states.
 * **Föräldraläge** — six working pages (Översikt, Appar, Skärmtid, Webb,
   Säkerhet, Profil) behind a PIN.
 * **Configuration-driven app grid.** The cards come from a JSON configuration
@@ -46,6 +57,10 @@ Every screen in the app is built against those two images.
   programs produce a friendly card-level message instead of a crash.
 * **A parent PIN service** with PBKDF2 hashing, plus a clearly marked
   development fallback PIN.
+* **Fourteen vector avatars and five scene themes** (Skogen, Rymden, Havet,
+  Dinosaurier, Färgglatt), chosen during setup and editable afterwards in
+  Parent Mode. Text drawn on the scene flips to a light palette on the dark
+  themes so it stays readable.
 * **Durable local configuration** with atomic-ish writes, a `.bak` copy and
   recovery from a corrupt file.
 * **Local-only logging.** No telemetry, no analytics, no network calls at all.
@@ -70,6 +85,68 @@ words:
 * A child can minimise or close KidShell like any other program.
 
 If you need a locked-down machine today, KidShell is not that yet.
+
+---
+
+## First run and resetting it
+
+The first time KidShell starts with no configured child, it opens **first-run
+setup** instead of Child Mode:
+
+```text
+Launch
+  └─ configuration has a finished child profile?
+       ├─ no  → First-run setup (Välkommen till Barnläge)
+       └─ yes → Barnläge
+```
+
+Routing is decided once, at startup, from the persisted configuration. It is
+deterministic: `KidShellConfiguration.RequiresOnboarding` is true unless the
+profile carries `isOnboardingComplete` **and** a name, an age and an avatar.
+Both halves matter, so a document written half-way can never produce a
+partially configured Child Mode.
+
+Nothing is persisted until *Starta Barnläge* on the final screen. Closing the
+window mid-setup leaves the configuration untouched and setup runs again next
+time.
+
+### Running setup again
+
+Three ways, in order of preference:
+
+1. **In the app.** Föräldraläge → **Profil** → **Kör introduktionen igen**.
+   Asks for confirmation, then clears only the child's name, age and avatar and
+   returns to setup. The app list, screen time, web settings and the parent PIN
+   are kept — this is also how you hand the machine to a different child.
+
+2. **Edit the configuration.** Set `isOnboardingComplete` to `false` in
+   `kidshell.config.json` (path under [Where the data lives](#where-the-data-lives))
+   while KidShell is closed. Clearing `name`, `age` or `avatarId` has the same
+   effect.
+
+3. **Start from nothing.** Delete `kidshell.config.json` (and the `.bak` beside
+   it) while KidShell is closed. This also discards the app list and every other
+   setting, so prefer option 1 or 2 unless you want genuinely fresh defaults.
+
+```powershell
+# Option 3 - full reset. KidShell must not be running.
+Remove-Item "$env:LOCALAPPDATA\Packages\KidShell.Barnlage.Dev_b19zrs1eesfdc\LocalState\kidshell.config.json*"
+```
+
+### Upgrading an existing install
+
+The configuration document is versioned. Schema 1 (MVP 0.1) had no concept of
+onboarding, so it is migrated on load:
+
+* a profile still carrying the shipped placeholder name is treated as *never
+  set up* — it is cleared and setup runs;
+* any other profile is carried over as an already-configured child, so
+  upgrading never pushes a family back through setup;
+* the old `meadow` and `sunset` theme ids become `forest` and `bright`.
+
+Everything outside the child profile — apps, screen time, web settings, PIN —
+survives the migration untouched, and the migrated document is written straight
+back at schema 2.
 
 ---
 
@@ -206,7 +283,8 @@ See [`assets/README.md`](assets/README.md) for provenance and licensing.
 | Milestone | Scope |
 | --- | --- |
 | **0.1 — Visual shell** ✅ | Child Mode, Parent Mode, PIN, configuration, launcher abstraction, tests |
-| 0.2 — Fullscreen & polish | Borderless full-screen child mode behind a real `DeveloperMode` switch, first-run wizard, forced PIN setup, theme work |
+| **0.1.1 — First-run onboarding** ✅ | Six-screen child profile setup, 14 avatars, 5 themes, schema 2 migration, re-run from Parent Mode |
+| 0.2 — Fullscreen & polish | Borderless full-screen child mode behind a real `DeveloperMode` switch, forced PIN setup on first run, more theme work |
 | 0.3 — Screen time | Session watchdog that actually enforces the stored weekday/weekend limits, warnings before time runs out |
 | 0.4 — Web | A real allowlist browser or Edge policy integration for the stored web mode |
 | 0.5 — Windows integration | Dedicated child account, Assigned Access / kiosk, AppLocker or WDAC policy, secure sign-out for *Avsluta till Windows* |

@@ -16,7 +16,8 @@ public enum ConfigurationLoadStatus
 public sealed record ConfigurationLoadResult(
     KidShellConfiguration Configuration,
     ConfigurationLoadStatus Status,
-    string? Detail = null);
+    string? Detail = null,
+    bool WasMigrated = false);
 
 /// <summary>Reads and writes the persisted KidShell configuration.</summary>
 public interface IConfigurationStore

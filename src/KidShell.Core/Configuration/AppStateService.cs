@@ -69,9 +69,10 @@ public sealed class AppStateService : IAppStateService
         LoadStatus = result.Status;
         LoadDetail = result.Detail;
 
-        if (result.Status != ConfigurationLoadStatus.Loaded)
+        if (result.Status != ConfigurationLoadStatus.Loaded || result.WasMigrated)
         {
-            // Materialise the defaults so the next start is an ordinary load.
+            // Materialise defaults - or the migrated document - so the next
+            // start is an ordinary load of a current-schema file.
             _store.Save(Current);
         }
 

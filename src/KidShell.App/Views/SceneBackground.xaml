@@ -12,11 +12,39 @@
     <!--
         The illustrated KidShell world.
 
-        Entirely vector: gradients, hills, a lake, trees and clouds drawn as
-        XAML shapes on a 1920x520 canvas that is stretched to whatever panel
-        the app is running on. Decorative only - it is hit-test invisible and
-        hidden from assistive technology.
+        One piece of geometry, five palettes. Everything is vector: gradients,
+        hills, water, trees and clouds drawn as XAML shapes on a 1920x520
+        canvas that is stretched to whatever panel the app is running on.
+        SceneBackground.xaml.cs recolours the brushes below and toggles the
+        themed extras (sun, moon, stars, volcano) when Theme changes.
+
+        Decorative only: hit-test invisible and hidden from assistive
+        technology.
     -->
+    <UserControl.Resources>
+        <LinearGradientBrush x:Key="SkyBrush" StartPoint="0,0" EndPoint="0.15,1">
+            <GradientStop x:Name="SkyStopTop" Offset="0" Color="#FFA9D8F4" />
+            <GradientStop x:Name="SkyStopMid" Offset="0.55" Color="#FFCFE9FA" />
+            <GradientStop x:Name="SkyStopBottom" Offset="1" Color="#FFEDF7FD" />
+        </LinearGradientBrush>
+
+        <SolidColorBrush x:Key="SceneHillFar" Color="#FF9FD7A0" />
+        <SolidColorBrush x:Key="SceneHillMid" Color="#FF76C77A" />
+        <SolidColorBrush x:Key="SceneHillNear" Color="#FF59B463" />
+        <SolidColorBrush x:Key="SceneWater" Color="#FF78C0E8" />
+        <SolidColorBrush x:Key="SceneMountain" Color="#FF8FB2D1" />
+        <SolidColorBrush x:Key="SceneMountainCap" Color="#FFE8F1F8" />
+        <SolidColorBrush x:Key="SceneTreeDark" Color="#FF3F9A54" />
+        <SolidColorBrush x:Key="SceneTreeLight" Color="#FF63B96C" />
+        <SolidColorBrush x:Key="SceneTrunk" Color="#FF8A6046" />
+        <SolidColorBrush x:Key="SceneFoam" Color="#E6FFFFFF" />
+        <SolidColorBrush x:Key="SceneSunCore" Color="#FFFCD65B" />
+        <SolidColorBrush x:Key="SceneSunGlow" Color="#3DFBCB3A" />
+        <SolidColorBrush x:Key="SceneSunRay" Color="#FFF6C63A" />
+        <SolidColorBrush x:Key="SceneCloud" Color="#D9FFFFFF" />
+        <SolidColorBrush x:Key="SceneBloom" Color="#FFFFFFFF" />
+    </UserControl.Resources>
+
     <Grid x:Name="SceneRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="54*" />
@@ -24,128 +52,193 @@
         </Grid.RowDefinitions>
 
         <!-- ===== Sky ===== -->
-        <Rectangle x:Name="SkyMeadow" Grid.RowSpan="2">
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0.15,1">
-                    <GradientStop Offset="0" Color="#FFA9D8F4" />
-                    <GradientStop Offset="0.55" Color="#FFCFE9FA" />
-                    <GradientStop Offset="1" Color="#FFEDF7FD" />
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
+        <Rectangle Grid.RowSpan="2" Fill="{StaticResource SkyBrush}" />
 
-        <Rectangle x:Name="SkySunset" Grid.RowSpan="2" Opacity="0">
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0.15,1">
-                    <GradientStop Offset="0" Color="#FFF6C1A0" />
-                    <GradientStop Offset="0.5" Color="#FFFBDFC6" />
-                    <GradientStop Offset="1" Color="#FFFDF2E6" />
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
-
-        <Rectangle x:Name="SkyOcean" Grid.RowSpan="2" Opacity="0">
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0.15,1">
-                    <GradientStop Offset="0" Color="#FF87C6E8" />
-                    <GradientStop Offset="0.55" Color="#FFB9E2F2" />
-                    <GradientStop Offset="1" Color="#FFE6F6FB" />
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
+        <!-- ===== Stars (space only) ===== -->
+        <Viewbox x:Name="StarLayer" Grid.Row="0" Stretch="Fill" Visibility="Collapsed">
+            <Canvas Width="1920" Height="560">
+                <Ellipse Canvas.Left="140" Canvas.Top="70" Width="9" Height="9" Fill="#E6FFFFFF" />
+                <Ellipse Canvas.Left="320" Canvas.Top="180" Width="6" Height="6" Fill="#B3FFFFFF" />
+                <Ellipse Canvas.Left="470" Canvas.Top="96" Width="11" Height="11" Fill="#FFFFFFFF" />
+                <Ellipse Canvas.Left="640" Canvas.Top="250" Width="7" Height="7" Fill="#CCFFFFFF" />
+                <Ellipse Canvas.Left="820" Canvas.Top="130" Width="8" Height="8" Fill="#E6FFFFFF" />
+                <Ellipse Canvas.Left="980" Canvas.Top="60" Width="6" Height="6" Fill="#99FFFFFF" />
+                <Ellipse Canvas.Left="1130" Canvas.Top="220" Width="10" Height="10" Fill="#FFFFFFFF" />
+                <Ellipse Canvas.Left="1290" Canvas.Top="110" Width="7" Height="7" Fill="#CCFFFFFF" />
+                <Ellipse Canvas.Left="1460" Canvas.Top="300" Width="8" Height="8" Fill="#B3FFFFFF" />
+                <Ellipse Canvas.Left="1620" Canvas.Top="170" Width="11" Height="11" Fill="#FFFFFFFF" />
+                <Ellipse Canvas.Left="1780" Canvas.Top="90" Width="6" Height="6" Fill="#99FFFFFF" />
+                <Ellipse Canvas.Left="240" Canvas.Top="330" Width="7" Height="7" Fill="#A6FFFFFF" />
+                <Ellipse Canvas.Left="1010" Canvas.Top="350" Width="6" Height="6" Fill="#8CFFFFFF" />
+                <Path
+                    Stroke="#66FFFFFF" StrokeThickness="4"
+                    StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                    Data="M 560,140 L 620,112" />
+                <Path
+                    Fill="#FFFBD34F"
+                    Data="M 1380,392 L 1390,416 L 1416,418 L 1396,435 L 1402,460 L 1380,446 L 1358,460 L 1364,435 L 1344,418 L 1370,416 Z" />
+            </Canvas>
+        </Viewbox>
 
         <!-- ===== Clouds ===== -->
-        <Viewbox Grid.Row="0" Stretch="Fill">
+        <Viewbox x:Name="CloudLayer" Grid.Row="0" Stretch="Fill">
             <Canvas Width="1920" Height="560">
-                <Ellipse Canvas.Left="150" Canvas.Top="242" Width="190" Height="76" Fill="#D9FFFFFF" />
-                <Ellipse Canvas.Left="216" Canvas.Top="214" Width="150" Height="94" Fill="#D9FFFFFF" />
-                <Ellipse Canvas.Left="296" Canvas.Top="246" Width="146" Height="70" Fill="#D9FFFFFF" />
+                <Ellipse Canvas.Left="150" Canvas.Top="242" Width="190" Height="76" Fill="{StaticResource SceneCloud}" />
+                <Ellipse Canvas.Left="216" Canvas.Top="214" Width="150" Height="94" Fill="{StaticResource SceneCloud}" />
+                <Ellipse Canvas.Left="296" Canvas.Top="246" Width="146" Height="70" Fill="{StaticResource SceneCloud}" />
 
-                <Ellipse Canvas.Left="790" Canvas.Top="186" Width="210" Height="76" Fill="#C6FFFFFF" />
-                <Ellipse Canvas.Left="860" Canvas.Top="158" Width="156" Height="92" Fill="#C6FFFFFF" />
-                <Ellipse Canvas.Left="950" Canvas.Top="188" Width="152" Height="70" Fill="#C6FFFFFF" />
+                <Ellipse Canvas.Left="790" Canvas.Top="186" Width="210" Height="76" Fill="{StaticResource SceneCloud}" Opacity="0.85" />
+                <Ellipse Canvas.Left="860" Canvas.Top="158" Width="156" Height="92" Fill="{StaticResource SceneCloud}" Opacity="0.85" />
+                <Ellipse Canvas.Left="950" Canvas.Top="188" Width="152" Height="70" Fill="{StaticResource SceneCloud}" Opacity="0.85" />
 
-                <Ellipse Canvas.Left="1380" Canvas.Top="320" Width="170" Height="60" Fill="#99FFFFFF" />
-                <Ellipse Canvas.Left="1436" Canvas.Top="298" Width="124" Height="74" Fill="#99FFFFFF" />
+                <Ellipse Canvas.Left="1380" Canvas.Top="320" Width="170" Height="60" Fill="{StaticResource SceneCloud}" Opacity="0.65" />
+                <Ellipse Canvas.Left="1436" Canvas.Top="298" Width="124" Height="74" Fill="{StaticResource SceneCloud}" Opacity="0.65" />
 
-                <Ellipse Canvas.Left="470" Canvas.Top="376" Width="150" Height="50" Fill="#73FFFFFF" />
-                <Ellipse Canvas.Left="518" Canvas.Top="360" Width="110" Height="58" Fill="#73FFFFFF" />
+                <Ellipse Canvas.Left="470" Canvas.Top="376" Width="150" Height="50" Fill="{StaticResource SceneCloud}" Opacity="0.5" />
+                <Ellipse Canvas.Left="518" Canvas.Top="360" Width="110" Height="58" Fill="{StaticResource SceneCloud}" Opacity="0.5" />
             </Canvas>
         </Viewbox>
 
         <!-- ===== Sun (fixed proportions so it never turns into an oval) ===== -->
         <Grid
+            x:Name="SunLayer"
             Grid.Row="0"
             Width="152" Height="152"
             Margin="0,54,28,0"
             HorizontalAlignment="Right"
             VerticalAlignment="Top">
-            <Ellipse Fill="{StaticResource SunGlowBrush}" Margin="10" />
-            <Ellipse Margin="32" Fill="{StaticResource SunCoreBrush}" />
+            <Ellipse Margin="10" Fill="{StaticResource SceneSunGlow}" />
+            <Ellipse Margin="32" Fill="{StaticResource SceneSunCore}" />
             <Path
-                Stroke="#FFF6C63A" StrokeThickness="7"
+                Stroke="{StaticResource SceneSunRay}" StrokeThickness="7"
                 StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                 Data="M 76,6 L 76,20 M 76,132 L 76,146 M 6,76 L 20,76 M 132,76 L 146,76 M 27,27 L 37,37 M 115,115 L 125,125 M 125,27 L 115,37 M 37,115 L 27,125" />
+        </Grid>
+
+        <!-- ===== Moon (space only) ===== -->
+        <Grid
+            x:Name="MoonLayer"
+            Grid.Row="0"
+            Width="136" Height="136"
+            Margin="0,58,44,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Visibility="Collapsed">
+            <Ellipse Margin="6" Fill="#33FFFFFF" />
+            <Ellipse Margin="20" Fill="#FFEFF2F8" />
+            <Ellipse
+                Width="22" Height="22"
+                Margin="42,44,0,0"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                Fill="#FFD6DCE8" />
+            <Ellipse
+                Width="14" Height="14"
+                Margin="0,38,38,0"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Fill="#FFD6DCE8" />
+            <Ellipse
+                Width="18" Height="18"
+                Margin="52,0,0,38"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Fill="#FFD6DCE8" />
         </Grid>
 
         <!-- ===== Landscape ===== -->
         <Viewbox Grid.Row="1" Stretch="Fill" VerticalAlignment="Bottom">
             <Canvas Width="1920" Height="520">
                 <!-- Distant mountains -->
-                <Path Fill="{StaticResource MountainBrush}"
-                      Data="M 900,160 L 1080,10 L 1196,124 L 1276,44 L 1450,160 Z" />
-                <Path Fill="{StaticResource MountainSnowBrush}"
-                      Data="M 1056,48 L 1080,26 L 1106,48 L 1088,56 L 1072,42 Z" />
-                <Path Fill="{StaticResource MountainSnowBrush}"
-                      Data="M 1250,70 L 1268,52 L 1290,74 L 1276,80 L 1262,66 Z" />
+                <Path
+                    x:Name="MountainLayer"
+                    Fill="{StaticResource SceneMountain}"
+                    Data="M 900,160 L 1080,10 L 1196,124 L 1276,44 L 1450,160 Z" />
+                <Path
+                    x:Name="MountainCapA"
+                    Fill="{StaticResource SceneMountainCap}"
+                    Data="M 1056,48 L 1080,26 L 1106,48 L 1088,56 L 1072,42 Z" />
+                <Path
+                    x:Name="MountainCapB"
+                    Fill="{StaticResource SceneMountainCap}"
+                    Data="M 1250,70 L 1268,52 L 1290,74 L 1276,80 L 1262,66 Z" />
+
+                <!-- Volcano (dinosaur theme only) -->
+                <Canvas x:Name="VolcanoLayer" Visibility="Collapsed">
+                    <Path Fill="#FF6E5A55" Data="M 1180,180 L 1300,36 L 1350,36 L 1470,180 Z" />
+                    <Path Fill="#FF5A4A46" Data="M 1300,36 L 1325,66 L 1350,36 Z" />
+                    <Path Fill="#FFE2622F" Data="M 1296,38 L 1354,38 L 1364,64 L 1338,54 L 1320,70 L 1298,52 Z" />
+                    <Path Fill="#FFF0913C" Data="M 1312,52 C 1322,74 1300,96 1306,124 C 1290,104 1294,74 1312,52 Z" />
+                </Canvas>
 
                 <!-- Far hills -->
-                <Path Fill="{StaticResource HillFarBrush}"
-                      Data="M 0,128 C 200,64 380,156 560,116 C 760,70 900,146 1100,104 C 1320,58 1520,146 1720,116 C 1820,100 1880,116 1920,104 L 1920,520 L 0,520 Z" />
+                <Path
+                    Fill="{StaticResource SceneHillFar}"
+                    Data="M 0,128 C 200,64 380,156 560,116 C 760,70 900,146 1100,104 C 1320,58 1520,146 1720,116 C 1820,100 1880,116 1920,104 L 1920,520 L 0,520 Z" />
 
                 <!-- Mid hills -->
-                <Path Fill="{StaticResource HillMidBrush}"
-                      Data="M 0,208 C 220,146 420,238 640,196 C 860,154 1060,242 1300,200 C 1520,162 1740,222 1920,190 L 1920,520 L 0,520 Z" />
+                <Path
+                    Fill="{StaticResource SceneHillMid}"
+                    Data="M 0,208 C 220,146 420,238 640,196 C 860,154 1060,242 1300,200 C 1520,162 1740,222 1920,190 L 1920,520 L 0,520 Z" />
 
                 <!-- Lake -->
-                <Ellipse Canvas.Left="560" Canvas.Top="248" Width="820" Height="176" Fill="{StaticResource LakeBrush}" />
-                <Ellipse Canvas.Left="700" Canvas.Top="286" Width="240" Height="34" Fill="#66FFFFFF" />
-                <Ellipse Canvas.Left="1010" Canvas.Top="320" Width="150" Height="22" Fill="#4DFFFFFF" />
+                <Canvas x:Name="LakeLayer">
+                    <Ellipse Canvas.Left="560" Canvas.Top="248" Width="820" Height="176" Fill="{StaticResource SceneWater}" />
+                    <Ellipse Canvas.Left="700" Canvas.Top="286" Width="240" Height="34" Fill="#66FFFFFF" />
+                    <Ellipse Canvas.Left="1010" Canvas.Top="320" Width="150" Height="22" Fill="#4DFFFFFF" />
+                </Canvas>
 
-                <!-- Near hills, wrapping the lake -->
-                <Path Fill="{StaticResource HillNearBrush}"
-                      Data="M 0,338 C 260,286 460,366 700,352 C 786,346 846,398 960,398 C 1074,398 1134,346 1220,352 C 1460,366 1680,290 1920,338 L 1920,520 L 0,520 Z" />
+                <!-- Open sea (ocean theme only) -->
+                <Canvas x:Name="SeaLayer" Visibility="Collapsed">
+                    <Path
+                        Fill="{StaticResource SceneWater}"
+                        Data="M 0,214 C 240,190 420,236 660,214 C 900,192 1120,238 1360,216 C 1580,196 1760,232 1920,210 L 1920,520 L 0,520 Z" />
+                    <Path
+                        Stroke="#59FFFFFF" StrokeThickness="7"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                        Data="M 180,300 C 214,286 248,314 282,300 M 620,344 C 654,330 688,358 722,344 M 1180,312 C 1214,298 1248,326 1282,312 M 1540,368 C 1574,354 1608,382 1642,368" />
+                    <Path
+                        Stroke="#40FFFFFF" StrokeThickness="6"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                        Data="M 380,400 C 414,386 448,414 482,400 M 900,432 C 934,418 968,446 1002,432 M 1380,440 C 1414,426 1448,454 1482,440" />
+                </Canvas>
 
-                <!-- Trees, left cluster -->
-                <Rectangle Canvas.Left="128" Canvas.Top="244" Width="20" Height="70" Fill="{StaticResource TrunkBrush}" />
-                <Ellipse Canvas.Left="86" Canvas.Top="186" Width="104" Height="92" Fill="{StaticResource TreeDarkBrush}" />
-                <Ellipse Canvas.Left="106" Canvas.Top="164" Width="86" Height="80" Fill="{StaticResource TreeLightBrush}" />
-                <Rectangle Canvas.Left="236" Canvas.Top="268" Width="15" Height="54" Fill="{StaticResource TrunkBrush}" />
-                <Ellipse Canvas.Left="204" Canvas.Top="222" Width="80" Height="70" Fill="{StaticResource TreeDarkBrush}" />
+                <!-- Near hills, wrapping the water -->
+                <Path
+                    x:Name="NearHillLayer"
+                    Fill="{StaticResource SceneHillNear}"
+                    Data="M 0,338 C 260,286 460,366 700,352 C 786,346 846,398 960,398 C 1074,398 1134,346 1220,352 C 1460,366 1680,290 1920,338 L 1920,520 L 0,520 Z" />
 
-                <!-- Trees, right cluster -->
-                <Rectangle Canvas.Left="1706" Canvas.Top="240" Width="22" Height="74" Fill="{StaticResource TrunkBrush}" />
-                <Ellipse Canvas.Left="1660" Canvas.Top="178" Width="114" Height="98" Fill="{StaticResource TreeDarkBrush}" />
-                <Ellipse Canvas.Left="1684" Canvas.Top="156" Width="90" Height="84" Fill="{StaticResource TreeLightBrush}" />
-                <Rectangle Canvas.Left="1590" Canvas.Top="272" Width="14" Height="50" Fill="{StaticResource TrunkBrush}" />
-                <Ellipse Canvas.Left="1560" Canvas.Top="228" Width="76" Height="66" Fill="{StaticResource TreeDarkBrush}" />
+                <!-- Trees and bushes -->
+                <Canvas x:Name="FloraLayer">
+                    <Rectangle Canvas.Left="128" Canvas.Top="244" Width="20" Height="70" Fill="{StaticResource SceneTrunk}" />
+                    <Ellipse Canvas.Left="86" Canvas.Top="186" Width="104" Height="92" Fill="{StaticResource SceneTreeDark}" />
+                    <Ellipse Canvas.Left="106" Canvas.Top="164" Width="86" Height="80" Fill="{StaticResource SceneTreeLight}" />
+                    <Rectangle Canvas.Left="236" Canvas.Top="268" Width="15" Height="54" Fill="{StaticResource SceneTrunk}" />
+                    <Ellipse Canvas.Left="204" Canvas.Top="222" Width="80" Height="70" Fill="{StaticResource SceneTreeDark}" />
 
-                <!-- Bushes -->
-                <Ellipse Canvas.Left="300" Canvas.Top="378" Width="70" Height="44" Fill="{StaticResource TreeDarkBrush}" />
-                <Ellipse Canvas.Left="332" Canvas.Top="386" Width="56" Height="36" Fill="{StaticResource TreeLightBrush}" />
-                <Ellipse Canvas.Left="1420" Canvas.Top="384" Width="62" Height="40" Fill="{StaticResource TreeDarkBrush}" />
-                <Ellipse Canvas.Left="1394" Canvas.Top="392" Width="50" Height="32" Fill="{StaticResource TreeLightBrush}" />
+                    <Rectangle Canvas.Left="1706" Canvas.Top="240" Width="22" Height="74" Fill="{StaticResource SceneTrunk}" />
+                    <Ellipse Canvas.Left="1660" Canvas.Top="178" Width="114" Height="98" Fill="{StaticResource SceneTreeDark}" />
+                    <Ellipse Canvas.Left="1684" Canvas.Top="156" Width="90" Height="84" Fill="{StaticResource SceneTreeLight}" />
+                    <Rectangle Canvas.Left="1590" Canvas.Top="272" Width="14" Height="50" Fill="{StaticResource SceneTrunk}" />
+                    <Ellipse Canvas.Left="1560" Canvas.Top="228" Width="76" Height="66" Fill="{StaticResource SceneTreeDark}" />
 
-                <!-- Flowers -->
-                <Ellipse Canvas.Left="470" Canvas.Top="406" Width="13" Height="13" Fill="#FFFFFFFF" />
-                <Ellipse Canvas.Left="520" Canvas.Top="422" Width="11" Height="11" Fill="#FFFDE9A9" />
-                <Ellipse Canvas.Left="1470" Canvas.Top="404" Width="13" Height="13" Fill="#FFFFFFFF" />
-                <Ellipse Canvas.Left="1530" Canvas.Top="424" Width="11" Height="11" Fill="#FFFDE9A9" />
-                <Ellipse Canvas.Left="180" Canvas.Top="420" Width="12" Height="12" Fill="#FFFFFFFF" />
+                    <Ellipse Canvas.Left="300" Canvas.Top="378" Width="70" Height="44" Fill="{StaticResource SceneTreeDark}" />
+                    <Ellipse Canvas.Left="332" Canvas.Top="386" Width="56" Height="36" Fill="{StaticResource SceneTreeLight}" />
+                    <Ellipse Canvas.Left="1420" Canvas.Top="384" Width="62" Height="40" Fill="{StaticResource SceneTreeDark}" />
+                    <Ellipse Canvas.Left="1394" Canvas.Top="392" Width="50" Height="32" Fill="{StaticResource SceneTreeLight}" />
+                </Canvas>
 
-                <!-- Foreground wave the footer sits on -->
-                <Path Fill="#E6FFFFFF"
-                      Data="M 0,438 C 300,396 620,478 960,446 C 1300,414 1640,476 1920,436 L 1920,520 L 0,520 Z" />
+                <!-- Blooms -->
+                <Canvas x:Name="BloomLayer">
+                    <Ellipse Canvas.Left="470" Canvas.Top="406" Width="13" Height="13" Fill="{StaticResource SceneBloom}" />
+                    <Ellipse Canvas.Left="520" Canvas.Top="422" Width="11" Height="11" Fill="#FFFDE9A9" />
+                    <Ellipse Canvas.Left="1470" Canvas.Top="404" Width="13" Height="13" Fill="{StaticResource SceneBloom}" />
+                    <Ellipse Canvas.Left="1530" Canvas.Top="424" Width="11" Height="11" Fill="#FFFDE9A9" />
+                    <Ellipse Canvas.Left="180" Canvas.Top="420" Width="12" Height="12" Fill="{StaticResource SceneBloom}" />
+                </Canvas>
+
+                <!-- Foreground band the footer sits on -->
+                <Path
+                    Fill="{StaticResource SceneFoam}"
+                    Data="M 0,438 C 300,396 620,478 960,446 C 1300,414 1640,476 1920,436 L 1920,520 L 0,520 Z" />
             </Canvas>
         </Viewbox>
     </Grid>

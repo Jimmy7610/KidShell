@@ -72,9 +72,10 @@
                         FontFamily="{StaticResource DisplayFontFamily}"
                         FontSize="23"
                         FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}" />
+                        Foreground="{StaticResource OnSceneStrongBrush}" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock
+                            Foreground="{StaticResource OnSceneSecondaryBrush}"
                             Style="{StaticResource SecondaryTextStyle}"
                             Text="{loc:Str Key=Parent.ChildMotto}" />
                         <FontIcon

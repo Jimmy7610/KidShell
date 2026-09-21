@@ -88,4 +88,113 @@
         </Canvas>
     </DataTemplate>
 
+    <DataTemplate x:Key="Avatar_cat">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF8D9AA8" />
+            <Path Fill="#FF6F7C8A" Data="M 24,28 L 30,8 L 46,22 Z" />
+            <Path Fill="#FF6F7C8A" Data="M 76,28 L 70,8 L 54,22 Z" />
+            <Ellipse Canvas.Left="18" Canvas.Top="24" Width="64" Height="60" Fill="#FFA7B4C1" />
+            <Ellipse Canvas.Left="33" Canvas.Top="42" Width="11" Height="13" Fill="#FF2C3A46" />
+            <Ellipse Canvas.Left="56" Canvas.Top="42" Width="11" Height="13" Fill="#FF2C3A46" />
+            <Path Fill="#FFF0B7C2" Data="M 44,62 L 56,62 L 50,69 Z" />
+            <Path Stroke="#FF6F7C8A" StrokeThickness="2.5" StrokeStartLineCap="Round" Data="M 30,64 L 14,60 M 30,70 L 15,72 M 70,64 L 86,60 M 70,70 L 85,72" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_dino">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF63C177" />
+            <Path Fill="#FF3E9A57" Data="M 34,24 L 42,10 L 48,24 L 56,10 L 62,24 L 70,14 L 72,30 Z" />
+            <Ellipse Canvas.Left="20" Canvas.Top="28" Width="62" Height="56" Fill="#FF87D398" />
+            <Ellipse Canvas.Left="32" Canvas.Top="44" Width="12" Height="12" Fill="#FF23402C" />
+            <Ellipse Canvas.Left="56" Canvas.Top="44" Width="12" Height="12" Fill="#FF23402C" />
+            <Ellipse Canvas.Left="35" Canvas.Top="46" Width="5" Height="5" Fill="#FFFFFFFF" />
+            <Ellipse Canvas.Left="59" Canvas.Top="46" Width="5" Height="5" Fill="#FFFFFFFF" />
+            <Path Stroke="#FF23402C" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 38,68 C 44,74 56,74 62,68" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_robot">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF5C7FA6" />
+            <Rectangle Canvas.Left="48" Canvas.Top="10" Width="4" Height="14" Fill="#FFD7E2EC" />
+            <Ellipse Canvas.Left="44" Canvas.Top="4" Width="12" Height="12" Fill="#FFF7C331" />
+            <Rectangle Canvas.Left="22" Canvas.Top="24" Width="56" Height="52" RadiusX="14" RadiusY="14" Fill="#FFDCE6EF" />
+            <Rectangle Canvas.Left="30" Canvas.Top="36" Width="40" Height="18" RadiusX="9" RadiusY="9" Fill="#FF32475C" />
+            <Ellipse Canvas.Left="36" Canvas.Top="40" Width="10" Height="10" Fill="#FF5ED7F2" />
+            <Ellipse Canvas.Left="54" Canvas.Top="40" Width="10" Height="10" Fill="#FF5ED7F2" />
+            <Rectangle Canvas.Left="38" Canvas.Top="62" Width="24" Height="6" RadiusX="3" RadiusY="3" Fill="#FF8FA2B4" />
+            <Rectangle Canvas.Left="14" Canvas.Top="40" Width="8" Height="18" RadiusX="4" RadiusY="4" Fill="#FFB9C7D5" />
+            <Rectangle Canvas.Left="78" Canvas.Top="40" Width="8" Height="18" RadiusX="4" RadiusY="4" Fill="#FFB9C7D5" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_whale">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF57B6E0" />
+            <Path Stroke="#FFEAF7FD" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 50,26 L 50,14 M 40,30 L 34,20 M 60,30 L 66,20" />
+            <Path Fill="#FF2F7FB5" Data="M 18,54 C 18,38 40,32 56,38 C 72,44 80,54 84,52 L 84,74 C 72,80 34,80 22,68 Z" />
+            <Path Fill="#FF2F7FB5" Data="M 80,46 L 94,36 L 92,62 Z" />
+            <Path Fill="#FFCFE9F7" Data="M 26,62 C 34,74 62,76 76,70 C 68,78 36,80 26,70 Z" />
+            <Ellipse Canvas.Left="34" Canvas.Top="48" Width="9" Height="9" Fill="#FF10344F" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_lion">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FFE8A33D" />
+            <Ellipse Canvas.Left="8" Canvas.Top="8" Width="84" Height="84" Fill="#FFC97F22" />
+            <Ellipse Canvas.Left="14" Canvas.Top="8" Width="24" Height="24" Fill="#FFC97F22" />
+            <Ellipse Canvas.Left="62" Canvas.Top="8" Width="24" Height="24" Fill="#FFC97F22" />
+            <Ellipse Canvas.Left="20" Canvas.Top="22" Width="60" Height="58" Fill="#FFF3C169" />
+            <Ellipse Canvas.Left="34" Canvas.Top="40" Width="10" Height="11" Fill="#FF4A2D10" />
+            <Ellipse Canvas.Left="56" Canvas.Top="40" Width="10" Height="11" Fill="#FF4A2D10" />
+            <Ellipse Canvas.Left="38" Canvas.Top="56" Width="24" Height="18" Fill="#FFFDEBCF" />
+            <Path Fill="#FF4A2D10" Data="M 44,60 L 56,60 L 50,66 Z" />
+            <Path Stroke="#FF4A2D10" StrokeThickness="2.5" StrokeStartLineCap="Round" Data="M 50,66 L 50,71 M 50,71 C 46,75 42,73 41,70 M 50,71 C 54,75 58,73 59,70" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_frog">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF74C24A" />
+            <Ellipse Canvas.Left="16" Canvas.Top="14" Width="30" Height="30" Fill="#FF93D46A" />
+            <Ellipse Canvas.Left="54" Canvas.Top="14" Width="30" Height="30" Fill="#FF93D46A" />
+            <Ellipse Canvas.Left="22" Canvas.Top="20" Width="18" Height="18" Fill="#FFFFFFFF" />
+            <Ellipse Canvas.Left="60" Canvas.Top="20" Width="18" Height="18" Fill="#FFFFFFFF" />
+            <Ellipse Canvas.Left="28" Canvas.Top="26" Width="9" Height="9" Fill="#FF1E3A14" />
+            <Ellipse Canvas.Left="66" Canvas.Top="26" Width="9" Height="9" Fill="#FF1E3A14" />
+            <Ellipse Canvas.Left="18" Canvas.Top="38" Width="64" Height="48" Fill="#FF93D46A" />
+            <Path Stroke="#FF1E3A14" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 32,62 C 42,74 58,74 68,62" />
+            <Ellipse Canvas.Left="28" Canvas.Top="52" Width="8" Height="6" Fill="#FF6BAE3E" />
+            <Ellipse Canvas.Left="64" Canvas.Top="52" Width="8" Height="6" Fill="#FF6BAE3E" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_bee">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FFF3C43C" />
+            <Ellipse Canvas.Left="10" Canvas.Top="24" Width="34" Height="26" Fill="#99FFFFFF" />
+            <Ellipse Canvas.Left="56" Canvas.Top="24" Width="34" Height="26" Fill="#99FFFFFF" />
+            <Ellipse Canvas.Left="24" Canvas.Top="26" Width="52" Height="58" Fill="#FFFBE08B" />
+            <Path Fill="#FF3B3021" Data="M 27,50 C 38,54 62,54 73,50 L 73,58 C 62,62 38,62 27,58 Z" />
+            <Path Fill="#FF3B3021" Data="M 30,68 C 40,72 60,72 70,68 L 66,78 C 58,81 42,81 34,78 Z" />
+            <Ellipse Canvas.Left="34" Canvas.Top="36" Width="10" Height="10" Fill="#FF3B3021" />
+            <Ellipse Canvas.Left="56" Canvas.Top="36" Width="10" Height="10" Fill="#FF3B3021" />
+            <Path Stroke="#FF3B3021" StrokeThickness="3" StrokeStartLineCap="Round" Data="M 38,24 L 32,12 M 62,24 L 68,12" />
+            <Ellipse Canvas.Left="28" Canvas.Top="6" Width="9" Height="9" Fill="#FF3B3021" />
+            <Ellipse Canvas.Left="63" Canvas.Top="6" Width="9" Height="9" Fill="#FF3B3021" />
+        </Canvas>
+    </DataTemplate>
+
+    <DataTemplate x:Key="Avatar_star">
+        <Canvas Width="100" Height="100">
+            <Ellipse Width="100" Height="100" Fill="#FF7E6BD8" />
+            <Path Fill="#FFFBD34F" Data="M 50,14 L 60,38 L 86,40 L 66,57 L 72,83 L 50,69 L 28,83 L 34,57 L 14,40 L 40,38 Z" />
+            <Ellipse Canvas.Left="39" Canvas.Top="42" Width="8" Height="9" Fill="#FF3D2F76" />
+            <Ellipse Canvas.Left="53" Canvas.Top="42" Width="8" Height="9" Fill="#FF3D2F76" />
+            <Path Stroke="#FF3D2F76" StrokeThickness="3" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M 42,58 C 46,63 54,63 58,58" />
+        </Canvas>
+    </DataTemplate>
+
 </ResourceDictionary>

@@ -8,6 +8,8 @@ namespace KidShell.App.ViewModels;
 
 public enum ShellMode
 {
+    /// <summary>First-run setup. Shown until a parent has configured a child.</summary>
+    Onboarding,
     Child,
     Parent
 }
@@ -31,6 +33,7 @@ public sealed class ShellViewModel : ObservableObject
         IDialogService dialogs,
         IDeveloperOptions developerOptions,
         IKidShellLogger logger,
+        OnboardingViewModel onboarding,
         ChildHomeViewModel child,
         PinOverlayViewModel pin,
         ParentShellViewModel parent)
@@ -40,6 +43,7 @@ public sealed class ShellViewModel : ObservableObject
         _developerOptions = developerOptions;
         _logger = logger;
 
+        Onboarding = onboarding;
         Child = child;
         Pin = pin;
         Parent = parent;
@@ -48,9 +52,32 @@ public sealed class ShellViewModel : ObservableObject
         Pin.Cancelled += (_, _) => ClosePin();
         Parent.BackToChildRequested += (_, _) => ReturnToChild();
         Parent.ExitRequested += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
+        Parent.RestartOnboardingRequested += (_, _) => StartOnboarding();
+        Onboarding.Completed += (_, _) => FinishOnboarding();
+
+        // The setup screens preview the chosen theme live, so a pick on the
+        // theme step has to reach the window's scene background.
+        Onboarding.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(OnboardingViewModel.PreviewThemeId) && IsOnboardingMode)
+            {
+                OnPropertyChanged(nameof(SceneThemeId));
+            }
+        };
 
         RequestParentAccessCommand = new RelayCommand(OpenPin);
+
+        // Deterministic startup routing: a configuration without a finished
+        // child profile always lands on first-run setup.
+        _mode = state.Current.RequiresOnboarding ? ShellMode.Onboarding : ShellMode.Child;
+
+        if (_mode == ShellMode.Onboarding)
+        {
+            Onboarding.Reset();
+        }
     }
+
+    public OnboardingViewModel Onboarding { get; }
 
     public ChildHomeViewModel Child { get; }
 
@@ -76,15 +103,26 @@ public sealed class ShellViewModel : ObservableObject
         {
             if (SetProperty(ref _mode, value))
             {
+                OnPropertyChanged(nameof(IsOnboardingMode));
                 OnPropertyChanged(nameof(IsChildMode));
                 OnPropertyChanged(nameof(IsParentMode));
+                OnPropertyChanged(nameof(SceneThemeId));
             }
         }
     }
 
+    public bool IsOnboardingMode => Mode == ShellMode.Onboarding;
+
     public bool IsChildMode => Mode == ShellMode.Child;
 
     public bool IsParentMode => Mode == ShellMode.Parent;
+
+    /// <summary>
+    /// The scene theme to draw behind whatever is on screen. During setup the
+    /// parent's current pick previews live; afterwards it follows the profile.
+    /// </summary>
+    public string SceneThemeId =>
+        IsOnboardingMode ? Onboarding.PreviewThemeId : _state.Current.Child.ThemeId;
 
     public bool IsPinOpen
     {
@@ -95,7 +133,7 @@ public sealed class ShellViewModel : ObservableObject
     /// <summary>Shows the PIN gate. The only route from Child Mode to Parent Mode.</summary>
     public void OpenPin()
     {
-        if (IsParentMode)
+        if (IsParentMode || IsOnboardingMode)
         {
             return;
         }
@@ -121,6 +159,24 @@ public sealed class ShellViewModel : ObservableObject
         Mode = ShellMode.Child;
         Child.Refresh();
         _logger.Info("Shell", "Returned to Child Mode.");
+    }
+
+    /// <summary>Sends the app back to first-run setup with a clean draft.</summary>
+    public void StartOnboarding()
+    {
+        IsPinOpen = false;
+        Onboarding.Reset();
+        Mode = ShellMode.Onboarding;
+        _logger.Info("Shell", "First-run setup opened.");
+    }
+
+    /// <summary>Called once the profile has been saved by the setup flow.</summary>
+    private void FinishOnboarding()
+    {
+        Child.Refresh();
+        Mode = ShellMode.Child;
+        OnPropertyChanged(nameof(SceneThemeId));
+        _logger.Info("Shell", "First-run setup finished; Child Mode is now personalised.");
     }
 
     /// <summary>

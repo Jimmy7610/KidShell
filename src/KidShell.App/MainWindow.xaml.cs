@@ -8,6 +8,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.System;
 using Windows.UI;
 
@@ -111,6 +112,8 @@ public sealed partial class MainWindow : Window
         _dialogs.Host = RootLayer;
         _picker.WindowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
+        OnboardingView.Initialize(_viewModel.Onboarding);
+
         ChildView.Initialize(
             _viewModel.Child,
             _viewModel.DeveloperMode,
@@ -159,10 +162,62 @@ public sealed partial class MainWindow : Window
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => Render();
 
     private void OnConfigurationChanged(object? sender, ConfigurationChangedEventArgs e) =>
-        Scene.Theme = e.Configuration.Child.ThemeId;
+        ApplySceneTheme();
+
+    /// <summary>
+    /// Points the scene at the current theme and flips the on-scene text
+    /// palette with it.
+    ///
+    /// Only text drawn straight onto the illustration is affected - anything
+    /// on a white card keeps the normal palette. Without this, the dark sky
+    /// themes would leave the greeting and the clock unreadable.
+    /// </summary>
+    private void ApplySceneTheme()
+    {
+        var themeId = _viewModel.SceneThemeId;
+        Scene.Theme = themeId;
+
+        var isDark = ThemeIds.IsDarkScene(themeId);
+
+        SetBrushColor("OnSceneStrongBrush", isDark ? OnDarkStrong : OnLightStrong);
+        SetBrushColor("OnSceneSecondaryBrush", isDark ? OnDarkSecondary : OnLightSecondary);
+        SetStopColor("WordmarkStopTop", isDark ? WordmarkDarkTop : WordmarkLightTop);
+        SetStopColor("WordmarkStopBottom", isDark ? WordmarkDarkBottom : WordmarkLightBottom);
+    }
+
+    // Light scenes keep the approved palette from the design references.
+    private static readonly Color OnLightStrong = Color.FromArgb(0xFF, 0x12, 0x2A, 0x3F);
+    private static readonly Color OnLightSecondary = Color.FromArgb(0xFF, 0x4A, 0x5E, 0x72);
+    private static readonly Color WordmarkLightTop = Color.FromArgb(0xFF, 0x38, 0x98, 0xEC);
+    private static readonly Color WordmarkLightBottom = Color.FromArgb(0xFF, 0x0E, 0x4F, 0x97);
+
+    // Dark scenes get a near-white pair that clears AA contrast on the sky.
+    private static readonly Color OnDarkStrong = Color.FromArgb(0xFF, 0xF4, 0xF7, 0xFC);
+    private static readonly Color OnDarkSecondary = Color.FromArgb(0xFF, 0xC6, 0xD1, 0xE6);
+    private static readonly Color WordmarkDarkTop = Color.FromArgb(0xFF, 0xBF, 0xDD, 0xFA);
+    private static readonly Color WordmarkDarkBottom = Color.FromArgb(0xFF, 0x74, 0xB6, 0xF2);
+
+    private static void SetBrushColor(string key, Color color)
+    {
+        if (Application.Current?.Resources.TryGetValue(key, out var value) is true &&
+            value is SolidColorBrush brush)
+        {
+            brush.Color = color;
+        }
+    }
+
+    private static void SetStopColor(string key, Color color)
+    {
+        if (Application.Current?.Resources.TryGetValue(key, out var value) is true &&
+            value is GradientStop stop)
+        {
+            stop.Color = color;
+        }
+    }
 
     private void Render()
     {
+        OnboardingView.Visibility = _viewModel.IsOnboardingMode ? Visibility.Visible : Visibility.Collapsed;
         ChildView.Visibility = _viewModel.IsChildMode ? Visibility.Visible : Visibility.Collapsed;
         ParentView.Visibility = _viewModel.IsParentMode ? Visibility.Visible : Visibility.Collapsed;
 
@@ -178,7 +233,7 @@ public sealed partial class MainWindow : Window
             PinOverlay.PrepareForEntry();
         }
 
-        Scene.Theme = _state.Current.Child.ThemeId;
+        ApplySceneTheme();
     }
 
     private Task ShowChildSettingsNoticeAsync() =>

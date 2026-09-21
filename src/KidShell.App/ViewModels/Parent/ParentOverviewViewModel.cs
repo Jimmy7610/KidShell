@@ -14,7 +14,7 @@ public sealed class ParentOverviewViewModel : ObservableObject
 {
     private KidShellConfiguration _draft = KidShellConfiguration.CreateDefault();
 
-    public string Subtitle => Strings.Format("Overview.Subtitle", _draft.Child.Name);
+    public string Subtitle => Strings.Format("Overview.Subtitle", Strings.Genitive(_draft.Child.Name));
 
     public string AppsValue => Strings.Format("Overview.AppsValue", _draft.Apps.Count(a => a.IsEnabled));
 

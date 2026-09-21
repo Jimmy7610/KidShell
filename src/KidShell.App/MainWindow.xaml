@@ -23,6 +23,8 @@
             VerticalAlignment="Top"
             Background="Transparent" />
 
+        <views:OnboardingView x:Name="OnboardingView" Visibility="Collapsed" />
+
         <views:ChildHomeView x:Name="ChildView" />
 
         <views:ParentShellView x:Name="ParentView" Visibility="Collapsed" />

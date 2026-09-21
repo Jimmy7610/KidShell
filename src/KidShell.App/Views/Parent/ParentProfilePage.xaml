@@ -50,7 +50,7 @@
                         <Slider
                             x:Name="AgeSlider"
                             AutomationProperties.Name="{loc:Str Key=Profile.AgeLabel}"
-                            Maximum="14"
+                            Maximum="18"
                             Minimum="2"
                             StepFrequency="1"
                             TickFrequency="1"
@@ -157,6 +157,45 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
             </StackPanel>
+
+            <!--
+                Development- and handover-friendly: clears only the child
+                profile and runs first-run setup again. Apps, screen time, web
+                settings and the parent PIN are kept.
+            -->
+            <Border Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon
+                        Grid.Column="0"
+                        FontFamily="{StaticResource SymbolFontFamily}"
+                        FontSize="20"
+                        Foreground="{StaticResource TextSecondaryBrush}"
+                        Glyph="&#xE72C;"
+                        VerticalAlignment="Center" />
+
+                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock
+                            Style="{StaticResource SectionTitleTextStyle}"
+                            Text="{loc:Str Key=Profile.RerunOnboarding}" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Profile.RerunBody}" />
+                    </StackPanel>
+
+                    <Button
+                        x:Name="RerunOnboardingButton"
+                        Grid.Column="2"
+                        Content="{loc:Str Key=Profile.RerunOnboarding}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        VerticalAlignment="Center" />
+                </Grid>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

@@ -23,6 +23,7 @@
                 <ResourceDictionary Source="ms-appx:///Themes/Buttons.xaml" />
                 <ResourceDictionary Source="ms-appx:///Themes/Cards.xaml" />
                 <ResourceDictionary Source="ms-appx:///Themes/Navigation.xaml" />
+                <ResourceDictionary Source="ms-appx:///Themes/Onboarding.xaml" />
 
                 <!-- Vector artwork -->
                 <ResourceDictionary Source="ms-appx:///Themes/AppIcons.xaml" />

@@ -69,7 +69,7 @@ public static class Strings
 
         // ---------- Overview ----------
         ["Overview.Title"] = "Översikt",
-        ["Overview.Subtitle"] = "Så här är {0}s dator inställd just nu.",
+        ["Overview.Subtitle"] = "Så här är {0} dator inställd just nu.",
         ["Overview.AppsTitle"] = "Appar",
         ["Overview.AppsValue"] = "{0} tillåtna",
         ["Overview.AppsHint"] = "Av totalt {0} konfigurerade.",
@@ -179,10 +179,70 @@ public static class Strings
         ["Profile.AvatarLabel"] = "Figur",
         ["Profile.ThemeLabel"] = "Tema",
         ["Profile.AvatarAutomation"] = "Välj figuren {0}",
-        ["Profile.ThemeMeadow"] = "Äng",
-        ["Profile.ThemeSunset"] = "Solnedgång",
-        ["Profile.ThemeOcean"] = "Hav",
         ["Profile.PreviewTitle"] = "Så här ser det ut",
+
+        // ---------- First-run onboarding ----------
+        ["Setup.StepOf"] = "Steg {0} av {1}",
+
+        ["Setup.WelcomeTitle"] = "Välkommen till Barnläge",
+        ["Setup.WelcomeBody"] = "Nu gör vi datorn personlig och trygg.",
+        ["Setup.WelcomeStart"] = "Kom igång",
+        ["Setup.WelcomeHint"] = "Det tar en minut. Du kan ändra allt senare i Föräldraläge.",
+
+        ["Setup.NameTitle"] = "Vad heter barnet som ska använda datorn?",
+        ["Setup.NameBody"] = "Namnet används för att hälsa på barnet i Barnläge.",
+        ["Setup.NamePlaceholder"] = "Skriv barnets namn",
+        ["Setup.NameLabel"] = "Barnets namn",
+        ["Setup.NameEmpty"] = "Skriv barnets namn för att fortsätta.",
+        ["Setup.NameTooLong"] = "Namnet är för långt. Välj ett kortare namn.",
+
+        ["Setup.AvatarTitle"] = "Välj en avatar till {0}",
+        ["Setup.AvatarBody"] = "Den här figuren möter {0} varje gång datorn startar.",
+        ["Setup.AvatarRequired"] = "Välj en figur för att fortsätta.",
+        ["Setup.AvatarAutomation"] = "Figur {0}",
+        ["Setup.AvatarSelectedAutomation"] = "Figur {0}, vald",
+
+        ["Setup.AgeTitle"] = "Hur gammal är {0}?",
+        ["Setup.AgeBody"] = "Åldern sparas i profilen. Den ändrar inga säkerhetsinställningar.",
+        ["Setup.AgeRequired"] = "Välj en ålder för att fortsätta.",
+        ["Setup.AgeOpenEnded"] = "10+",
+        ["Setup.AgeYears"] = "{0} år",
+        ["Setup.AgeOpenEndedAutomation"] = "10 år eller äldre",
+
+        ["Setup.ThemeTitle"] = "Välj hur Barnläge ska se ut",
+        ["Setup.ThemeBody"] = "Temat bestämmer bakgrunden som {0} ser.",
+        ["Setup.ThemeRequired"] = "Välj ett tema för att fortsätta.",
+
+        ["Setup.DoneTitle"] = "Allt är klart för {0}!",
+        ["Setup.DoneBody"] = "Nu är Barnläge redo att användas.",
+        ["Setup.DoneStart"] = "Starta Barnläge",
+        ["Setup.DoneSummary"] = "{0}, {1} år",
+        ["Setup.SaveFailed"] = "Inställningarna kunde inte sparas. Försök igen.",
+
+        ["Setup.Continue"] = "Fortsätt",
+        ["Setup.Back"] = "Tillbaka",
+
+        // ---------- Theme names ----------
+        ["Theme.forest"] = "Skogen",
+        ["Theme.space"] = "Rymden",
+        ["Theme.ocean"] = "Havet",
+        ["Theme.dino"] = "Dinosaurier",
+        ["Theme.bright"] = "Färgglatt",
+        ["Theme.forest.Hint"] = "Gröna kullar och en lugn sjö",
+        ["Theme.space.Hint"] = "Stjärnhimmel och måne",
+        ["Theme.ocean.Hint"] = "Öppet hav så långt man ser",
+        ["Theme.dino.Hint"] = "Varmt urtidsljus och en vulkan",
+        ["Theme.bright.Hint"] = "Starka färger överallt",
+
+        // ---------- Re-run onboarding ----------
+        ["Profile.RerunOnboarding"] = "Kör introduktionen igen",
+        ["Profile.RerunTitle"] = "Kör introduktionen igen?",
+        ["Profile.RerunBody"] =
+            "Namn, ålder och figur nollställs och introduktionen startar om. Appar, skärmtid, webbinställningar och PIN-koden påverkas inte.",
+        ["Profile.RerunPrimary"] = "Starta om introduktionen",
+        ["Profile.RerunFailed"] = "Introduktionen kunde inte startas om. Se loggen för detaljer.",
+        ["Profile.RerunUnsaved"] =
+            "Spara eller kasta dina ändringar innan du kör introduktionen igen.",
 
         // ---------- Dialogs ----------
         ["Dialog.DiscardTitle"] = "Osparade ändringar",
@@ -220,6 +280,25 @@ public static class Strings
 
     public static string Get(string key) =>
         Swedish.TryGetValue(key, out var value) ? value : key;
+
+    /// <summary>
+    /// Swedish genitive of a name: "Alva" becomes "Alvas", but a name that
+    /// already ends in s, x or z takes no extra -s ("Lucas dator", not
+    /// "Lucass dator").
+    /// </summary>
+    public static string Genitive(string? name)
+    {
+        var trimmed = (name ?? string.Empty).Trim();
+
+        if (trimmed.Length == 0)
+        {
+            return trimmed;
+        }
+
+        return char.ToLowerInvariant(trimmed[^1]) is 's' or 'x' or 'z'
+            ? trimmed
+            : trimmed + "s";
+    }
 
     public static string Format(string key, params object?[] args)
     {

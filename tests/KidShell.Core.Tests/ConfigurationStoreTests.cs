@@ -29,7 +29,7 @@ public class ConfigurationStoreTests
         config.Child.Name = "Nora";
         config.Child.Age = 8;
         config.Child.AvatarId = "owl";
-        config.Child.ThemeId = "sunset";
+        config.Child.ThemeId = ThemeIds.Space;
         config.ScreenTime.IsEnabled = true;
         config.ScreenTime.WeekdayMinutes = 45;
         config.ScreenTime.WeekendMinutes = 150;
@@ -44,7 +44,7 @@ public class ConfigurationStoreTests
         Assert.Equal("Nora", loaded.Child.Name);
         Assert.Equal(8, loaded.Child.Age);
         Assert.Equal("owl", loaded.Child.AvatarId);
-        Assert.Equal("sunset", loaded.Child.ThemeId);
+        Assert.Equal(ThemeIds.Space, loaded.Child.ThemeId);
         Assert.True(loaded.ScreenTime.IsEnabled);
         Assert.Equal(45, loaded.ScreenTime.WeekdayMinutes);
         Assert.Equal(150, loaded.ScreenTime.WeekendMinutes);
@@ -63,7 +63,9 @@ public class ConfigurationStoreTests
 
         using var document = JsonDocument.Parse(File.ReadAllText(dir.ConfigPath));
 
-        Assert.Equal(1, document.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(
+            KidShellConfiguration.CurrentSchemaVersion,
+            document.RootElement.GetProperty("schemaVersion").GetInt32());
     }
 
     [Fact]
@@ -123,7 +125,8 @@ public class ConfigurationStoreTests
         var result = store.Load();
 
         Assert.Equal(ConfigurationLoadStatus.RecoveredFromCorruption, result.Status);
-        Assert.Equal("Alice", result.Configuration.Child.Name);
+        Assert.Equal(string.Empty, result.Configuration.Child.Name);
+        Assert.True(result.Configuration.RequiresOnboarding);
         Assert.True(logger.HasError);
     }
 
@@ -154,7 +157,7 @@ public class ConfigurationStoreTests
         var result = store.Load();
 
         Assert.Equal(ConfigurationLoadStatus.Loaded, result.Status);
-        Assert.Equal(1, result.Configuration.SchemaVersion);
+        Assert.Equal(KidShellConfiguration.CurrentSchemaVersion, result.Configuration.SchemaVersion);
         Assert.NotNull(result.Configuration.Child);
         Assert.NotNull(result.Configuration.Apps);
         Assert.NotNull(result.Configuration.Web.AllowedDomains);
@@ -167,17 +170,46 @@ public class ConfigurationStoreTests
         var config = new KidShellConfiguration
         {
             SchemaVersion = -4,
-            Child = new ChildProfile { Name = "   ", Age = 99 },
+            Child = new ChildProfile { Name = "  Nora  ", Age = 99 },
             ScreenTime = new ScreenTimeSettings { WeekdayMinutes = -30, WeekendMinutes = 99_999 }
         };
 
         JsonConfigurationStore.Normalize(config);
 
-        Assert.Equal(1, config.SchemaVersion);
-        Assert.Equal(6, config.Child.Age);
-        Assert.Equal("Barnet", config.Child.Name);
+        Assert.Equal(KidShellConfiguration.CurrentSchemaVersion, config.SchemaVersion);
+        Assert.Equal(ChildProfile.MaxAge, config.Child.Age);
+        Assert.Equal("Nora", config.Child.Name);
         Assert.Equal(0, config.ScreenTime.WeekdayMinutes);
         Assert.Equal(24 * 60, config.ScreenTime.WeekendMinutes);
+    }
+
+    [Fact]
+    public void Normalize_never_invents_a_child()
+    {
+        // A blank profile is a legitimate state: it means setup has not run.
+        var config = new KidShellConfiguration
+        {
+            Child = new ChildProfile { Name = "   ", Age = 0 }
+        };
+
+        JsonConfigurationStore.Normalize(config);
+
+        Assert.Equal(string.Empty, config.Child.Name);
+        Assert.Equal(0, config.Child.Age);
+        Assert.True(config.RequiresOnboarding);
+    }
+
+    [Fact]
+    public void Normalize_truncates_an_absurdly_long_name()
+    {
+        var config = new KidShellConfiguration
+        {
+            Child = new ChildProfile { Name = new string('a', 500), Age = 7 }
+        };
+
+        JsonConfigurationStore.Normalize(config);
+
+        Assert.Equal(ChildProfile.MaxNameLength, config.Child.Name.Length);
     }
 
     [Fact]

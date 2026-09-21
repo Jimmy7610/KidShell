@@ -20,9 +20,10 @@
     <SolidColorBrush x:Key="BrandBlueLightBrush" Color="{StaticResource BrandBlueLightColor}" />
     <SolidColorBrush x:Key="BrandSparkBrush" Color="{StaticResource BrandSparkColor}" />
 
+    <!-- Stops are named so a dark scene theme can lighten the wordmark. -->
     <LinearGradientBrush x:Key="BrandWordmarkBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Offset="0" Color="{StaticResource BrandBlueLightColor}" />
-        <GradientStop Offset="1" Color="{StaticResource BrandBlueDeepColor}" />
+        <GradientStop x:Name="WordmarkStopTop" Offset="0" Color="{StaticResource BrandBlueLightColor}" />
+        <GradientStop x:Name="WordmarkStopBottom" Offset="1" Color="{StaticResource BrandBlueDeepColor}" />
     </LinearGradientBrush>
 
     <LinearGradientBrush x:Key="PrimaryActionBrush" StartPoint="0,0" EndPoint="0,1">
@@ -42,6 +43,19 @@
 
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}" />
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+
+    <!--
+        On-scene text.
+
+        Everything that sits directly on the illustrated background rather than
+        on a white card uses these. MainWindow flips them to a light palette
+        when the chosen theme has a dark sky, so Rymden stays readable without
+        putting a plate behind the header and losing the approved look on the
+        bright themes.
+    -->
+    <SolidColorBrush x:Key="OnSceneStrongBrush" Color="{StaticResource TextPrimaryColor}" />
+    <SolidColorBrush x:Key="OnSceneSecondaryBrush" Color="{StaticResource TextSecondaryColor}" />
+
     <SolidColorBrush x:Key="TextOnAccentBrush" Color="{StaticResource TextOnAccentColor}" />
     <SolidColorBrush x:Key="TextOnAccentSoftBrush" Color="#E6FFFFFF" />
 

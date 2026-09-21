@@ -55,9 +55,13 @@ public sealed class JsonConfigurationStore : IConfigurationStore
             try
             {
                 var json = File.ReadAllText(ConfigurationFilePath);
-                var config = Deserialize(json);
+                var config = Deserialize(json, out var wasMigrated);
                 _logger.Info("Config", $"Configuration loaded (schemaVersion {config.SchemaVersion}).");
-                return new ConfigurationLoadResult(config, ConfigurationLoadStatus.Loaded);
+                return new ConfigurationLoadResult(
+                    config,
+                    ConfigurationLoadStatus.Loaded,
+                    Detail: null,
+                    WasMigrated: wasMigrated);
             }
             catch (Exception ex) when (ex is JsonException or IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException)
             {
@@ -84,7 +88,7 @@ public sealed class JsonConfigurationStore : IConfigurationStore
                 json = JsonSerializer.Serialize(configuration, SerializerOptions);
 
                 // Cheap round-trip validation before anything is replaced.
-                _ = Deserialize(json);
+                _ = Deserialize(json, out _);
             }
             catch (Exception ex)
             {
@@ -124,10 +128,12 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         }
     }
 
-    private static KidShellConfiguration Deserialize(string json)
+    private KidShellConfiguration Deserialize(string json, out bool wasMigrated)
     {
         var config = JsonSerializer.Deserialize<KidShellConfiguration>(json, SerializerOptions)
                      ?? throw new InvalidDataException("Configuration document deserialized to null.");
+
+        wasMigrated = ConfigurationMigrator.Migrate(config, _logger);
 
         return Normalize(config);
     }
@@ -150,15 +156,21 @@ public sealed class JsonConfigurationStore : IConfigurationStore
             config.SchemaVersion = KidShellConfiguration.CurrentSchemaVersion;
         }
 
-        if (config.Child.Age is < 0 or > 18)
+        // A blank name and a zero age are valid: they mean first-run setup has
+        // not been completed. Normalize tidies, it never invents a child.
+        config.Child.Name = (config.Child.Name ?? string.Empty).Trim();
+
+        if (config.Child.Name.Length > ChildProfile.MaxNameLength)
         {
-            config.Child.Age = 6;
+            config.Child.Name = config.Child.Name[..ChildProfile.MaxNameLength];
         }
 
-        if (string.IsNullOrWhiteSpace(config.Child.Name))
-        {
-            config.Child.Name = "Barnet";
-        }
+        config.Child.Age = config.Child.Age <= 0
+            ? 0
+            : Math.Clamp(config.Child.Age, ChildProfile.MinAge, ChildProfile.MaxAge);
+
+        config.Child.AvatarId = (config.Child.AvatarId ?? string.Empty).Trim();
+        config.Child.ThemeId = ThemeIds.Migrate(config.Child.ThemeId);
 
         config.ScreenTime.WeekdayMinutes = Math.Clamp(config.ScreenTime.WeekdayMinutes, 0, 24 * 60);
         config.ScreenTime.WeekendMinutes = Math.Clamp(config.ScreenTime.WeekendMinutes, 0, 24 * 60);

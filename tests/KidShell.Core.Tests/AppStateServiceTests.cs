@@ -29,7 +29,7 @@ public class AppStateServiceTests
         draft.Child.Name = "Nora";
 
         Assert.True(state.Current.FindApp("minecraft")!.IsEnabled);
-        Assert.Equal("Alice", state.Current.Child.Name);
+        Assert.Equal(string.Empty, state.Current.Child.Name);
 
         Assert.True(state.Commit(draft));
 
@@ -150,7 +150,7 @@ public class AppStateServiceTests
         draft.Child.Name = "Nora";
         draft.Child.Age = 8;
         draft.Child.AvatarId = "owl";
-        draft.Child.ThemeId = "sunset";
+        draft.Child.ThemeId = ThemeIds.Space;
         first.Commit(draft);
 
         var (second, _, _) = TestFactory.CreateState(dir);
@@ -159,7 +159,7 @@ public class AppStateServiceTests
         Assert.Equal("Nora", second.Current.Child.Name);
         Assert.Equal(8, second.Current.Child.Age);
         Assert.Equal("owl", second.Current.Child.AvatarId);
-        Assert.Equal("sunset", second.Current.Child.ThemeId);
+        Assert.Equal(ThemeIds.Space, second.Current.Child.ThemeId);
     }
 
     [Fact]
@@ -234,7 +234,7 @@ public class AppStateServiceTests
 
         state.Commit(draft);
 
-        Assert.Equal(1, state.Current.SchemaVersion);
+        Assert.Equal(KidShellConfiguration.CurrentSchemaVersion, state.Current.SchemaVersion);
         Assert.Equal(0, state.Current.ScreenTime.WeekdayMinutes);
     }
 

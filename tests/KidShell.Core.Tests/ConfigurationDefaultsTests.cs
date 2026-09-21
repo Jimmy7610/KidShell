@@ -6,23 +6,43 @@ namespace KidShell.Core.Tests;
 public class ConfigurationDefaultsTests
 {
     [Fact]
-    public void Default_configuration_declares_schema_version_1()
+    public void Default_configuration_declares_schema_version_2()
     {
         var config = KidShellConfiguration.CreateDefault();
 
-        Assert.Equal(1, KidShellConfiguration.CurrentSchemaVersion);
-        Assert.Equal(1, config.SchemaVersion);
+        Assert.Equal(2, KidShellConfiguration.CurrentSchemaVersion);
+        Assert.Equal(2, config.SchemaVersion);
     }
 
     [Fact]
-    public void Default_configuration_describes_the_approved_child_profile()
+    public void Default_configuration_ships_no_child_at_all()
+    {
+        // KidShell must never pretend a child has already been set up. A
+        // placeholder profile on first launch was the MVP 0.1 bug this
+        // asserts against.
+        var config = KidShellConfiguration.CreateDefault();
+
+        Assert.Equal(string.Empty, config.Child.Name);
+        Assert.Equal(0, config.Child.Age);
+        Assert.Equal(string.Empty, config.Child.AvatarId);
+        Assert.False(config.Child.HasRequiredDetails);
+    }
+
+    [Fact]
+    public void Default_configuration_requires_onboarding()
     {
         var config = KidShellConfiguration.CreateDefault();
 
-        Assert.Equal("Alice", config.Child.Name);
-        Assert.Equal(6, config.Child.Age);
-        Assert.False(string.IsNullOrWhiteSpace(config.Child.AvatarId));
-        Assert.False(string.IsNullOrWhiteSpace(config.Child.ThemeId));
+        Assert.False(config.Child.IsOnboardingComplete);
+        Assert.True(config.RequiresOnboarding);
+    }
+
+    [Fact]
+    public void Default_configuration_still_has_a_usable_theme()
+    {
+        var config = KidShellConfiguration.CreateDefault();
+
+        Assert.True(ThemeIds.IsKnown(config.Child.ThemeId));
     }
 
     [Fact]
@@ -90,11 +110,13 @@ public class ConfigurationDefaultsTests
         var draft = config.Clone();
 
         draft.Child.Name = "Nora";
+        draft.Child.IsOnboardingComplete = true;
         draft.FindApp("paint")!.IsEnabled = false;
         draft.Web.AllowedDomains.Add("example.com");
         draft.ScreenTime.WeekdayMinutes = 15;
 
-        Assert.Equal("Alice", config.Child.Name);
+        Assert.Equal(string.Empty, config.Child.Name);
+        Assert.False(config.Child.IsOnboardingComplete);
         Assert.True(config.FindApp("paint")!.IsEnabled);
         Assert.DoesNotContain("example.com", config.Web.AllowedDomains);
         Assert.Equal(60, config.ScreenTime.WeekdayMinutes);

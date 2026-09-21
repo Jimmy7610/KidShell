@@ -29,7 +29,8 @@ Namespaces:
 
 | Namespace | Contents |
 | --- | --- |
-| `KidShell.Core.Configuration` | The configuration document, its defaults, the JSON store, `IAppStateService` |
+| `KidShell.Core.Configuration` | The configuration document, its defaults, the JSON store, migrations, `IAppStateService`, avatar and theme ids |
+| `KidShell.Core.Onboarding` | `IOnboardingService`, `OnboardingDraft`, first-run validation |
 | `KidShell.Core.Launching` | `IAppLauncher`, `LaunchResult`, the executable resolver, `ProcessRunner` |
 | `KidShell.Core.Security` | `IParentPinService`, PBKDF2 hashing, the development PIN constant |
 | `KidShell.Core.Diagnostics` | `IKidShellLogger` and a rolling file logger |
@@ -67,8 +68,8 @@ One model, `KidShellConfiguration`, is the whole persisted state:
 
 ```jsonc
 {
-  "schemaVersion": 1,
-  "child":      { "name", "age", "avatarId", "themeId" },
+  "schemaVersion": 2,
+  "child":      { "name", "age", "avatarId", "themeId", "isOnboardingComplete" },
   "apps":       [ { "id", "displayName", "programName", "description",
                     "category", "icon", "accentStyle", "isEnabled",
                     "executablePath", "arguments", "sortOrder" } ],
@@ -78,7 +79,8 @@ One model, `KidShellConfiguration`, is the whole persisted state:
 }
 ```
 
-`schemaVersion` is written as `1` and is the hook for future migrations.
+`schemaVersion` is written as `2`. Version 1 was MVP 0.1, before the child
+profile gained `isOnboardingComplete`; see [Migrations](#migrations).
 Derived members (`EnabledApps`, `EffectiveProgramName`, `IsConfigured`) carry
 `[JsonIgnore]` so the file stays a description of intent rather than a dump of
 computed state.
@@ -117,6 +119,28 @@ Nothing is ever written next to the executable or into Program Files.
 
 KidShell never throws its way out of a bad configuration file.
 
+### Migrations
+
+`ConfigurationMigrator` runs inside `Deserialize`, before `Normalize`, and
+reports whether it changed anything so `AppStateService.Initialize` can write
+the upgraded document straight back. A newer-than-current document is left
+alone rather than downgraded.
+
+**Schema 1 → 2** adds `child.isOnboardingComplete` and the five named themes.
+Schema 1 had no onboarding concept, so the flag is inferred:
+
+* a profile still carrying the MVP 0.1 placeholder name is treated as never set
+  up — cleared, and setup runs;
+* any other profile is carried over with `isOnboardingComplete = true`, so
+  upgrading never pushes an existing family back through setup;
+* `meadow` and `sunset` become `forest` and `bright`.
+
+The placeholder name survives in exactly one place in the product —
+`ConfigurationMigrator.LegacyPlaceholderName` — as the rule that removes it. It
+is `internal const` and never rendered.
+
+Apps, screen time, web settings and the PIN are untouched by the migration.
+
 ### Live state and drafts
 
 `IAppStateService` owns the single live document.
@@ -139,6 +163,115 @@ Child Mode the moment it is saved.
 which compares the serialized draft with the serialized live document. Editing a
 value and editing it back is therefore correctly *not* a change — a class of bug
 that per-page dirty flags tend to get wrong.
+
+---
+
+## 2a. First-run onboarding
+
+KidShell ships with no child configured. `KidShellConfiguration.CreateDefault()`
+returns an empty `ChildProfile`, and the app opens first-run setup rather than
+Child Mode until a parent finishes it.
+
+### Why there is no default child
+
+MVP 0.1 shipped `Name = "Alice", Age = 6, AvatarId = "fox"` as defaults, copied
+from the design mockups. That made a brand-new install greet a child who does
+not exist. A blank profile is the honest state, so the model expresses it: an
+empty name, a zero age, and an empty avatar id all mean *not chosen yet*.
+`JsonConfigurationStore.Normalize` was changed to match — it tidies (trims,
+clamps, truncates) but never invents a child.
+
+### Deciding whether setup runs
+
+```csharp
+public bool RequiresOnboarding => !Child.IsOnboardingComplete || !Child.HasRequiredDetails;
+```
+
+Two conditions, deliberately. `IsOnboardingComplete` records that a parent
+confirmed the final screen; `HasRequiredDetails` checks the profile actually
+holds a name, an age and an avatar. Either one alone could be satisfied by a
+half-written document, and the result would be a partially configured Child
+Mode. Together they make startup routing total.
+
+`ShellViewModel` reads it once, in its constructor, and picks the starting mode.
+Routing is therefore decided from persisted state alone — there is no ordering
+dependency on which view happens to load first.
+
+### The draft
+
+`OnboardingDraft` (Core) holds what the parent has picked so far: name, age,
+avatar id, theme id, plus `ValidateName` and per-field `Has*` checks. It is a
+working copy with no connection to the configuration file.
+
+That is what makes two required behaviours fall out for free:
+
+* **Back is lossless.** `OnboardingViewModel` keeps one draft for the whole
+  session, so stepping back and forward again shows what was already chosen.
+* **Abandoning setup is safe.** Nothing is written until the final screen, so
+  closing the window half-way leaves no partial profile behind and setup simply
+  runs again. There is no "resume half-configured" state to get wrong.
+
+### Completing
+
+`IOnboardingService` owns the two state transitions:
+
+| Member | Effect |
+| --- | --- |
+| `RequiresOnboarding` | Asks the live configuration whether setup must run |
+| `CreateDraft()` | A fresh, never pre-filled draft |
+| `Complete(draft)` | Validates, then writes the profile and sets the flag |
+| `Restart()` | Clears the profile and the flag, keeping everything else |
+
+`Complete` refuses an unfinished draft (`OnboardingCompletion.Incomplete`) and
+reports a failed write (`SaveFailed`) rather than lying; the UI stays on the
+final screen so the parent can retry. It writes through the ordinary
+`IAppStateService.CreateDraft()`/`Commit()` path, so Child Mode rebuilds via the
+same `ConfigurationChanged` event as any other saved change. There is no second
+settings store.
+
+`Restart()` is what *Kör introduktionen igen* on the Profil page calls. It
+clears only `Name`, `Age`, `AvatarId` and `IsOnboardingComplete`; the app
+catalogue, screen time, web settings and the parent PIN survive, because handing
+the machine to a different child should not mean rebuilding it. Parent Mode
+refuses the action while there are unsaved edits, since the restart commits
+through the same store and would silently discard them.
+
+### Screens
+
+Six steps in one `OnboardingView`, swapped by visibility with a ~200 ms
+directional slide-and-fade (forward from the right, Back from the left):
+
+| Step | Screen | Gate |
+| --- | --- | --- |
+| 1 | Välkommen till Barnläge | — |
+| 2 | Child name | Non-empty after trimming, ≤ 32 characters |
+| 3 | Avatar (14 choices) | One selected |
+| 4 | Age (5–9, 10+) | One selected |
+| 5 | Theme (5 choices) | One selected |
+| 6 | Finish | Writes the profile |
+
+Every choice is a real `Button` (`SetupTileStyle`) so pointer, touch, Tab, Enter
+and Space all work and the platform focus visual applies. Selection is drawn as
+a thick brand ring *plus* a check badge — never colour alone — and announced
+through `AutomationProperties.Name`. Validation messages pair an icon with text
+for the same reason.
+
+### Themes and contrast
+
+Five scene themes — `forest`, `space`, `ocean`, `dino`, `bright` — share one
+piece of geometry in `SceneBackground`. A `ScenePalette` record supplies the
+colours and toggles the themed extras (sun, moon, stars, volcano, open sea), and
+the control mutates the brush instances its XAML already references rather than
+rebuilding the tree.
+
+`space` has a dark sky, which would leave the greeting, the tagline and the
+clock unreadable. `ThemeIds.IsDarkScene` declares that as a property of the
+theme, and `MainWindow` flips three app-level resources — `OnSceneStrongBrush`,
+`OnSceneSecondaryBrush` and the wordmark gradient stops — when the scene
+changes. Only text drawn *directly on the illustration* uses those brushes;
+anything on a white card keeps the normal palette. The alternative, putting a
+plate behind the header, would have changed the approved look on every light
+theme to fix one dark one.
 
 ---
 
@@ -215,10 +348,13 @@ ShellViewModel                     which face is showing; owns the PIN gate
 
 ### Mode switching
 
-`MainWindow` is a three-layer `Grid`: the illustrated `SceneBackground`, the
-active mode (`ChildHomeView` or `ParentShellView`), and `PinOverlayView` on top.
-Switching modes is a visibility change rather than a frame navigation, so Child
-Mode is never rebuilt and returning to it is instant. While the PIN overlay is
+`MainWindow` is a layered `Grid`: the illustrated `SceneBackground`, the active
+mode (`OnboardingView`, `ChildHomeView` or `ParentShellView`), and
+`PinOverlayView` on top. Switching modes is a visibility change rather than a
+frame navigation, so Child Mode is never rebuilt and returning to it is instant.
+`ShellMode.Onboarding` is the startup mode whenever the configuration requires
+setup; the PIN gate refuses to open while it is active, since there is no Parent
+Mode to reach yet. While the PIN overlay is
 up, both modes have `IsHitTestVisible = false`, so nothing behind it is
 reachable by pointer or keyboard.
 
@@ -356,7 +492,17 @@ a single real process:
 * resolver rules for bare names, missing extensions, absolute paths, quotes and
   protocol activation;
 * PIN verification, malformed input, the developer-mode gate, PIN replacement,
-  persistence across restart, and that no PIN is ever readable on disk.
+  persistence across restart, and that no PIN is ever readable on disk;
+* first-run onboarding: that a new configuration requires it, that a draft is
+  never pre-filled, that an empty or whitespace name cannot produce a completed
+  profile, that name/age/avatar/theme each persist across a restart, that
+  nothing is written until the final step is confirmed, that a completion flag
+  without a profile still routes to setup, and that re-running setup clears the
+  profile while keeping apps, screen time, web settings and the PIN;
+* schema 1 → 2 migration: the placeholder profile is discarded and a
+  personalised one is carried over, legacy theme ids are translated, the
+  migration is idempotent, a newer document is not downgraded, and the upgraded
+  document is written back with no trace of the placeholder name left on disk.
 
 The UI layer is verified by manual QA against the two reference images; that
 list is in the milestone report rather than here.

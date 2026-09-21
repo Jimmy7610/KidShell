@@ -75,9 +75,10 @@
                         FontFamily="{StaticResource DisplayFontFamily}"
                         FontSize="23"
                         FontWeight="SemiBold"
-                        Foreground="{StaticResource TextPrimaryBrush}" />
+                        Foreground="{StaticResource OnSceneStrongBrush}" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock
+                            Foreground="{StaticResource OnSceneSecondaryBrush}"
                             Style="{StaticResource SecondaryTextStyle}"
                             Text="{loc:Str Key=Child.Encouragement}" />
                         <FontIcon
@@ -201,6 +202,11 @@
                         <Rectangle Grid.Row="1" Grid.Column="1" Margin="1,1,0,0" Fill="White" />
                     </Grid>
                 </Border>
+                <!--
+                    The footer sits on the pale foreground band in every theme,
+                    so it keeps the normal dark text rather than the on-scene
+                    palette.
+                -->
                 <TextBlock
                     Style="{StaticResource SecondaryTextStyle}"
                     Text="{loc:Str Key=Child.FooterTagline}"
