@@ -35,10 +35,20 @@ public sealed class ParentOverviewViewModel : ObservableObject
         _ => Strings.Get("Overview.WebNotConfigured")
     };
 
-    public string SecurityValue => Strings.Get("Overview.SecurityValue");
+    /// <summary>
+    /// Mirrors the Säkerhet page's readiness verdict rather than a fixed
+    /// string, so the two screens can never disagree about how protected the
+    /// machine is.
+    /// </summary>
+    public string SecurityValue { get; private set; } = Strings.Get("Overview.SecurityValue");
 
-    public void Load(KidShellConfiguration draft)
+    public void Load(KidShellConfiguration draft, string? securitySummary = null)
     {
+        if (!string.IsNullOrWhiteSpace(securitySummary))
+        {
+            SecurityValue = securitySummary;
+        }
+
         _draft = draft;
         Refresh();
     }

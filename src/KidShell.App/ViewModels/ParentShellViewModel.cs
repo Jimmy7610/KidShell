@@ -6,6 +6,7 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Security.Readiness;
 
 namespace KidShell.App.ViewModels;
 
@@ -48,6 +49,8 @@ public sealed class ParentShellViewModel : ObservableObject
         IAddAppFlow addAppFlow,
         IPinChangeFlow pinChangeFlow,
         IOnboardingService onboarding,
+        ISecurityReadinessService readiness,
+        ISecurityDialogs securityDialogs,
         IDeveloperOptions developerOptions,
         IKidShellLogger logger)
     {
@@ -65,7 +68,7 @@ public sealed class ParentShellViewModel : ObservableObject
         Apps = new ParentAppsViewModel(addAppFlow, MarkDirty);
         ScreenTime = new ParentScreenTimeViewModel(MarkDirty);
         Web = new ParentWebViewModel(MarkDirty);
-        Security = new ParentSecurityViewModel(pinService, developerOptions);
+        Security = new ParentSecurityViewModel(pinService, developerOptions, readiness, securityDialogs);
         Profile = new ParentProfileViewModel(MarkDirty, () => _ = RerunOnboardingAsync());
 
         SelectPageCommand = new RelayCommand(parameter =>
@@ -174,7 +177,7 @@ public sealed class ParentShellViewModel : ObservableObject
         _draft = _state.CreateDraft();
         StatusMessage = null;
 
-        Overview.Load(_draft);
+        Overview.Load(_draft, Security.OverviewSummary);
         Apps.Load(_draft);
         ScreenTime.Load(_draft);
         Web.Load(_draft);
@@ -188,6 +191,34 @@ public sealed class ParentShellViewModel : ObservableObject
         OnPropertyChanged(nameof(AvatarId));
         OnPropertyChanged(nameof(IsPinConfigured));
         NotifyPageSelection();
+
+        _ = RunSecurityScanAsync();
+    }
+
+    /// <summary>
+    /// Runs the read-only readiness scan whenever Parent Mode opens, so the
+    /// Säkerhet page and the Översikt summary show live machine state rather
+    /// than a stale or hard-coded verdict.
+    ///
+    /// Read-only: the scan detects, evaluates and plans. It cannot change a
+    /// Windows setting, and it does not touch KidShell's configuration either,
+    /// so it is safe to run while a draft is being edited.
+    /// </summary>
+    private async Task RunSecurityScanAsync()
+    {
+        try
+        {
+            await Security.RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            // A failed scan degrades the security page; it never stops a
+            // parent getting to the rest of Parent Mode.
+            _logger.Error("Parent", "The security readiness scan failed.", ex);
+            return;
+        }
+
+        Overview.Load(_draft, Security.OverviewSummary);
     }
 
     private void MarkDirty()
@@ -210,7 +241,7 @@ public sealed class ParentShellViewModel : ObservableObject
 
             // Continue editing on a fresh draft of the now-live configuration.
             _draft = _state.CreateDraft();
-            Overview.Load(_draft);
+            Overview.Load(_draft, Security.OverviewSummary);
             Apps.Load(_draft);
             ScreenTime.Load(_draft);
             Web.Load(_draft);

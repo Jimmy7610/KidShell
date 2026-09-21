@@ -244,6 +244,148 @@ public static class Strings
         ["Profile.RerunUnsaved"] =
             "Spara eller kasta dina ändringar innan du kör introduktionen igen.",
 
+        // ---------- Security readiness (MVP 0.1.5) ----------
+        ["Security.StatusTitle"] = "Säkerhetsstatus",
+        ["Security.LockNotEnabled"] = "Windows-låsning är inte aktiverad",
+        ["Security.ScanFailedTitle"] = "Kontrollen kunde inte köras",
+
+        ["Security.StateDevelopment"] = "Utvecklingsläge",
+        ["Security.StateDevelopmentBody"] =
+            "KidShell har inte ändrat något i Windows. Barnet kan fortfarande minimera KidShell och nå resten av datorn.",
+        ["Security.StateNotReady"] = "Inte redo",
+        ["Security.StateNotReadyBody"] = "Något behöver åtgärdas innan säkerhetsinstallation kan köras.",
+        ["Security.StateReadyWithWarnings"] = "Redo med anmärkningar",
+        ["Security.StateReadyWithWarningsBody"] = "Installationen kan köras, men läs anmärkningarna först.",
+        ["Security.StateReady"] = "Redo att konfigureras",
+        ["Security.StateReadyBody"] = "Allt som behövs för det rekommenderade läget finns på plats.",
+
+        // Windows information card
+        ["Security.WindowsInfoTitle"] = "Windows-information",
+        ["Security.EditionLabel"] = "Windows-version",
+        ["Security.BuildLabel"] = "Build",
+        ["Security.AccountTypeLabel"] = "Kontotyp",
+        ["Security.AccountAdministrator"] = "Administratör",
+        ["Security.AccountStandardUser"] = "Standardanvändare",
+        ["Security.UacLabel"] = "UAC",
+        ["Security.UacActive"] = "Aktivt",
+        ["Security.UacInactive"] = "Inte aktivt",
+        ["Security.UacUnknown"] = "Kunde inte läsas",
+
+        // Capability cards
+        ["Security.CapabilitiesTitle"] = "Funktioner på den här datorn",
+        ["Security.CapAvailable"] = "Tillgängligt",
+        ["Security.CapUnavailable"] = "Inte tillgängligt",
+        ["Security.CapUnknown"] = "Okänt",
+
+        ["Security.CapAssignedAccess"] = "Assigned Access",
+        ["Security.CapAssignedAccessAvailable"] = "Kan användas i en senare säkerhetsinstallation.",
+        ["Security.CapAssignedAccessUnavailable"] = "Kräver Windows 11 Pro eller senare.",
+
+        ["Security.CapAppControl"] = "Appkontroll i Windows",
+        ["Security.CapAppControlAvailable"] = "Kan användas i en senare säkerhetsinstallation.",
+        ["Security.CapAppControlUnavailable"] = "Kräver Windows Enterprise eller Education.",
+
+        ["Security.CapKidShellAllowlist"] = "KidShells applista",
+        ["Security.CapKidShellAllowlistHint"] =
+            "Styr vilka appar barnet ser i KidShell. Ersätter inte Windows egen appkontroll.",
+
+        ["Security.CapChildAccount"] = "Barnkonto",
+        ["Security.CapChildAccountNone"] = "Inget separat barnkonto är konfigurerat ännu.",
+        ["Security.CapChildAccountFound"] = "Möjligt konto hittat: {0}",
+        ["Security.CapWatchdog"] = "Watchdog",
+        ["Security.CapWatchdogNone"] = "Ingen övervakning är installerad.",
+        ["Security.CapWebPolicy"] = "Webbpolicy",
+        ["Security.CapWebPolicyNone"] = "Ingen webbläsarpolicy är aktiverad.",
+        ["Security.NotConfiguredShort"] = "Inte konfigurerat",
+        ["Security.NotInstalledShort"] = "Inte installerad",
+        ["Security.NotEnabledShort"] = "Inte aktiverad",
+
+        // Recommended mode card
+        ["Security.RecommendedTitle"] = "Rekommenderat säkerhetsläge",
+        ["Security.ModeStandard"] = "Standardläge",
+        ["Security.ModeStandardBody"] =
+            "Den här Windows-versionen saknar vissa funktioner som används av KidShell Secure Mode.",
+        ["Security.ModeSecure"] = "Secure Mode tillgängligt",
+        ["Security.ModeSecureBody"] =
+            "Den här datorn stöder alla funktioner som KidShell Secure Mode använder.",
+        ["Security.ModeDevelopment"] = "Endast utvecklingsläge",
+        ["Security.ModeDevelopmentBody"] =
+            "Den här datorn uppfyller inte kraven för vare sig Standardläge eller Secure Mode.",
+        ["Security.ShowDifference"] = "Visa skillnaden",
+
+        // Standard vs Secure comparison
+        ["Security.CompareTitle"] = "Standardläge och Secure Mode",
+        ["Security.CompareIntro"] =
+            "Båda lägena gör datorn enklare och tryggare för barnet. Secure Mode kan dessutom låsa själva Windows-inloggningen.",
+        ["Security.CompareFeature"] = "Funktion",
+        ["Security.CompareStandard"] = "Standard",
+        ["Security.CompareSecure"] = "Secure",
+        ["Security.CompareYes"] = "Ja",
+        ["Security.CompareNo"] = "Nej",
+        ["Security.CompareLimited"] = "Begränsad",
+        ["Security.CompareRowInterface"] = "KidShell-gränssnitt",
+        ["Security.CompareRowChildAccount"] = "Separat barnkonto",
+        ["Security.CompareRowAppLimits"] = "Appbegränsning",
+        ["Security.CompareRowPin"] = "Föräldra-PIN",
+        ["Security.CompareRowAssignedAccess"] = "Assigned Access",
+        ["Security.CompareRowLockedEnvironment"] = "Förstärkt låst användarmiljö",
+        ["Security.CompareFooter"] =
+            "Inget av lägena gör datorn omöjlig att ta sig ur. De gör det svårare för ett barn att hamna fel av misstag.",
+        ["Security.CompareClose"] = "Stäng",
+
+        // Security plan
+        ["Security.ShowPlan"] = "Visa säkerhetsplan",
+        ["Security.PlanTitle"] = "Det här skulle KidShell göra",
+        ["Security.PlanIntro"] =
+            "Så här skulle säkerhetsinstallationen gå till på den här datorn. Ingenting av det körs nu — listan visas bara.",
+        ["Security.PlanEmpty"] = "Den här datorn har inget läge att installera ännu.",
+        ["Security.PlanNothingExecuted"] = "Inga av stegen har körts. Datorn är oförändrad.",
+        ["Security.PlanRequiresAdmin"] = "Kräver administratör",
+        ["Security.PlanCanRollback"] = "Går att ångra",
+        ["Security.PlanCannotRollback"] = "Går inte att ångra automatiskt",
+        ["Security.PlanRiskLow"] = "Låg ändringsrisk",
+        ["Security.PlanRiskMedium"] = "Medelhög ändringsrisk",
+        ["Security.PlanRiskHigh"] = "Hög ändringsrisk",
+        ["Security.PlanRiskNote"] =
+            "Ändringsrisk beskriver hur svårt ett steg är att ångra — inte hur säkert resultatet blir.",
+        ["Security.PlanClose"] = "Stäng",
+
+        // Checks, warnings, blockers
+        ["Security.ChecksTitle"] = "Kontroller",
+        ["Security.BlockersTitle"] = "Behöver åtgärdas",
+        ["Security.WarningsTitle"] = "Att känna till",
+        ["Security.CheckPassed"] = "Klart",
+        ["Security.CheckWarning"] = "Anmärkning",
+        ["Security.CheckFailed"] = "Behöver åtgärdas",
+        ["Security.CheckNotApplicable"] = "Kunde inte kontrolleras",
+
+        // Advanced diagnostics
+        ["Security.Advanced"] = "Avancerat",
+        ["Security.DiagEdition"] = "Edition",
+        ["Security.DiagVersion"] = "Version",
+        ["Security.DiagBuild"] = "Build",
+        ["Security.DiagAssignedAccess"] = "Assigned Access-stöd",
+        ["Security.DiagAppControl"] = "Appkontrollstöd",
+        ["Security.DiagUac"] = "UAC",
+        ["Security.DiagUserType"] = "Kontotyp",
+        ["Security.DiagExecutionMode"] = "Körläge för säkerhet",
+        ["Security.DiagLastScan"] = "Senaste kontroll",
+        ["Security.DiagNeverScanned"] = "Inte körd ännu",
+        ["Security.DiagPackaged"] = "Paketidentitet",
+        ["Security.DiagElevated"] = "Körs med utökad behörighet",
+        ["Security.DiagYes"] = "Ja",
+        ["Security.DiagNo"] = "Nej",
+        ["Security.Rescan"] = "Kör kontroll igen",
+        ["Security.Scanning"] = "Kontrollerar...",
+        ["Security.AuditOnlyNote"] =
+            "KidShell körs i granskningsläge. Inställningar läses men ändras aldrig.",
+
+        // Parent overview summary
+        ["Overview.SecurityDevelopment"] = "Utvecklingsläge",
+        ["Overview.SecurityReady"] = "Redo att konfigureras",
+        ["Overview.SecurityReadyWithWarnings"] = "Redo med anmärkningar",
+        ["Overview.SecurityNotReady"] = "Inte redo",
+
         // ---------- Dialogs ----------
         ["Dialog.DiscardTitle"] = "Osparade ändringar",
         ["Dialog.DiscardBody"] = "Du har ändringar som inte är sparade. Vill du kasta dem?",

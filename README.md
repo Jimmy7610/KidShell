@@ -63,6 +63,11 @@ Every screen in the app is built against those two images.
   themes so it stays readable.
 * **Durable local configuration** with atomic-ish writes, a `.bak` copy and
   recovery from a corrupt file.
+* **Security readiness, read-only.** Detects the real Windows edition
+  (without trusting the misleading `ProductName` value), reports which
+  capabilities exist, runs pre-flight checks and prints the plan a future
+  secure setup would follow — while being structurally incapable of changing
+  anything.
 * **Local-only logging.** No telemetry, no analytics, no network calls at all.
 
 ---
@@ -147,6 +152,56 @@ onboarding, so it is migrated on load:
 Everything outside the child profile — apps, screen time, web settings, PIN —
 survives the migration untouched, and the migrated document is written straight
 back at schema 2.
+
+---
+
+## Windows requirements
+
+KidShell's **user interface** runs on any Windows 10 or 11 machine, and can be
+developed and tested without changing a single Windows setting. That is what
+every 0.1.x build does.
+
+KidShell's **security** is a different question, and depends on the edition:
+
+| Edition | Best available mode | Why |
+| --- | --- | --- |
+| Windows 11 / 10 **Home** | Standard | No Assigned Access |
+| Windows 11 / 10 **Pro**, Pro Education, Pro for Workstations | Secure | Assigned Access |
+| **Enterprise**, **Education**, IoT Enterprise | Secure + AppLocker | Assigned Access and supported app control |
+
+* **Standard mode** (planned): a separate standard Windows account for the
+  child, KidShell's own app allowlist, UAC separation, autostart and a
+  watchdog. The child can still minimise KidShell and use the rest of that
+  account's desktop.
+* **Secure mode** (planned): everything in Standard, plus Assigned Access
+  restricting the child's sign-in to KidShell.
+
+Standard is **not** equivalent to Secure, and KidShell never says it is.
+
+> ### This build does not protect Windows
+>
+> **MVP 0.1.x is not parental-control security software.** It has applied no
+> Windows lockdown of any kind: no accounts are created, no policy is written,
+> no kiosk mode is configured, and the child can leave KidShell at any time by
+> minimising it.
+>
+> Föräldraläge → **Säkerhet** reports exactly what this machine could support
+> and what KidShell would change, and states that nothing has been changed.
+> That page runs a strictly read-only scan — detection, evaluation and
+> planning, and no write path exists in the code at all. See
+> [`docs/architecture/SECURITY-READINESS.md`](docs/architecture/SECURITY-READINESS.md).
+>
+> Treat KidShell today as a friendly shell for a supervised child, not as a
+> lock.
+
+### Checking your own machine
+
+Open Föräldraläge → Säkerhet. It shows the detected edition and build, your
+account type, UAC state, which capabilities exist, and — under **Avancerat** —
+the raw diagnostics plus the execution mode, which reads `AuditOnly`.
+
+**Visa säkerhetsplan** prints the exact steps a future secure setup would take
+on your machine. It runs none of them.
 
 ---
 
@@ -284,9 +339,11 @@ See [`assets/README.md`](assets/README.md) for provenance and licensing.
 | --- | --- |
 | **0.1 — Visual shell** ✅ | Child Mode, Parent Mode, PIN, configuration, launcher abstraction, tests |
 | **0.1.1 — First-run onboarding** ✅ | Six-screen child profile setup, 14 avatars, 5 themes, schema 2 migration, re-run from Parent Mode |
+| **0.1.5 — Security readiness (dry run)** ✅ | Windows capability detection, readiness report, pre-flight checks, security plan, AuditOnly guarantee. Changes nothing. |
 | 0.2 — Fullscreen & polish | Borderless full-screen child mode behind a real `DeveloperMode` switch, forced PIN setup on first run, more theme work |
 | 0.3 — Screen time | Session watchdog that actually enforces the stored weekday/weekend limits, warnings before time runs out |
 | 0.4 — Web | A real allowlist browser or Edge policy integration for the stored web mode |
+| 0.2 — Apply security | The first milestone that changes Windows: executes the plan 0.1.5 generates, with rollback for every step |
 | 0.5 — Windows integration | Dedicated child account, Assigned Access / kiosk, AppLocker or WDAC policy, secure sign-out for *Avsluta till Windows* |
 | 0.6 — Hardening | Watchdog service, tamper resistance, signed MSIX, real deployment story |
 

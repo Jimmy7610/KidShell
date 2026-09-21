@@ -8,8 +8,16 @@
     xmlns:vm="using:KidShell.App.ViewModels.Parent"
     mc:Ignorable="d">
 
+    <!--
+        Föräldraläge → Säkerhet.
+
+        A readiness dashboard. Everything here is read from the machine and
+        nothing on this page can change a Windows setting: the two buttons open
+        informational dialogs and "Kör kontroll igen" repeats the same
+        read-only detection.
+    -->
     <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="26,24,26,24" Spacing="20">
+        <StackPanel Padding="26,24,26,24" Spacing="18">
 
             <StackPanel>
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Security.Title}" />
@@ -19,95 +27,392 @@
                     Text="{loc:Str Key=Security.Subtitle}" />
             </StackPanel>
 
-            <!-- Status list. Each row carries a glyph and a word, never colour alone. -->
-            <Border Background="{StaticResource TintNeutralBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="8,4">
-                <ItemsRepeater x:Name="StatusList">
-                    <ItemsRepeater.Layout>
-                        <StackLayout Spacing="0" />
-                    </ItemsRepeater.Layout>
-                    <ItemsRepeater.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SecurityStatusViewModel">
-                            <Border AutomationProperties.Name="{x:Bind AutomationName}" Style="{StaticResource ListRowStyle}">
-                                <Grid ColumnSpacing="14">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <FontIcon
-                                        Grid.Column="0"
-                                        FontFamily="{StaticResource SymbolFontFamily}"
-                                        FontSize="17"
-                                        Foreground="{x:Bind StatusBrush}"
-                                        Glyph="{x:Bind Glyph}"
-                                        VerticalAlignment="Center" />
-
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock
-                                            FontWeight="SemiBold"
-                                            Style="{StaticResource BodyTextStyle}"
-                                            Text="{x:Bind Label}" />
-                                        <TextBlock
-                                            Style="{StaticResource CaptionTextStyle}"
-                                            Text="{x:Bind Hint}"
-                                            Visibility="{x:Bind Hint, Converter={StaticResource StringToVisibility}}" />
-                                    </StackPanel>
-
-                                    <Border Grid.Column="2" Style="{StaticResource StatusChipStyle}">
-                                        <TextBlock Style="{StaticResource StatusChipTextStyle}" Text="{x:Bind Value}" />
-                                    </Border>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsRepeater.ItemTemplate>
-                </ItemsRepeater>
-            </Border>
-
-            <Border Background="{StaticResource TintRoseBrush}" Style="{StaticResource InfoPanelStyle}">
-                <Grid ColumnSpacing="14">
+            <!-- ===================== Säkerhetsstatus ===================== -->
+            <Border Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
+                <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
                     <FontIcon
                         Grid.Column="0"
                         FontFamily="{StaticResource SymbolFontFamily}"
-                        FontSize="22"
-                        Foreground="{StaticResource StatusAlertBrush}"
-                        Glyph="&#xEA18;"
+                        FontSize="26"
+                        Foreground="{StaticResource StatusWarningBrush}"
+                        Glyph="&#xE7BA;"
                         VerticalAlignment="Top" />
-                    <StackPanel Grid.Column="1" Spacing="5">
-                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.BannerTitle}" />
+
+                    <StackPanel Grid.Column="1" Spacing="6">
                         <TextBlock
-                            Style="{StaticResource SecondaryTextStyle}"
-                            Text="{loc:Str Key=Security.BannerBody}" />
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Security.StatusTitle}" />
+                        <TextBlock
+                            x:Name="StatusHeadlineText"
+                            FontFamily="{StaticResource DisplayFontFamily}"
+                            FontSize="24"
+                            FontWeight="Bold"
+                            Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock
+                            x:Name="LockNoticeText"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Style="{StaticResource BodyTextStyle}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            x:Name="StatusBodyText"
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Button
+                        x:Name="RescanButton"
+                        Grid.Column="2"
+                        Content="{loc:Str Key=Security.Rescan}"
+                        Style="{StaticResource SecondaryButtonStyle}"
+                        VerticalAlignment="Top" />
+                </Grid>
+            </Border>
+
+            <!-- ===================== Behöver åtgärdas ===================== -->
+            <Border
+                x:Name="BlockerPanel"
+                Background="{StaticResource TintRoseBrush}"
+                Style="{StaticResource InfoPanelStyle}"
+                Visibility="Collapsed">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="17"
+                            Foreground="{StaticResource StatusAlertBrush}"
+                            Glyph="&#xEA39;"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            Style="{StaticResource SectionTitleTextStyle}"
+                            Text="{loc:Str Key=Security.BlockersTitle}" />
+                    </StackPanel>
+                    <ItemsRepeater x:Name="BlockerList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{x:Bind}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+            </Border>
+
+            <!-- ===================== Att känna till ===================== -->
+            <Border
+                x:Name="WarningPanel"
+                Background="{StaticResource TintNeutralBrush}"
+                Style="{StaticResource InfoPanelStyle}"
+                Visibility="Collapsed">
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="17"
+                            Foreground="{StaticResource StatusWarningBrush}"
+                            Glyph="&#xE7BA;"
+                            VerticalAlignment="Center" />
+                        <TextBlock
+                            Style="{StaticResource SectionTitleTextStyle}"
+                            Text="{loc:Str Key=Security.WarningsTitle}" />
+                    </StackPanel>
+                    <ItemsRepeater x:Name="WarningList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{x:Bind}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+            </Border>
+
+            <!-- ===================== Windows-information ===================== -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.WindowsInfoTitle}" />
+
+                <Border Background="{StaticResource TintBlueBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="18,14">
+                    <ItemsRepeater x:Name="WindowsFactList">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout
+                                ItemsStretch="Fill"
+                                MinColumnSpacing="18"
+                                MinItemHeight="52"
+                                MinItemWidth="190"
+                                MinRowSpacing="10" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SecurityFactViewModel">
+                                <StackPanel AutomationProperties.Name="{x:Bind AutomationName}" Spacing="2">
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{x:Bind Label}" />
+                                    <TextBlock
+                                        FontFamily="{StaticResource DisplayFontFamily}"
+                                        FontSize="17"
+                                        FontWeight="SemiBold"
+                                        Foreground="{StaticResource TextPrimaryBrush}"
+                                        Text="{x:Bind Value}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Border>
+            </StackPanel>
+
+            <!-- ===================== Rekommenderat säkerhetsläge ===================== -->
+            <Border Background="{StaticResource TintGreenBrush}" Style="{StaticResource InfoPanelStyle}">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Spacing="5">
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Security.RecommendedTitle}" />
+                        <TextBlock
+                            x:Name="RecommendedModeText"
+                            FontFamily="{StaticResource DisplayFontFamily}"
+                            FontSize="20"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock
+                            x:Name="RecommendedModeBodyText"
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Spacing="8" VerticalAlignment="Center">
+                        <Button
+                            x:Name="CompareButton"
+                            Content="{loc:Str Key=Security.ShowDifference}"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            x:Name="PlanButton"
+                            Content="{loc:Str Key=Security.ShowPlan}"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource SecondaryButtonStyle}" />
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Where the data lives; nothing leaves the machine. -->
-            <Border Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
-                <StackPanel Spacing="10">
-                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.LocalOnly}" />
-                    <StackPanel Spacing="2">
+            <!-- ===================== Funktioner ===================== -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.CapabilitiesTitle}" />
+
+                <Border Background="{StaticResource TintNeutralBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="8,4">
+                    <ItemsRepeater x:Name="CapabilityList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="0" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SecurityStatusViewModel">
+                                <Border AutomationProperties.Name="{x:Bind AutomationName}" Style="{StaticResource ListRowStyle}">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <FontIcon
+                                            Grid.Column="0"
+                                            FontFamily="{StaticResource SymbolFontFamily}"
+                                            FontSize="17"
+                                            Foreground="{x:Bind StatusBrush}"
+                                            Glyph="{x:Bind Glyph}"
+                                            VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind Label}" />
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextStyle}"
+                                                Text="{x:Bind Hint}"
+                                                TextWrapping="Wrap"
+                                                Visibility="{x:Bind Hint, Converter={StaticResource StringToVisibility}}" />
+                                        </StackPanel>
+
+                                        <Border Grid.Column="2" Style="{StaticResource StatusChipStyle}" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource StatusChipTextStyle}" Text="{x:Bind Value}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Border>
+            </StackPanel>
+
+            <!-- ===================== Kontroller ===================== -->
+            <StackPanel Spacing="10">
+                <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.ChecksTitle}" />
+
+                <Border Background="{StaticResource TintNeutralBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="8,4">
+                    <ItemsRepeater x:Name="CheckList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="0" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SecurityCheckViewModel">
+                                <Border AutomationProperties.Name="{x:Bind AutomationName}" Style="{StaticResource ListRowStyle}">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <FontIcon
+                                            Grid.Column="0"
+                                            FontFamily="{StaticResource SymbolFontFamily}"
+                                            FontSize="17"
+                                            Foreground="{x:Bind StatusBrush}"
+                                            Glyph="{x:Bind Glyph}"
+                                            VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind Title}" />
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextStyle}"
+                                                Text="{x:Bind Detail}"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <Border Grid.Column="2" Style="{StaticResource StatusChipStyle}" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource StatusChipTextStyle}" Text="{x:Bind StatusLabel}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Border>
+            </StackPanel>
+
+            <!-- ===================== Avancerat ===================== -->
+            <Expander
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Header="{loc:Str Key=Security.Advanced}">
+                <StackPanel Padding="0,10,0,4" Spacing="14">
+
+                    <ItemsRepeater x:Name="DiagnosticsList">
+                        <ItemsRepeater.Layout>
+                            <UniformGridLayout
+                                ItemsStretch="Fill"
+                                MinColumnSpacing="18"
+                                MinItemHeight="48"
+                                MinItemWidth="200"
+                                MinRowSpacing="8" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SecurityFactViewModel">
+                                <StackPanel AutomationProperties.Name="{x:Bind AutomationName}" Spacing="1">
+                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{x:Bind Label}" />
+                                    <TextBlock
+                                        FontWeight="SemiBold"
+                                        Style="{StaticResource BodyTextStyle}"
+                                        Text="{x:Bind Value}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <Border Background="{StaticResource TintBlueBrush}" CornerRadius="{StaticResource RadiusMd}" Padding="14,10">
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Security.AuditOnlyNote}"
+                            TextWrapping="Wrap" />
+                    </Border>
+
+                    <StackPanel Spacing="4">
                         <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Security.ConfigPathTitle}" />
                         <TextBlock
                             x:Name="ConfigPathText"
                             FontSize="12"
                             IsTextSelectionEnabled="True"
-                            Style="{StaticResource CaptionTextStyle}" />
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
-                    <StackPanel Spacing="2">
+
+                    <StackPanel Spacing="4">
                         <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Security.LogPathTitle}" />
                         <TextBlock
                             x:Name="LogPathText"
                             FontSize="12"
                             IsTextSelectionEnabled="True"
-                            Style="{StaticResource CaptionTextStyle}" />
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
                 </StackPanel>
-            </Border>
+            </Expander>
+
+            <!-- ===================== Prototype-stage status ===================== -->
+            <StackPanel Spacing="10">
+                <Border Background="{StaticResource TintNeutralBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="8,4">
+                    <ItemsRepeater x:Name="StatusList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="0" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SecurityStatusViewModel">
+                                <Border AutomationProperties.Name="{x:Bind AutomationName}" Style="{StaticResource ListRowStyle}">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <FontIcon
+                                            Grid.Column="0"
+                                            FontFamily="{StaticResource SymbolFontFamily}"
+                                            FontSize="17"
+                                            Foreground="{x:Bind StatusBrush}"
+                                            Glyph="{x:Bind Glyph}"
+                                            VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind Label}" />
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextStyle}"
+                                                Text="{x:Bind Hint}"
+                                                TextWrapping="Wrap"
+                                                Visibility="{x:Bind Hint, Converter={StaticResource StringToVisibility}}" />
+                                        </StackPanel>
+
+                                        <Border Grid.Column="2" Style="{StaticResource StatusChipStyle}" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource StatusChipTextStyle}" Text="{x:Bind Value}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </Border>
+            </StackPanel>
 
         </StackPanel>
     </ScrollViewer>

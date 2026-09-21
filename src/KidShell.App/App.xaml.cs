@@ -5,6 +5,8 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Launching;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Security.Readiness;
+using KidShell.App.Services.Security;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
@@ -65,11 +67,19 @@ public partial class App : Application
         services.AddSingleton<IParentPinService, ParentPinService>();
         services.AddSingleton<IOnboardingService, OnboardingService>();
 
+        // Security readiness. Detection and account discovery are read-only
+        // implementations; there is deliberately no ISecurityMutator
+        // registration, because no implementation of it exists anywhere.
+        services.AddSingleton<ISystemFactsProvider, WindowsSystemFactsProvider>();
+        services.AddSingleton<IWindowsAccountDiscovery, WindowsLocalAccountDiscovery>();
+        services.AddSingleton<ISecurityReadinessService, SecurityReadinessService>();
+
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
         services.AddSingleton<IAddAppFlow, AddAppFlow>();
         services.AddSingleton<IPinChangeFlow, PinChangeFlow>();
+        services.AddSingleton<ISecurityDialogs, SecurityDialogs>();
 
         services.AddSingleton<OnboardingViewModel>();
         services.AddSingleton<ChildHomeViewModel>();

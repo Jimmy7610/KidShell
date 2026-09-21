@@ -13,6 +13,9 @@ internal sealed class RecordingLogger : IKidShellLogger
         Entries.Add((level, category, message, exception));
 
     public bool HasError => Entries.Any(e => e.Level == LogLevel.Error);
+
+    /// <summary>Every logged message, for asserting on what was and was not recorded.</summary>
+    public IEnumerable<string> Messages => Entries.Select(e => e.Message);
 }
 
 /// <summary>A temporary directory that cleans itself up.</summary>
