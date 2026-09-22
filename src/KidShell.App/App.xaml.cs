@@ -10,6 +10,10 @@ using KidShell.Core.Security.Readiness;
 using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
 using KidShell.Core.Apps;
+using KidShell.Core.ScreenTime;
+using KidShell.Core.Sessions;
+using KidShell.Core.Security.Transactions;
+using KidShell.Core.Watchdog;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
@@ -87,6 +91,24 @@ public partial class App : Application
         services.AddSingleton<ISystemFactsProvider, WindowsSystemFactsProvider>();
         services.AddSingleton<IWindowsAccountDiscovery, WindowsLocalAccountDiscovery>();
         services.AddSingleton<ISecurityReadinessService, SecurityReadinessService>();
+
+        // Recovery manifests. Written before any future transaction applies
+        // anything; nothing writes one yet because nothing applies anything.
+        services.AddSingleton<IRecoveryManifestStore>(
+            sp => new RecoveryManifestStore(AppPaths.RecoveryDirectory, sp.GetRequiredService<IKidShellLogger>()));
+
+        // Screen time. The counter lives in its own file for the reason given
+        // on AppPaths.ScreenTimeStatePath.
+        services.AddSingleton<IScreenTimeStateStore>(
+            sp => new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()));
+        services.AddSingleton<ScreenTimeEngine>();
+
+        services.AddSingleton<ChildSessionManager>();
+        services.AddSingleton<IWatchdog, ShellHealthMonitor>();
+
+        // Simulated on purpose: the only ISessionController that exists does
+        // not sign anybody out. See DevelopmentSessionController.
+        services.AddSingleton<ISessionController, DevelopmentSessionController>();
 
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();

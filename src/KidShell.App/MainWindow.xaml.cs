@@ -117,6 +117,7 @@ public sealed partial class MainWindow : Window
         ChildView.Initialize(
             _viewModel.Child,
             _viewModel.DeveloperMode,
+            _viewModel.DevelopmentPinActive,
             onSettingsRequested: () => _ = ShowChildSettingsNoticeAsync(),
             onParentAccessRequested: _viewModel.OpenPin);
 

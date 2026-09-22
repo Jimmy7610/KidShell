@@ -433,6 +433,7 @@ public static class Strings
 
         // ---------- Developer ----------
         ["Dev.Badge"] = "Utvecklingsläge",
+        ["Dev.BadgeOpenPin"] = "Utvecklingsläge · standard-PIN",
         ["Dev.ParentShortcut"] = "Ctrl+Skift+P öppnar PIN-rutan",
     };
 
