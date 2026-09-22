@@ -42,8 +42,13 @@ coverage*.xml
 TestResults/
 
 ## Signing
+# Signing material. A private key must never be committed; see
+# docs/DEPLOYMENT.md for where it belongs instead.
 *.pfx
 *.snk
+*.p12
+*.cer
+*.key
 
 ## OS noise
 Thumbs.db

@@ -66,6 +66,8 @@ internal sealed class FakeDeveloperOptions : IDeveloperOptions
     public FakeDeveloperOptions(bool developerMode) => DeveloperMode = developerMode;
 
     public bool DeveloperMode { get; }
+
+    public bool ShowDevelopmentWatermark => DeveloperMode;
 }
 
 internal static class SecurityFixtures

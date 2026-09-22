@@ -83,11 +83,26 @@ internal sealed class StubResolver : IExecutableResolver
     public ExecutableResolution Resolve(string executablePath) => _resolve(executablePath);
 }
 
+/// <summary>Runtime environments for both build kinds.</summary>
+internal static class TestRuntime
+{
+    public static KidShell.Core.Runtime.IRuntimeEnvironment Development { get; } =
+        KidShell.Core.Runtime.RuntimeEnvironment.Development;
+
+    public static KidShell.Core.Runtime.IRuntimeEnvironment Production { get; } =
+        KidShell.Core.Runtime.RuntimeEnvironment.Production;
+
+    public static KidShell.Core.Runtime.IRuntimeEnvironment For(bool developerMode) =>
+        developerMode ? Development : Production;
+}
+
 internal sealed class StubDeveloperOptions : IDeveloperOptions
 {
     public StubDeveloperOptions(bool developerMode) => DeveloperMode = developerMode;
 
     public bool DeveloperMode { get; }
+
+    public bool ShowDevelopmentWatermark => DeveloperMode;
 }
 
 internal static class TestFactory

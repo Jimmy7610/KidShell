@@ -230,9 +230,9 @@
                             Glyph="&#xE7BA;"
                             Style="{StaticResource StatusGlyphStyle}" />
                         <TextBlock
+                            x:Name="DeveloperBadgeText"
                             Foreground="{StaticResource StatusWarningBrush}"
-                            Style="{StaticResource StatusChipTextStyle}"
-                            Text="{loc:Str Key=Dev.Badge}" />
+                            Style="{StaticResource StatusChipTextStyle}" />
                     </StackPanel>
                 </Border>
             </StackPanel>

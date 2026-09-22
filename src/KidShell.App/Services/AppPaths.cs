@@ -18,6 +18,25 @@ public static class AppPaths
 
     public static string LogFilePath => Path.Combine(DataDirectory, "logs", "kidshell.log");
 
+    /// <summary>
+    /// The screen-time counter. Its own file because it is written every tick,
+    /// while the configuration is written when a parent saves - sharing one
+    /// would let a routine counter update corrupt the parent's settings.
+    /// </summary>
+    public static string ScreenTimeStatePath => Path.Combine(DataDirectory, "screentime.json");
+
+    /// <summary>
+    /// Recovery manifests. A folder rather than a file: each transaction gets
+    /// its own, and they outlive the transaction that wrote them.
+    /// </summary>
+    public static string RecoveryDirectory => Path.Combine(DataDirectory, "recovery");
+
+    /// <summary>
+    /// Where generated policy artifacts are written for review. Nothing here
+    /// is ever applied; it exists so a parent can read what KidShell would do.
+    /// </summary>
+    public static string ArtifactsDirectory => Path.Combine(DataDirectory, "artifacts");
+
     private static string ResolveDataDirectory()
     {
         string directory;

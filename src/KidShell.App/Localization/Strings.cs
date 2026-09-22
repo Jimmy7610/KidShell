@@ -44,6 +44,11 @@ public static class Strings
         ["Pin.DeveloperHint"] = "Utvecklingsläge: standard-PIN används tills en vuxen väljer en egen.",
         ["Pin.EntryAutomation"] = "PIN-kod, {0} av {1} siffror angivna",
         ["Pin.KeyAutomation"] = "Siffra {0}",
+        ["Pin.ErrorEmpty"] = "Skriv en PIN-kod.",
+        ["Pin.ErrorNotNumeric"] = "PIN-koden får bara innehålla siffror.",
+        ["Pin.ErrorRepeated"] = "Välj en PIN-kod med olika siffror.",
+        ["Pin.ErrorSequential"] = "Välj en PIN-kod som inte är en sifferföljd.",
+        ["Pin.ErrorReserved"] = "Den PIN-koden är KidShells utvecklingskod och kan inte användas.",
 
         // ---------- Parent shell ----------
         ["Parent.Title"] = "Föräldraläge",
@@ -433,6 +438,7 @@ public static class Strings
 
         // ---------- Developer ----------
         ["Dev.Badge"] = "Utvecklingsläge",
+        ["Dev.BadgeOpenPin"] = "Utvecklingsläge · standard-PIN",
         ["Dev.ParentShortcut"] = "Ctrl+Skift+P öppnar PIN-rutan",
     };
 

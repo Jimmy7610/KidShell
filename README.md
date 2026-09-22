@@ -349,20 +349,37 @@ See [`assets/README.md`](assets/README.md) for provenance and licensing.
 
 ## Roadmap
 
-| Milestone | Scope |
-| --- | --- |
-| **0.1 — Visual shell** ✅ | Child Mode, Parent Mode, PIN, configuration, launcher abstraction, tests |
-| **0.1.1 — First-run onboarding** ✅ | Six-screen child profile setup, 14 avatars, 5 themes, schema 2 migration, re-run from Parent Mode |
-| **0.1.5 — Security readiness (dry run)** ✅ | Windows capability detection, readiness report, pre-flight checks, security plan, AuditOnly guarantee. Changes nothing. |
-| 0.2 — Fullscreen & polish | Borderless full-screen child mode behind a real `DeveloperMode` switch, forced PIN setup on first run, more theme work |
-| 0.3 — Screen time | Session watchdog that actually enforces the stored weekday/weekend limits, warnings before time runs out |
-| 0.4 — Web | A real allowlist browser or Edge policy integration for the stored web mode |
-| 0.2 — Apply security | The first milestone that changes Windows: executes the plan 0.1.5 generates, with rollback for every step |
-| 0.5 — Windows integration | Dedicated child account, Assigned Access / kiosk, AppLocker or WDAC policy, secure sign-out for *Avsluta till Windows* |
-| 0.6 — Hardening | Watchdog service, tamper resistance, signed MSIX, real deployment story |
+| Version | Scope | Status |
+| --- | --- | --- |
+| 0.1 | Application shell | ✅ done |
+| 0.1.1 | First-run onboarding | ✅ done |
+| 0.1.5 | Security readiness (dry run) | ✅ done |
+| **0.2** | **Product UX, production PIN, app discovery** | **in progress** |
+| 0.3 | Transactional Windows integration foundation | planned |
+| 0.4 | Child account + application control preparation | planned |
+| 0.5 | Screen time, web, watchdog | planned |
+| 0.6 | Installer, updater, deployment | planned |
+| 0.7 | Hardening and escape testing | planned |
+| 0.8 | Release candidate preparation | planned |
+| 1.0 | Production release | blocked on dedicated-device validation |
 
-Milestones 0.5 and later are the ones that change the machine. They are kept
-strictly out of 0.1 on purpose.
+Scope, principles and the out-of-scope list live in
+**[`docs/ROADMAP.md`](docs/ROADMAP.md)**, which is authoritative.
+
+### Documentation
+
+| | |
+| --- | --- |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Version progression, principles, out of scope |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, what is actually in force, escape-test matrix |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Every file written, and what is never collected |
+| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Getting back in when something goes wrong |
+| [`docs/TESTING.md`](docs/TESTING.md) | How the suite is organised and what it does not cover |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing boundary, update rules |
+| [`docs/architecture/`](docs/architecture/) | Milestone architecture notes |
+
+Milestones 0.3 and later are the ones that will eventually change a machine.
+None of them has, and none of them will on a development machine.
 
 ---
 

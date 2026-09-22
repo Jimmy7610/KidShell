@@ -5,8 +5,15 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Launching;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Runtime;
 using KidShell.Core.Security.Readiness;
+using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
+using KidShell.Core.Apps;
+using KidShell.Core.ScreenTime;
+using KidShell.Core.Sessions;
+using KidShell.Core.Security.Transactions;
+using KidShell.Core.Watchdog;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 
@@ -54,7 +61,10 @@ public partial class App : Application
         IKidShellLogger logger = new FileLogger(AppPaths.LogFilePath);
         services.AddSingleton(logger);
 
-        services.AddSingleton<IDeveloperOptions>(new DeveloperOptions());
+        // Decided by the compiler, not by configuration. See
+        // BuildRuntimeEnvironment for why there is no runtime switch.
+        services.AddSingleton<IRuntimeEnvironment>(BuildRuntimeEnvironment.Current);
+        services.AddSingleton<IDeveloperOptions, DeveloperOptions>();
 
         services.AddSingleton<IConfigurationStore>(
             sp => new JsonConfigurationStore(AppPaths.ConfigurationFilePath, sp.GetRequiredService<IKidShellLogger>()));
@@ -63,6 +73,14 @@ public partial class App : Application
         services.AddSingleton<IExecutableResolver>(new WindowsExecutableResolver());
         services.AddSingleton<IProcessRunner, ProcessRunner>();
         services.AddSingleton<IAppLauncher, AppLauncher>();
+
+        // Installed-application discovery. Every scanner is read-only; the
+        // catalogue merges and de-duplicates what they find.
+        services.AddSingleton<IApplicationProfileLibrary>(ApplicationProfileLibrary.Default);
+        services.AddSingleton<IApplicationScanner, StartMenuScanner>();
+        services.AddSingleton<IApplicationScanner, RegistryApplicationScanner>();
+        services.AddSingleton<IApplicationScanner, PackagedApplicationScanner>();
+        services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
         services.AddSingleton<IParentPinService, ParentPinService>();
         services.AddSingleton<IOnboardingService, OnboardingService>();
@@ -73,6 +91,24 @@ public partial class App : Application
         services.AddSingleton<ISystemFactsProvider, WindowsSystemFactsProvider>();
         services.AddSingleton<IWindowsAccountDiscovery, WindowsLocalAccountDiscovery>();
         services.AddSingleton<ISecurityReadinessService, SecurityReadinessService>();
+
+        // Recovery manifests. Written before any future transaction applies
+        // anything; nothing writes one yet because nothing applies anything.
+        services.AddSingleton<IRecoveryManifestStore>(
+            sp => new RecoveryManifestStore(AppPaths.RecoveryDirectory, sp.GetRequiredService<IKidShellLogger>()));
+
+        // Screen time. The counter lives in its own file for the reason given
+        // on AppPaths.ScreenTimeStatePath.
+        services.AddSingleton<IScreenTimeStateStore>(
+            sp => new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()));
+        services.AddSingleton<ScreenTimeEngine>();
+
+        services.AddSingleton<ChildSessionManager>();
+        services.AddSingleton<IWatchdog, ShellHealthMonitor>();
+
+        // Simulated on purpose: the only ISessionController that exists does
+        // not sign anybody out. See DevelopmentSessionController.
+        services.AddSingleton<ISessionController, DevelopmentSessionController>();
 
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();

@@ -1,29 +1,42 @@
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
+using KidShell.Core.Runtime;
 
 namespace KidShell.Core.Security;
 
 /// <summary>
-/// Default <see cref="IParentPinService"/>: PBKDF2 hash held inside the
-/// KidShell configuration document, with a clearly-marked development
-/// fallback while no PIN has been chosen.
+/// Default <see cref="IParentPinService"/>: a PBKDF2 hash held inside the
+/// KidShell configuration document.
+///
+/// The development fallback is gated on the build, not on configuration. In a
+/// production build <see cref="DevelopmentPin"/> is refused even when no PIN
+/// has been set — a state that then leaves Parent Mode unreachable, which is
+/// the correct failure. Onboarding is what guarantees a production install
+/// always has a real PIN before it finishes.
 /// </summary>
 public sealed class ParentPinService : IParentPinService
 {
     private readonly IAppStateService _state;
-    private readonly IDeveloperOptions _developerOptions;
+    private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
 
-    public ParentPinService(IAppStateService state, IDeveloperOptions developerOptions, IKidShellLogger logger)
+    public ParentPinService(IAppStateService state, IRuntimeEnvironment environment, IKidShellLogger logger)
     {
         _state = state;
-        _developerOptions = developerOptions;
+        _environment = environment;
         _logger = logger;
     }
 
-    public int PinLength => 6;
+    public int PinLength => ParentPinPolicy.RequiredLength;
 
     public bool IsCustomPinConfigured => _state.Current.ParentPin.IsConfigured;
+
+    /// <summary>
+    /// Whether the published fallback PIN would currently be accepted. Shown
+    /// prominently in the UI, because a build in this state is not protected.
+    /// </summary>
+    public bool IsDevelopmentFallbackActive =>
+        _environment.IsDevelopment && !IsCustomPinConfigured;
 
     public PinVerificationResult Verify(string pin)
     {
@@ -41,34 +54,36 @@ public sealed class ParentPinService : IParentPinService
             return ok ? PinVerificationResult.Correct : PinVerificationResult.Incorrect;
         }
 
-        if (!_developerOptions.DeveloperMode)
+        if (_environment.IsProduction)
         {
-            // No PIN configured and no development fallback: stay locked.
-            _logger.Warning("Pin", "No parent PIN configured and developer mode is off; refusing entry.");
+            // No PIN and no fallback. Parent Mode stays shut rather than
+            // opening on a PIN that is printed in the documentation.
+            _logger.Warning("Pin", "No parent PIN configured in a production build; refusing entry.");
             return PinVerificationResult.Incorrect;
         }
 
         var devOk = PinHasher.FixedTimeEquals(pin, DevelopmentPin.Value);
-        _logger.Info("Pin", devOk
-            ? "Development fallback PIN accepted."
+        _logger.Warning("Pin", devOk
+            ? "Development fallback PIN accepted. This build is not protected."
             : "Development fallback PIN rejected.");
         return devOk ? PinVerificationResult.Correct : PinVerificationResult.Incorrect;
     }
 
     public bool TrySetPin(string pin)
     {
-        if (string.IsNullOrWhiteSpace(pin) || pin.Length != PinLength || !pin.All(char.IsAsciiDigit))
+        if (ParentPinPolicy.Validate(pin) != PinValidation.Ok)
         {
+            _logger.Warning("Pin", "A proposed parent PIN was refused by policy.");
             return false;
         }
 
         var (hash, salt) = PinHasher.Hash(pin);
-        var settings = _state.Current.ParentPin;
-        settings.Hash = hash;
-        settings.Salt = salt;
-        settings.Iterations = PinHasher.DefaultIterations;
+        var draft = _state.CreateDraft();
+        draft.ParentPin.Hash = hash;
+        draft.ParentPin.Salt = salt;
+        draft.ParentPin.Iterations = PinHasher.DefaultIterations;
 
-        if (!_state.SaveCurrent())
+        if (!_state.Commit(draft))
         {
             _logger.Error("Pin", "New parent PIN could not be persisted.");
             return false;

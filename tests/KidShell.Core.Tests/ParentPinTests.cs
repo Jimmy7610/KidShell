@@ -9,7 +9,7 @@ public class ParentPinTests
     {
         var (state, _, logger) = TestFactory.CreateState(dir);
         state.Initialize();
-        return new ParentPinService(state, new StubDeveloperOptions(developerMode), logger);
+        return new ParentPinService(state, TestRuntime.For(developerMode), logger);
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using KidShell.App.Services;
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
+using KidShell.Core.Security;
 
 namespace KidShell.App.ViewModels;
 
@@ -23,6 +24,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IAppStateService _state;
     private readonly IDialogService _dialogs;
     private readonly IDeveloperOptions _developerOptions;
+    private readonly IParentPinService _pinService;
     private readonly IKidShellLogger _logger;
 
     private ShellMode _mode = ShellMode.Child;
@@ -32,6 +34,7 @@ public sealed class ShellViewModel : ObservableObject
         IAppStateService state,
         IDialogService dialogs,
         IDeveloperOptions developerOptions,
+        IParentPinService pinService,
         IKidShellLogger logger,
         OnboardingViewModel onboarding,
         ChildHomeViewModel child,
@@ -41,6 +44,7 @@ public sealed class ShellViewModel : ObservableObject
         _state = state;
         _dialogs = dialogs;
         _developerOptions = developerOptions;
+        _pinService = pinService;
         _logger = logger;
 
         Onboarding = onboarding;
@@ -91,6 +95,13 @@ public sealed class ShellViewModel : ObservableObject
     public event EventHandler? ExitRequested;
 
     public bool DeveloperMode => _developerOptions.DeveloperMode;
+
+    /// <summary>
+    /// Whether the published fallback PIN would currently open Parent Mode.
+    /// Surfaced in the child's footer badge because it is the state that
+    /// actually matters, not the build flavour.
+    /// </summary>
+    public bool DevelopmentPinActive => _pinService.IsDevelopmentFallbackActive;
 
     public string DeveloperBadge => Strings.Get("Dev.Badge");
 
