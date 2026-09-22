@@ -1,21 +1,450 @@
 # KidShell / Barnläge
 
-KidShell turns an ordinary Windows laptop into something a six-year-old can use
-on their own. On first launch a parent runs a short setup that names the child
-and chooses their avatar and theme. After that the child sees **Barnläge** — a
-bright, illustrated home screen with a handful of large, obvious cards. A parent
-holds one button for three seconds, enters a PIN, and gets **Föräldraläge**: a
-calmer screen for deciding what the child may use.
-
-> **Development status: MVP 0.1 — visual application shell, plus first-run
-> child profile onboarding.**
->
-> **WINDOWS LOCKDOWN STATUS: NOT ENABLED.**
-> KidShell has not changed anything about this machine's Windows configuration
-> and does not restrict the child in any way yet. See
-> [What MVP 0.1 deliberately does not secure](#what-mvp-01-deliberately-does-not-secure).
+[Svenska](#svenska) · [English](#english)
 
 ---
+
+# Svenska
+
+KidShell är ett barnvänligt Windows-skal som gör en vanlig Windows-dator enklare att använda för barn och lättare att styra för en förälder. Barnet möts av ett tydligt **Barnläge** med stora appkort, medan föräldern har ett separat **Föräldraläge** för profil, appar, PIN, skärmtid, webb och säkerhet.
+
+> **Utvecklingsstatus: 0.2 development / pre-production foundation**
+>
+> **WINDOWS LOCKDOWN STATUS: NOT ENABLED**
+>
+> KidShell har fortfarande **inte** aktiverat någon riktig Windows-låsning. Inga Windows-konton har skapats, ingen AppLocker-policy har applicerats, Assigned Access är inte aktiverat och inga tjänster eller systempolicyer har installerats. Säkerhetsdelarna som finns idag är analys, planering, policygenerering, simulering och recovery-arkitektur.
+
+## Skärmbilder
+
+| Första start | |
+| --- | --- |
+| ![Välkommen](docs/screenshots/setup-welcome.png) | ![Barnets namn](docs/screenshots/setup-name.png) |
+| ![Avatar](docs/screenshots/setup-avatar.png) | ![Tema](docs/screenshots/setup-theme.png) |
+
+| Barnläge | Föräldraläge |
+| --- | --- |
+| ![Barnläge](docs/screenshots/child-mode.png) | ![Föräldraöversikt](docs/screenshots/parent-overview.png) |
+| ![Föräldra-PIN](docs/screenshots/parent-pin.png) | ![Tillåtna appar](docs/screenshots/parent-apps.png) |
+
+Den godkända visuella riktningen finns i
+[`docs/design/child-home-reference.png`](docs/design/child-home-reference.png) och
+[`docs/design/parent-mode-reference.png`](docs/design/parent-mode-reference.png).
+
+## Vad KidShell kan idag
+
+### Barnläge
+
+- Ett riktigt paketerat WinUI 3-program byggt med .NET 10 och Windows App SDK 2.5.1.
+- Första-start-flöde där föräldern väljer barnets namn, avatar, ålder och tema.
+- 14 vektoravatarer och 5 teman: **Skogen, Rymden, Havet, Dinosaurier och Färgglatt**.
+- Responsivt appgrid med stora barnvänliga kort.
+- Klocka, batteri och nätverksstatus.
+- Paint och Windows Kalkylator kan startas via KidShells launcher-abstraktion.
+- Vänliga felmeddelanden när en app saknas eller inte är korrekt konfigurerad.
+
+### Föräldraläge
+
+Föräldraläget innehåller idag:
+
+- **Översikt**
+- **Appar**
+- **Skärmtid**
+- **Webb**
+- **Säkerhet**
+- **Profil**
+
+Föräldern kan bland annat:
+
+- slå appar av och på
+- ändra barnets profil
+- ändra PIN
+- konfigurera skärmtidsregler
+- hantera webbinställningar
+- se Windows- och säkerhetskapabiliteter
+
+### Föräldra-PIN
+
+KidShell skiljer nu tydligt på utvecklingsläge och produktionsläge.
+
+- En riktig föräldra-PIN lagras aldrig i klartext.
+- PIN lagras med PBKDF2-baserad hashning.
+- Svaga PIN-koder som `000000`, `123456`, `987654` och den publicerade utvecklings-PIN-koden får inte väljas som riktig PIN.
+- En Release/production-build accepterar **inte** utvecklings-PIN som fallback.
+- En Debug/development-build visar tydligt att utvecklingsläge är aktivt.
+
+Utvecklings-PIN i Debug-build:
+
+```text
+246810
+```
+
+Den ska endast användas under utveckling.
+
+### Installerade appar
+
+KidShell har read-only appupptäckt för bland annat:
+
+- Start-menyn
+- registrerade Win32-program
+- installerade paket / MSIX / UWP
+- AUMID där det finns
+- kända exekverbara sökvägar
+
+Resultaten normaliseras och dubletter slås ihop. Att lägga till en app i KidShells gränssnitt är **inte** samma sak som att ge den framtida Windows-säkerhetsbehörigheter.
+
+### App-profiler
+
+KidShell har en modell för att beskriva hur appar beter sig, bland annat:
+
+- huvudprocess
+- child processes
+- launcher
+- updater-processer
+- protokoll och URL:er
+- filplatser
+- beroenden
+- kända säkerhetsrisker
+
+Profiler finns eller är förberedda för bland annat Calculator, Paint, Minecraft, VLC, Scratch och webbläsare.
+
+## Skärmtid
+
+Skärmtidsmotorn är implementerad på applikationsnivå.
+
+Den kan hantera:
+
+- vardags- och helggränser
+- tillåtna tider på dygnet
+- använd tid och återstående tid
+- varningar vid 15, 5 och 1 minut
+- tillfälliga förlängningar
+- omstart av KidShell
+- sleep/resume
+- lokala dagsgränser och DST
+- passiv upptäckt av misstänkt bakåtflyttad systemklocka
+
+Viktigt: eftersom Windows-lockdown ännu inte är aktiverad kan KidShell begränsa vad som händer **inne i KidShell**, men kan ännu inte garantera att ett barn inte lämnar appen och använder resten av Windows.
+
+## Webb
+
+KidShell har en web policy-modell och kan generera framtida Edge-policy som **dry-run/artifact**.
+
+Planerade lägen:
+
+- ingen webbläsare
+- endast godkända webbplatser
+- friare webb
+
+URL:er normaliseras och riskabla protokoll som `file:`, `javascript:` och `shell:` avvisas.
+
+Ingen webbläsarpolicy appliceras på Windows i nuvarande build.
+
+## Säkerhetsarkitektur
+
+KidShell bygger säkerhetsdelen enligt principen:
+
+```text
+Prepare
+  ↓
+Preflight
+  ↓
+Snapshot
+  ↓
+Spara recovery-manifest
+  ↓
+Apply
+  ↓
+Verify
+  ↓
+Commit
+```
+
+Om något går fel efter att en ändring har börjat appliceras ska transaktionen försöka göra rollback i omvänd ordning.
+
+Cancellation-säkerheten är också byggd så att:
+
+- avbrott före första Apply kan avbryta utan mutation
+- avbrott efter en Apply måste gå via rollback
+- rollback använder en separat tidsbudget och stoppas inte bara för att den ursprungliga operationen blev cancelled
+
+I nuvarande produktkod finns fortfarande ingen användbar väg till riktig `Apply`.
+
+`SecurityFeatureCompiledIn` är fortfarande `false`.
+
+## Recovery
+
+KidShell har recovery-manifest som är tänkta att sparas **innan** framtida Windows-förändringar görs.
+
+Recovery-informationen kan innehålla:
+
+- transaction ID
+- tidpunkt
+- Windows-kapabiliteter
+- planerade operationer
+- tidigare värden
+- rollback-information
+- slutstatus
+
+PIN, lösenord, salt och andra hemligheter ska inte skrivas till recovery-manifestet.
+
+## Barnkonto och Windows-säkerhet
+
+Arkitekturen kan idag upptäcka och planera för ett framtida barnkonto, men den skapar eller ändrar inget konto.
+
+Målet är:
+
+```text
+Föräldrakonto
+└─ Administrator
+
+Barnkonto
+└─ Standard User
+```
+
+Barnkontot ska aldrig behöva administratörsrättigheter.
+
+## AppLocker och Assigned Access
+
+KidShell skiljer på:
+
+- om Windows kan **enforce** AppLocker
+- om den aktuella datorn har en dokumenterad kanal för att **deploya** policyn
+
+Det är inte samma sak.
+
+På en vanlig Windows Home-installation kan enforcement-motorn finnas samtidigt som PowerShell-modul, policykonsol, CSP eller annan lämplig deployment-kanal saknas.
+
+KidShell använder därför inte en förenklad `SupportsAppLocker = true/false`.
+
+AppLocker-policy kan genereras som validerad XML-artifact, men appliceras inte.
+
+Assigned Access är inte tillgängligt på Windows Home och är därför avsett för framtida **Secure Mode** på kompatibla Windows-utgåvor.
+
+## Standard Mode och Secure Mode
+
+### Standard Mode — planerat
+
+Avsett att fungera så långt Windows-utgåvan tillåter, inklusive Home:
+
+- separat standardkonto för barnet
+- KidShell autostart
+- tillåten appmodell
+- skärmtid
+- webbkontroll
+- watchdog
+- recovery
+- dokumenterad appkontroll där deployment faktiskt stöds
+
+### Secure Mode — planerat
+
+På kompatibla Windows-utgåvor:
+
+- allt i Standard Mode
+- Assigned Access / restricted user experience
+- starkare OS-nivåisolering
+
+KidShell ska aldrig märka en dator som **Skyddad** bara för att funktionerna finns. Riktig enforcement måste först appliceras och verifieras.
+
+## Watchdog och sessioner
+
+KidShell har idag:
+
+- child session manager
+- process/session-abstraktion
+- watchdog-logik
+- crash-loop detection
+- development session controller
+
+En riktig Windows watchdog-service är **inte installerad eller implementerad för produktion ännu**.
+
+## Uppdateringar
+
+Arkitektur finns för framtida säkra uppdateringar:
+
+```text
+Check
+→ Download
+→ Verify
+→ Stage
+→ Install
+→ Verify
+→ Rollback vid fel
+```
+
+Modellen kräver bland annat HTTPS, signaturkontroll och SHA-256-verifiering.
+
+Automatiska produktionsuppdateringar är fortfarande avstängda eftersom KidShell ännu inte har en riktig kodsigneringskedja.
+
+## Vad KidShell INTE gör ännu
+
+Nuvarande build är **inte färdig parental-control-säkerhet**.
+
+Följande är inte aktiverat på en riktig dator:
+
+- skapande eller ändring av Windows-barnkonto
+- AppLocker enforcement-policy
+- Assigned Access / kiosk
+- Windows-autostart för barnkontot
+- watchdog-service
+- shell replacement
+- Group Policy-förändringar
+- UAC-förändringar
+- systemomfattande webbpolicy
+- säker produktionsinstaller
+- automatisk produktionsuppdatering
+- kodsignering
+
+Explorer, Task Manager och vanliga Windows-genvägar är därför fortfarande tillgängliga när KidShell körs utan riktig lockdown.
+
+## Windows-krav
+
+| | |
+| --- | --- |
+| OS | Windows 10 1809 (10.0.17763) eller senare; utvecklas främst på Windows 11 |
+| SDK | .NET SDK 10.0.300 eller senare |
+| Runtime | Windows App Runtime 2.5.1 |
+| Lokal Debug-körning | Windows Developer Mode för registrering av osignerat lokalt paket |
+
+Packaged app discovery använder nyare Windows-API:er där de finns och guardas på äldre Windows-builds.
+
+## Bygga
+
+Öppna **PowerShell** i repots rotmapp och kör:
+
+```powershell
+cd C:\Projects\KidShell
+dotnet build KidShell.sln -p:Platform=x64 -c Debug
+```
+
+För Release:
+
+```powershell
+dotnet build KidShell.sln -p:Platform=x64 -c Release
+```
+
+## Köra
+
+Från repots rot:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\run-kidshell.ps1
+```
+
+När paketet redan är registrerat kan appen startas med:
+
+```powershell
+start shell:AppsFolder\KidShell.Barnlage.Dev_b19zrs1eesfdc!App
+```
+
+## Tester
+
+Kör:
+
+```powershell
+dotnet test KidShell.sln -c Release
+```
+
+Nuvarande verifierade nivå på `main`:
+
+**542 automatiska tester passerar.**
+
+GitHub Actions kör dessutom restore, build, test och en separat kontroll som letar efter uppenbara maskinmuterande anrop i produktkoden.
+
+## Arkitektur
+
+```text
+KidShell.App
+WinUI 3 / Windows-specifikt UI
+        │
+        ▼
+KidShell.Core
+konfiguration, appar, PIN, screen time,
+sessioner, webb, watchdog, säkerhetsplanering
+        ▲
+        │
+KidShell.Core.Tests
+xUnit / fake operations / ingen riktig Windows-mutation
+```
+
+Viktiga principer:
+
+- `KidShell.Core` innehåller så mycket testbar logik som möjligt.
+- UI får inte sprida direkta Windows-mutationer.
+- framtida systemändringar måste gå genom den transaktionella säkerhetsgränsen.
+- capability är inte samma sak som enforcement.
+- recovery går före lockdown.
+- lokal-first: ingen telemetry och inget molnkonto krävs.
+
+## Data
+
+| Data | Plats |
+| --- | --- |
+| Konfiguration | `%LOCALAPPDATA%\Packages\KidShell.Barnlage.Dev_…\LocalState\kidshell.config.json` |
+| Backup | samma plats med `.bak` |
+| Logg | `…\LocalState\logs\kidshell.log` |
+| Recovery | lokal appdata enligt recovery-arkitekturen |
+
+KidShell samlar inte in:
+
+- tangenttryckningar
+- chattar
+- lösenord
+- dokumentinnehåll
+- webbsidors innehåll
+- skärmbilder för övervakning
+
+Se [`docs/PRIVACY.md`](docs/PRIVACY.md).
+
+## Roadmap
+
+| Version | Omfattning | Status |
+| --- | --- | --- |
+| 0.1 | Application shell | ✅ Klar |
+| 0.1.1 | First-run onboarding | ✅ Klar |
+| 0.1.5 | Security readiness / dry-run | ✅ Klar |
+| **0.2** | **Produkt-UX, production PIN, app discovery** | **Pågår** |
+| 0.3 | Transactional Windows integration | Förberedd i Core |
+| 0.4 | Barnkonto + appkontroll | Förberedd / dry-run |
+| 0.5 | Skärmtid, webb, watchdog | Delvis implementerad |
+| 0.6 | Installer, updater, deployment | Planerad |
+| 0.7 | Hardening och escape testing | Planerad |
+| 0.8 | Release candidate | Kräver separat testdator |
+| 1.0 | Produktionsrelease | Blockerad tills riktig device-validation är klar |
+
+Den detaljerade och auktoritativa roadmapen finns i
+**[`docs/ROADMAP.md`](docs/ROADMAP.md)**.
+
+## Dokumentation
+
+| Dokument | Innehåll |
+| --- | --- |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Versioner, principer och scope |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model och security status |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Vad som sparas och inte samlas in |
+| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Recovery och rollback |
+| [`docs/TESTING.md`](docs/TESTING.md) | Teststrategi |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing och deployment |
+| [`docs/architecture/`](docs/architecture/) | Arkitekturanteckningar per milestone |
+
+## Licens
+
+Copyright © 2026 Jimmy Eliasson. All rights reserved.
+
+KidShell är proprietär programvara. Ingen rätt ges att kopiera, modifiera, distribuera, sublicensiera, sälja, publicera eller skapa derivat av programvaran utan skriftligt tillstånd från upphovsrättsinnehavaren.
+
+Se [LICENSE](LICENSE).
+
+---
+
+# English
+
+KidShell is a child-friendly Windows shell designed to make an ordinary Windows PC simpler for a child to use and easier for a parent to manage. The child sees a clear **Child Mode** with large app cards, while the parent gets a separate **Parent Mode** for profile, apps, PIN, screen time, web and security.
+
+> **Development status: 0.2 development / pre-production foundation**
+>
+> **WINDOWS LOCKDOWN STATUS: NOT ENABLED**
+>
+> KidShell has still **not** enabled real Windows lockdown. No Windows accounts have been created, no AppLocker policy has been applied, Assigned Access is not enabled, and no services or system policies have been installed. Current security functionality consists of detection, planning, policy generation, simulation and recovery architecture.
 
 ## Screenshots
 
@@ -24,367 +453,415 @@ calmer screen for deciding what the child may use.
 | ![Welcome](docs/screenshots/setup-welcome.png) | ![Child name](docs/screenshots/setup-name.png) |
 | ![Avatar](docs/screenshots/setup-avatar.png) | ![Theme](docs/screenshots/setup-theme.png) |
 
-| Barnläge | Föräldraläge |
+| Child Mode | Parent Mode |
 | --- | --- |
 | ![Child Mode](docs/screenshots/child-mode.png) | ![Parent overview](docs/screenshots/parent-overview.png) |
 | ![Parent PIN](docs/screenshots/parent-pin.png) | ![Allowed apps](docs/screenshots/parent-apps.png) |
 
 The approved visual direction lives in
-[`docs/design/child-home-reference.png`](docs/design/child-home-reference.png)
-and
+[`docs/design/child-home-reference.png`](docs/design/child-home-reference.png) and
 [`docs/design/parent-mode-reference.png`](docs/design/parent-mode-reference.png).
-Every screen in the app is built against those two images.
 
----
+## What KidShell can do today
 
-## What MVP 0.1 does
+### Child Mode
 
-* A real, packaged WinUI 3 desktop application on .NET 10 and Windows App SDK 2.5.1.
-* **First-run setup.** KidShell ships with no child configured. On first launch
-  a parent walks six screens — welcome, name, avatar, age, theme, finish — and
-  only the last one writes anything. There is no placeholder child and no
-  pretend profile; close the window half-way and setup simply runs again.
-* **Barnläge** — illustrated vector scene in one of five themes, the configured
-  child profile, live clock/battery/network readout and a responsive 4x2 grid of
-  large app cards with hover, pressed and keyboard-focus states.
-* **Föräldraläge** — six working pages (Översikt, Appar, Skärmtid, Webb,
-  Säkerhet, Profil) behind a PIN.
-* **Configuration-driven app grid.** The cards come from a JSON configuration
-  document, never from XAML. Toggling an app in Parent Mode and pressing
-  *Spara ändringar* changes what the child sees.
-* **A launcher abstraction** (`IAppLauncher`). Rita launches Paint and
-  Miniräknare launches Windows Calculator through it; missing or unconfigured
-  programs produce a friendly card-level message instead of a crash.
-* **A parent PIN service** with PBKDF2 hashing, plus a clearly marked
-  development fallback PIN.
-* **Fourteen vector avatars and five scene themes** (Skogen, Rymden, Havet,
-  Dinosaurier, Färgglatt), chosen during setup and editable afterwards in
-  Parent Mode. Text drawn on the scene flips to a light palette on the dark
-  themes so it stays readable.
-* **Durable local configuration** with atomic-ish writes, a `.bak` copy and
-  recovery from a corrupt file.
-* **Security readiness, read-only.** Detects the real Windows edition
-  (without trusting the misleading `ProductName` value), reports which
-  capabilities exist, runs pre-flight checks and prints the plan a future
-  secure setup would follow — while being structurally incapable of changing
-  anything.
-* **Local-only logging.** No telemetry, no analytics, no network calls at all.
+- A real packaged WinUI 3 application built on .NET 10 and Windows App SDK 2.5.1.
+- First-run setup for child name, avatar, age and theme.
+- 14 vector avatars and 5 themes: **Forest, Space, Ocean, Dinosaurs and Bright**.
+- Responsive app grid with large child-friendly cards.
+- Clock, battery and network status.
+- Paint and Windows Calculator can launch through KidShell's launcher abstraction.
+- Friendly errors when an app is missing or misconfigured.
 
----
+### Parent Mode
 
-## What MVP 0.1 deliberately does NOT secure
+Parent Mode currently contains:
 
-This milestone is a visual and architectural shell. It is **not** a child
-lockdown product yet, and the Säkerhet page inside the app says so in the same
-words:
+- **Overview**
+- **Apps**
+- **Screen time**
+- **Web**
+- **Security**
+- **Profile**
 
-* No Windows account is created or modified.
-* Assigned Access / kiosk mode is **not** configured.
-* AppLocker and WDAC are **not** configured.
-* No Group Policy, registry or UAC changes are made.
-* Explorer is **not** replaced; Task Manager and Windows shortcuts still work.
-* No service or watchdog is installed.
-* Screen-time limits are **stored but not enforced**.
-* The web filter choice is **stored but changes no browser settings** and sets
-  no Edge policies.
-* A child can minimise or close KidShell like any other program.
+A parent can, among other things:
 
-If you need a locked-down machine today, KidShell is not that yet.
+- enable or disable apps
+- edit the child profile
+- change the parent PIN
+- configure screen-time rules
+- manage web settings
+- inspect Windows and security capabilities
 
----
+### Parent PIN
 
-## First run and resetting it
+KidShell now has a strict separation between development and production behavior.
 
-The first time KidShell starts with no configured child, it opens **first-run
-setup** instead of Child Mode:
+- A real parent PIN is never stored in plaintext.
+- PIN storage uses PBKDF2-based hashing.
+- Weak PINs such as `000000`, `123456`, `987654`, and the published development PIN cannot be selected as a real PIN.
+- A Release/production build does **not** accept the development PIN as a fallback.
+- A Debug/development build clearly indicates that development mode is active.
 
-```text
-Launch
-  └─ configuration has a finished child profile?
-       ├─ no  → First-run setup (Välkommen till Barnläge)
-       └─ yes → Barnläge
-```
-
-Routing is decided once, at startup, from the persisted configuration. It is
-deterministic: `KidShellConfiguration.RequiresOnboarding` is true unless the
-profile carries `isOnboardingComplete` **and** a name, an age and an avatar.
-Both halves matter, so a document written half-way can never produce a
-partially configured Child Mode.
-
-Nothing is persisted until *Starta Barnläge* on the final screen. Closing the
-window mid-setup leaves the configuration untouched and setup runs again next
-time.
-
-### Running setup again
-
-Three ways, in order of preference:
-
-1. **In the app.** Föräldraläge → **Profil** → **Kör introduktionen igen**.
-   Asks for confirmation, then clears only the child's name, age and avatar and
-   returns to setup. The app list, screen time, web settings and the parent PIN
-   are kept — this is also how you hand the machine to a different child.
-
-2. **Edit the configuration.** Set `isOnboardingComplete` to `false` in
-   `kidshell.config.json` (path under [Where the data lives](#where-the-data-lives))
-   while KidShell is closed. Clearing `name`, `age` or `avatarId` has the same
-   effect.
-
-3. **Start from nothing.** Delete `kidshell.config.json` (and the `.bak` beside
-   it) while KidShell is closed. This also discards the app list and every other
-   setting, so prefer option 1 or 2 unless you want genuinely fresh defaults.
-
-```powershell
-# Option 3 - full reset. KidShell must not be running.
-Remove-Item "$env:LOCALAPPDATA\Packages\KidShell.Barnlage.Dev_b19zrs1eesfdc\LocalState\kidshell.config.json*"
-```
-
-### Upgrading an existing install
-
-The configuration document is versioned. Schema 1 (MVP 0.1) had no concept of
-onboarding, so it is migrated on load:
-
-* a profile still carrying the shipped placeholder name is treated as *never
-  set up* — it is cleared and setup runs;
-* any other profile is carried over as an already-configured child, so
-  upgrading never pushes a family back through setup;
-* the old `meadow` and `sunset` theme ids become `forest` and `bright`.
-
-Everything outside the child profile — apps, screen time, web settings, PIN —
-survives the migration untouched, and the migrated document is written straight
-back at schema 2.
-
----
-
-## Windows requirements
-
-KidShell's **user interface** runs on any Windows 10 or 11 machine, and can be
-developed and tested without changing a single Windows setting. That is what
-every 0.1.x build does.
-
-KidShell's **security** is a different question, and depends on the edition:
-
-| Edition | Best available mode | Why |
-| --- | --- | --- |
-| Windows 11 / 10 **Home** | Standard | No Assigned Access (AppLocker *enforcement* is supported) |
-| Windows 11 / 10 **Pro**, Pro Education, Pro for Workstations | Secure | Assigned Access, plus the AppLocker CSP |
-| **Enterprise**, **Education**, IoT Enterprise | Secure | Assigned Access, plus the AppLocker CSP |
-
-**AppLocker is not edition-gated.** Since
-[KB 5024351](https://support.microsoft.com/help/5024351), Windows 10 version
-2004 and newer and all Windows 11 versions enforce AppLocker policies on every
-edition, Home included. What still varies is how a policy gets *installed*: the
-AppLocker CSP needs Pro or above, and the PowerShell module and policy console
-are not present on every machine. A stock Home machine can therefore enforce a
-policy it has no first-party way to deploy — KidShell reports that state
-honestly rather than rounding it to "unavailable".
-
-* **Standard mode** (planned): a separate standard Windows account for the
-  child, KidShell's own app allowlist, AppLocker enforcement where a
-  deployment route exists, UAC separation, autostart and a watchdog. The child
-  can still minimise KidShell and use the rest of that account's desktop.
-* **Secure mode** (planned): everything in Standard, plus Assigned Access
-  restricting the child's sign-in to KidShell.
-
-Standard is **not** equivalent to Secure, and KidShell never says it is.
-
-> ### This build does not protect Windows
->
-> **MVP 0.1.x is not parental-control security software.** It has applied no
-> Windows lockdown of any kind: no accounts are created, no policy is written,
-> no kiosk mode is configured, and the child can leave KidShell at any time by
-> minimising it.
->
-> Föräldraläge → **Säkerhet** reports exactly what this machine could support
-> and what KidShell would change, and states that nothing has been changed.
-> That page runs a strictly read-only scan — detection, evaluation and
-> planning, and no write path exists in the code at all. See
-> [`docs/architecture/SECURITY-READINESS.md`](docs/architecture/SECURITY-READINESS.md).
->
-> Treat KidShell today as a friendly shell for a supervised child, not as a
-> lock.
-
-### Checking your own machine
-
-Open Föräldraläge → Säkerhet. It shows the detected edition and build, your
-account type, UAC state, which capabilities exist, and — under **Avancerat** —
-the raw diagnostics plus the execution mode, which reads `AuditOnly`.
-
-Under **Avancerat** the AppLocker surface is broken out in full: enforcement,
-the Application Identity service, the PowerShell module, local policy
-readability, the policy store, the management console and the CSP — because
-those are separate questions with different answers on the same machine.
-
-**Visa säkerhetsplan** prints the exact steps a future secure setup would take
-on your machine. It runs none of them.
-
----
-
-## Requirements
-
-| | |
-| --- | --- |
-| OS | Windows 10 1809 (10.0.17763) or later; developed on Windows 11 |
-| SDK | .NET SDK 10.0.300 or later (`dotnet --version`) |
-| Runtime | Windows App Runtime 2.5.1 (installed automatically with Visual Studio, or from Microsoft) |
-| For the CLI run script | Developer Mode enabled in Windows Settings → System → For developers |
-
-Developer Mode is needed only so that an unsigned local package layout can be
-registered. It is a setting you turn on for yourself; KidShell never changes it.
-
----
-
-## How to build
-
-```bash
-dotnet build KidShell.sln -p:Platform=x64
-```
-
-Core and the test project build for any platform; the app project targets
-`x64` and `ARM64`.
-
-## How to run
-
-The app is a packaged (MSIX) WinUI 3 application, so the loose build output has
-to be registered before it can start. The repository ships a script that builds,
-registers and launches in one step:
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\run-kidshell.ps1
-```
-
-Useful switches:
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\run-kidshell.ps1 -SkipBuild
-```
-
-```bash
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\run-kidshell.ps1 -Unregister
-```
-
-From Visual Studio, set **KidShell.App** as the startup project and press F5 —
-the normal packaged-app F5 loop works as usual.
-
-## How to run the tests
-
-```bash
-dotnet test tests\KidShell.Core.Tests\KidShell.Core.Tests.csproj
-```
-
----
-
-## ⚠️ Development PIN
-
-Until a parent sets their own PIN, Parent Mode accepts the built-in
-development PIN:
+Development PIN in Debug builds:
 
 ```text
 246810
 ```
 
-This is **development only**:
+This is for development only.
 
-* it is a compiled-in constant in `KidShell.Core/Security/DevelopmentPin.cs`,
-* it is never written to the configuration file,
-* it is only accepted while `DeveloperOptions.DeveloperMode` is `true`,
-* the PIN screen and the Säkerhet page both say out loud that it is in use.
+### Installed application discovery
 
-Shipping to real families requires removing the fallback and forcing PIN setup
-during first run. That is tracked for the Windows integration milestone.
+KidShell has read-only discovery for:
 
-While `DeveloperMode` is true there is also a keyboard shortcut,
-**Ctrl+Shift+P**, that opens the PIN prompt without the three-second hold, so
-development is never blocked by the gesture.
+- Start Menu entries
+- registered Win32 applications
+- installed packages / MSIX / UWP
+- AUMID where available
+- known executable paths
 
----
+Results are normalized and duplicates are merged. Adding an app to KidShell's visible app list is **not** the same thing as granting future Windows security permission.
 
-## Architecture overview
+### Application profiles
+
+KidShell has a model for describing how applications behave, including:
+
+- main executable
+- child processes
+- launcher
+- updater processes
+- protocols and URLs
+- file locations
+- dependencies
+- known security considerations
+
+Profiles exist or are prepared for apps such as Calculator, Paint, Minecraft, VLC, Scratch and browsers.
+
+## Screen time
+
+The screen-time engine is implemented at application level.
+
+It supports:
+
+- weekday and weekend allowances
+- allowed hours
+- used and remaining time
+- warnings at 15, 5 and 1 minute
+- temporary parent extensions
+- KidShell restarts
+- sleep/resume
+- local-day boundaries and DST
+- passive detection of suspicious backward clock movement
+
+Important: because Windows lockdown is not yet enabled, KidShell can control what happens **inside KidShell**, but cannot yet guarantee that a child cannot leave the application and use the rest of Windows.
+
+## Web
+
+KidShell has a web-policy model and can generate future Edge policy as a **dry-run/artifact**.
+
+Planned modes:
+
+- no browser
+- approved sites only
+- broader web access
+
+URLs are normalized and risky schemes such as `file:`, `javascript:` and `shell:` are rejected.
+
+No browser policy is applied to Windows in the current build.
+
+## Security architecture
+
+KidShell's security foundation follows:
 
 ```text
-KidShell.App  (WinUI 3, net10.0-windows)   views, view models, design system
-      │
-      ▼
-KidShell.Core (net10.0, no UI)             configuration, launching, PIN, logging
-      ▲
-      │
-KidShell.Core.Tests (xunit)                68 tests, no UI and no real processes
+Prepare
+  ↓
+Preflight
+  ↓
+Snapshot
+  ↓
+Persist recovery manifest
+  ↓
+Apply
+  ↓
+Verify
+  ↓
+Commit
 ```
 
-* **KidShell.Core** deliberately has no Windows TFM and no WinUI reference, so
-  everything important is testable without a window.
-* **`IAppStateService`** is the single source of truth. Child Mode reads the
-  live configuration; Parent Mode edits a detached clone and only `Commit`
-  makes it real.
-* **`IAppLauncher`** is the only route to another program. No view or view
-  model calls `Process.Start`.
-* **`IParentPinService`** hides how PINs are stored so the file-based
-  implementation can be swapped for Credential Manager or Hello later.
+If something fails after a change starts being applied, the transaction attempts rollback in reverse order.
 
-Full detail: [`docs/architecture/MVP-0.1.md`](docs/architecture/MVP-0.1.md).
+Cancellation handling is also designed so that:
 
----
+- cancellation before the first Apply can stop without mutation
+- cancellation after an Apply must pass through rollback
+- rollback uses its own time budget and is not simply cancelled because the original operation was cancelled
 
-## Where the data lives
+There is still no usable route to real `Apply` in current product code.
+
+`SecurityFeatureCompiledIn` remains `false`.
+
+## Recovery
+
+KidShell has recovery manifests designed to be persisted **before** future Windows changes are made.
+
+Recovery data can include:
+
+- transaction ID
+- timestamp
+- Windows capability summary
+- planned operations
+- previous values
+- rollback information
+- final state
+
+PINs, passwords, salts and other secrets must not be written to recovery manifests.
+
+## Child account and Windows security
+
+The architecture can currently discover and plan for a future child account, but does not create or modify one.
+
+Target model:
+
+```text
+Parent account
+└─ Administrator
+
+Child account
+└─ Standard User
+```
+
+The child account should never need administrator rights.
+
+## AppLocker and Assigned Access
+
+KidShell distinguishes between:
+
+- whether Windows can **enforce** AppLocker
+- whether the current machine has a documented way to **deploy** the policy
+
+Those are not the same thing.
+
+On a typical Windows Home machine, the enforcement engine may exist while the PowerShell module, policy console, CSP or another suitable deployment channel is absent.
+
+KidShell therefore does not use a simplified `SupportsAppLocker = true/false` model.
+
+AppLocker policy can be generated as validated XML artifacts, but is not applied.
+
+Assigned Access is not available on Windows Home and is intended for future **Secure Mode** on compatible Windows editions.
+
+## Standard Mode and Secure Mode
+
+### Standard Mode — planned
+
+Designed to work as far as the Windows edition allows, including Home:
+
+- dedicated standard child account
+- KidShell autostart
+- allowed-app model
+- screen time
+- web controls
+- watchdog
+- recovery
+- documented application control where deployment is actually supported
+
+### Secure Mode — planned
+
+On compatible Windows editions:
+
+- everything in Standard Mode
+- Assigned Access / restricted user experience
+- stronger OS-level containment
+
+KidShell must never label a machine **Protected** merely because a capability exists. Real enforcement must be applied and independently verified first.
+
+## Watchdog and sessions
+
+KidShell currently includes:
+
+- child session manager
+- process/session abstraction
+- watchdog logic
+- crash-loop detection
+- development session controller
+
+A real Windows watchdog service is **not yet installed or implemented for production**.
+
+## Updates
+
+Architecture exists for future secure updates:
+
+```text
+Check
+→ Download
+→ Verify
+→ Stage
+→ Install
+→ Verify
+→ Rollback on failure
+```
+
+The model requires HTTPS, signature verification and SHA-256 verification.
+
+Automatic production updates remain disabled because KidShell does not yet have a production code-signing chain.
+
+## What KidShell does NOT do yet
+
+The current build is **not finished parental-control security**.
+
+The following are not enabled on a real machine:
+
+- creation or modification of a Windows child account
+- AppLocker enforcement policy
+- Assigned Access / kiosk mode
+- Windows autostart for the child account
+- watchdog service
+- shell replacement
+- Group Policy changes
+- UAC changes
+- system-wide web policy
+- production installer
+- automatic production updater
+- code signing
+
+Explorer, Task Manager and normal Windows shortcuts are therefore still available when KidShell runs without real lockdown.
+
+## Windows requirements
 
 | | |
 | --- | --- |
+| OS | Windows 10 1809 (10.0.17763) or later; primarily developed on Windows 11 |
+| SDK | .NET SDK 10.0.300 or later |
+| Runtime | Windows App Runtime 2.5.1 |
+| Local Debug run | Windows Developer Mode for registration of the unsigned local package |
+
+Packaged-app discovery uses newer Windows APIs where available and is guarded on older Windows builds.
+
+## Build
+
+Open **PowerShell** in the repository root and run:
+
+```powershell
+cd C:\Projects\KidShell
+dotnet build KidShell.sln -p:Platform=x64 -c Debug
+```
+
+For Release:
+
+```powershell
+dotnet build KidShell.sln -p:Platform=x64 -c Release
+```
+
+## Run
+
+From the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\run-kidshell.ps1
+```
+
+When the package is already registered:
+
+```powershell
+start shell:AppsFolder\KidShell.Barnlage.Dev_b19zrs1eesfdc!App
+```
+
+## Tests
+
+Run:
+
+```powershell
+dotnet test KidShell.sln -c Release
+```
+
+Current verified level on `main`:
+
+**542 automated tests passing.**
+
+GitHub Actions also performs restore, build, test, and a separate source scan for obvious machine-changing calls in product code.
+
+## Architecture
+
+```text
+KidShell.App
+WinUI 3 / Windows-specific UI
+        │
+        ▼
+KidShell.Core
+configuration, apps, PIN, screen time,
+sessions, web, watchdog, security planning
+        ▲
+        │
+KidShell.Core.Tests
+xUnit / fake operations / no real Windows mutation
+```
+
+Core principles:
+
+- `KidShell.Core` holds as much testable logic as possible.
+- UI code must not scatter direct Windows mutation calls.
+- future system changes must pass through the transactional security boundary.
+- capability is not the same as enforcement.
+- recovery comes before lockdown.
+- local-first: no telemetry and no cloud account required.
+
+## Data
+
+| Data | Location |
+| --- | --- |
 | Configuration | `%LOCALAPPDATA%\Packages\KidShell.Barnlage.Dev_…\LocalState\kidshell.config.json` |
-| Backup | the same path with `.bak` |
+| Backup | same path with `.bak` |
 | Log | `…\LocalState\logs\kidshell.log` |
+| Recovery | local app data according to the recovery architecture |
 
-Nothing is written to Program Files, and nothing leaves the machine. The exact
-paths for the current install are shown on the Säkerhet page inside the app.
+KidShell does not collect:
 
-KidShell does not collect keystrokes, document contents, browsing contents,
-passwords or chats, and has no cloud component.
+- keystrokes
+- chats
+- passwords
+- document contents
+- browsing page contents
+- monitoring screenshots
 
----
-
-## Assets
-
-Every image and icon in this repository is generated or drawn for the project.
-See [`assets/README.md`](assets/README.md) for provenance and licensing.
-
----
+See [`docs/PRIVACY.md`](docs/PRIVACY.md).
 
 ## Roadmap
 
 | Version | Scope | Status |
 | --- | --- | --- |
-| 0.1 | Application shell | ✅ done |
-| 0.1.1 | First-run onboarding | ✅ done |
-| 0.1.5 | Security readiness (dry run) | ✅ done |
-| **0.2** | **Product UX, production PIN, app discovery** | **in progress** |
-| 0.3 | Transactional Windows integration foundation | planned |
-| 0.4 | Child account + application control preparation | planned |
-| 0.5 | Screen time, web, watchdog | planned |
-| 0.6 | Installer, updater, deployment | planned |
-| 0.7 | Hardening and escape testing | planned |
-| 0.8 | Release candidate preparation | planned |
-| 1.0 | Production release | blocked on dedicated-device validation |
+| 0.1 | Application shell | ✅ Done |
+| 0.1.1 | First-run onboarding | ✅ Done |
+| 0.1.5 | Security readiness / dry-run | ✅ Done |
+| **0.2** | **Product UX, production PIN, app discovery** | **In progress** |
+| 0.3 | Transactional Windows integration | Prepared in Core |
+| 0.4 | Child account + app control | Prepared / dry-run |
+| 0.5 | Screen time, web, watchdog | Partially implemented |
+| 0.6 | Installer, updater, deployment | Planned |
+| 0.7 | Hardening and escape testing | Planned |
+| 0.8 | Release candidate | Requires a dedicated test device |
+| 1.0 | Production release | Blocked until real device validation is complete |
 
-Scope, principles and the out-of-scope list live in
-**[`docs/ROADMAP.md`](docs/ROADMAP.md)**, which is authoritative.
+The detailed and authoritative roadmap lives in
+**[`docs/ROADMAP.md`](docs/ROADMAP.md)**.
 
-### Documentation
+## Documentation
 
-| | |
+| Document | Contents |
 | --- | --- |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Version progression, principles, out of scope |
-| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, what is actually in force, escape-test matrix |
-| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Every file written, and what is never collected |
-| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Getting back in when something goes wrong |
-| [`docs/TESTING.md`](docs/TESTING.md) | How the suite is organised and what it does not cover |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing boundary, update rules |
-| [`docs/architecture/`](docs/architecture/) | Milestone architecture notes |
-
-Milestones 0.3 and later are the ones that will eventually change a machine.
-None of them has, and none of them will on a development machine.
-
----
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Versions, principles and scope |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model and security status |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | What is stored and what is never collected |
+| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Recovery and rollback |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test strategy |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing and deployment |
+| [`docs/architecture/`](docs/architecture/) | Architecture notes by milestone |
 
 ## Licence
 
 Copyright © 2026 Jimmy Eliasson. All rights reserved.
 
-KidShell is proprietary software. No permission is granted to copy, modify, distribute, sublicense, sell, publish, or create derivative works from the software except with prior written permission from the copyright holder. See [LICENSE](LICENSE).
+KidShell is proprietary software. No permission is granted to copy, modify, distribute, sublicense, sell, publish, or create derivative works from the software without prior written permission from the copyright holder.
+
+See [LICENSE](LICENSE).
