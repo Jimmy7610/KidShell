@@ -1,0 +1,71 @@
+name: Build and test
+
+# KidShell is a packaged WinUI 3 app, so the build needs a Windows runner.
+# This workflow restores, builds and tests. It deliberately does NOT sign,
+# publish, deploy or touch anything outside the runner.
+
+on:
+  push:
+    branches: [main, 'work/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test (x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Matches the TargetFramework in the project files.
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore KidShell.sln
+
+      - name: Build
+        run: dotnet build KidShell.sln -p:Platform=x64 --configuration Release --no-restore
+
+      - name: Test
+        # KidShell.Core targets plain net10.0 and its tests touch no machine
+        # state, so they run anywhere. The security tests in particular assert
+        # that nothing can change Windows - they must never need a real one.
+        run: dotnet test KidShell.sln --configuration Release --no-build --verbosity normal
+
+      - name: Verify no mutation path was introduced
+        shell: pwsh
+        run: |
+          # A cheap second line of defence behind the reflection tests: fail
+          # the build if source gains an obvious machine-changing call. The
+          # tests are authoritative; this catches a new file nobody tested.
+          $patterns = @(
+            'Set-AppLockerPolicy',
+            'New-LocalUser',
+            'Remove-LocalUser',
+            'Add-LocalGroupMember',
+            'ExitWindowsEx',
+            'InitiateSystemShutdown'
+          )
+
+          $hits = @()
+          foreach ($p in $patterns) {
+            $found = Select-String -Path 'src\**\*.cs' -Pattern $p -SimpleMatch -ErrorAction SilentlyContinue
+            if ($found) { $hits += $found }
+          }
+
+          if ($hits.Count -gt 0) {
+            Write-Host '::error::A machine-changing call appeared in src/.'
+            $hits | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            exit 1
+          }
+
+          Write-Host 'No machine-changing calls found in src/.'
