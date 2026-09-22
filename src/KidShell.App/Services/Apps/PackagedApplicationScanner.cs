@@ -27,7 +27,10 @@ public sealed class PackagedApplicationScanner : IApplicationScanner
 
     public Task<IReadOnlyList<DiscoveredApplication>> ScanAsync(CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
+        // GetAppListEntries needs build 19041. KidShell's minimum platform is
+        // 17763, so on an older machine this scanner simply finds nothing
+        // rather than throwing - the other scanners still work.
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
         {
             return Task.FromResult<IReadOnlyList<DiscoveredApplication>>([]);
         }
@@ -66,6 +69,7 @@ public sealed class PackagedApplicationScanner : IApplicationScanner
         return Task.FromResult<IReadOnlyList<DiscoveredApplication>>(results);
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows10.0.19041.0")]
     private static void Describe(Package package, List<DiscoveredApplication> results)
     {
         // Framework packages and resource packages are dependencies, not
