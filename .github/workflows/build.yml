@@ -47,19 +47,85 @@ jobs:
           # A cheap second line of defence behind the reflection tests: fail
           # the build if source gains an obvious machine-changing call. The
           # tests are authoritative; this catches a new file nobody tested.
+          #
+          # Enumerate the files explicitly. This used to pass 'src\**\*.cs' to
+          # Select-String -Path, which does NOT recurse - PowerShell's '**' is
+          # a literal two-character wildcard matching within a single path
+          # segment, so it only ever looked one directory deep and quietly
+          # matched nothing. A scan that finds nothing looks exactly like a
+          # scan that passes, which is the worst way for a guard to fail.
+          $files = @(
+            Get-ChildItem -Path 'src' -Recurse -Filter '*.cs' -File |
+              Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
+          )
+
+          # So: assert the enumeration actually found source. If this guard
+          # ever silently stops looking again, the build says so.
+          if ($files.Count -eq 0) {
+            Write-Host '::error::Source scan found no .cs files under src/. The scan is broken, not clean.'
+            exit 1
+          }
+
+          Write-Host "Scanning $($files.Count) source file(s)."
+
+          # Named APIs whose only purpose is to change the machine. Each maps
+          # to something on KidShell's do-not-do list: create or alter accounts,
+          # deploy app-control policy, configure kiosk mode, install a service,
+          # force autologon, or restart Windows.
           $patterns = @(
-            'Set-AppLockerPolicy',
+            # Local accounts and group membership
             'New-LocalUser',
             'Remove-LocalUser',
+            'Set-LocalUser',
             'Add-LocalGroupMember',
+            'Remove-LocalGroupMember',
+            'NetUserAdd',
+            'NetUserDel',
+            'NetUserSetInfo',
+            'NetLocalGroupAddMembers',
+            'NetLocalGroupDelMembers',
+
+            # Application control
+            'Set-AppLockerPolicy',
+            'ConvertFrom-CIPolicy',
+            'CiTool.exe',
+
+            # Kiosk / assigned access
+            'Set-AssignedAccess',
+            'Clear-AssignedAccess',
+
+            # Services
+            'CreateServiceW',
+            'ChangeServiceConfig',
+            'New-Service',
+
+            # Autologon and shell replacement
+            'AutoAdminLogon',
+            'DefaultPassword',
+
+            # Ending the session or the machine
             'ExitWindowsEx',
-            'InitiateSystemShutdown'
+            'InitiateSystemShutdown',
+            'Restart-Computer',
+            'Stop-Computer'
           )
+
+          # Comments are not calls. KidShell's source documents these APIs at
+          # length precisely to say it does not use them - flagging that prose
+          # would make the guard useless noise that somebody eventually
+          # disables. String literals and real calls are still caught.
+          function Test-IsComment([string] $line) {
+            $t = $line.Trim()
+            return $t.StartsWith('//') -or $t.StartsWith('*') -or $t.StartsWith('/*')
+          }
 
           $hits = @()
           foreach ($p in $patterns) {
-            $found = Select-String -Path 'src\**\*.cs' -Pattern $p -SimpleMatch -ErrorAction SilentlyContinue
-            if ($found) { $hits += $found }
+            foreach ($match in ($files | Select-String -Pattern $p -SimpleMatch)) {
+              if (-not (Test-IsComment $match.Line)) {
+                $hits += $match
+              }
+            }
           }
 
           if ($hits.Count -gt 0) {
@@ -68,4 +134,4 @@ jobs:
             exit 1
           }
 
-          Write-Host 'No machine-changing calls found in src/.'
+          Write-Host "No machine-changing calls found in src/ ($($patterns.Count) patterns checked)."

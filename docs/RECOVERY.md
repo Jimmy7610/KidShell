@@ -71,14 +71,37 @@ previous value of everything about to change plus a manual rollback hint per
 step. It deliberately holds **no PIN, hash, salt or password** — a file meant to
 be read during a crisis is the worst place for a secret.
 
-A transaction whose manifest could not be written does not proceed.
+A transaction whose manifest could not be written does not proceed. That is
+enforced by the coordinator, not by a caller remembering: the manifest store is
+a required constructor dependency, the write happens between the last snapshot
+and the first change, and a write that fails or throws refuses the transaction
+outright.
 
 ### How rollback works
 
 ```
-Preflight all → Snapshot all → Apply each → Verify each
+Preflight all → Snapshot all → Write manifest → Apply each → Verify each
 any failure   → Rollback everything applied, newest first
 ```
+
+### If you cancel
+
+Cancelling is safe at any point, and what it means depends on one thing: had
+anything been applied yet?
+
+* **Before the first change** — the transaction stops and reports `Cancelled`.
+  Nothing was altered, so there is nothing to undo.
+* **After any change** — cancelling rolls everything back, newest first,
+  exactly as a failure would. You get `RolledBack`, or `RollbackFailed` if the
+  undo itself failed.
+* Rollback runs on its own clock. Cancelling does not cancel the recovery —
+  that would stop the undo halfway and leave the machine in the state the whole
+  design exists to avoid.
+
+A cancellation that arrives after the last operation has applied *and* verified
+commits normally. There is no work left to stop, and undoing a configuration
+that wholly succeeded would be worse than ignoring a request that arrived too
+late.
 
 Verification reads the change back rather than trusting that applying it
 returned success, because Windows can accept a write and not honour it.
@@ -90,6 +113,8 @@ Three outcomes matter:
 | `Committed` | Applied and verified | Nothing |
 | `RolledBack` | Failed, everything undone | Nothing. Read the failure message. |
 | `RollbackFailed` | Failed **and** the undo failed | Follow the manifest by hand. This is the only state that needs a human. |
+| `Cancelled` | Stopped before any change | Nothing |
+| `Refused` | KidShell declined to start | Nothing. Read the reason. |
 
 ### Undoing by hand
 

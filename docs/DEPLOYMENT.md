@@ -128,10 +128,17 @@ Any failure means no install. There is no "install anyway" path.
 Release for x64, test.
 
 It deliberately does **not** sign, publish, deploy, or hold any secret. It also
-greps `src/` for obviously machine-changing calls (`Set-AppLockerPolicy`,
+scans `src/` for obviously machine-changing calls (`Set-AppLockerPolicy`,
 `New-LocalUser`, `ExitWindowsEx`, …) as a second line of defence behind the
-reflection tests — those are authoritative; the grep catches a new file nobody
+reflection tests — those are authoritative; the scan catches a new file nobody
 tested.
+
+The scan enumerates files explicitly with `Get-ChildItem -Recurse` and asserts
+that it found some. It previously passed `src\**\*.cs` to `Select-String
+-Path`, which does not recurse — so it had been quietly matching nothing, and a
+guard that finds nothing is indistinguishable from one that passes. It skips
+comment lines, because the source documents these APIs at length precisely to
+say it does not call them.
 
 ---
 

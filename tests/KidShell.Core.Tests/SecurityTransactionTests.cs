@@ -43,6 +43,50 @@ internal sealed class FakeOperation : ISecurityOperation
 
     public string Id { get; }
 
+    /// <summary>
+    /// Shared ordered log of what every stage of every operation did, plus
+    /// what the manifest store did. Ordering claims are proved against this
+    /// rather than inferred.
+    /// </summary>
+    public List<string>? Journal { get; init; }
+
+    /// <summary>Cancelled when this operation's Preflight runs, which then throws.</summary>
+    public CancellationTokenSource? CancelDuringPreflight { get; init; }
+
+    /// <summary>Cancelled when CaptureState runs, which then throws.</summary>
+    public CancellationTokenSource? CancelDuringSnapshot { get; init; }
+
+    /// <summary>
+    /// Cancelled once CaptureState has SUCCEEDED. Lands the cancellation in
+    /// the gap between "everything is captured" and "the first change is
+    /// made", which is the last moment at which stopping is free.
+    /// </summary>
+    public CancellationTokenSource? CancelAfterSnapshot { get; init; }
+
+    /// <summary>
+    /// Cancelled when Apply runs, which then throws - an operation that
+    /// noticed the cancellation partway through and may or may not have
+    /// taken effect.
+    /// </summary>
+    public CancellationTokenSource? CancelDuringApply { get; init; }
+
+    /// <summary>
+    /// Cancelled when Apply runs, but Apply still SUCCEEDS. Models the
+    /// dangerous case: the change is really applied, and the cancellation is
+    /// not noticed until the coordinator looks again.
+    /// </summary>
+    public CancellationTokenSource? CancelAfterApply { get; init; }
+
+    /// <summary>Cancelled when Verify runs, which then throws.</summary>
+    public CancellationTokenSource? CancelDuringVerify { get; init; }
+
+    /// <summary>
+    /// Whether the token handed to Rollback was already cancelled. Must stay
+    /// false: rollback runs on a token of its own precisely so that being
+    /// asked to stop cannot also stop the recovery.
+    /// </summary>
+    public bool RollbackSawCancelledToken { get; private set; }
+
     public string Description => $"Teståtgärd {Id}";
 
     public ChangeRiskLevel RiskLevel => ChangeRiskLevel.Low;
@@ -66,6 +110,14 @@ internal sealed class FakeOperation : ISecurityOperation
     public Task<OperationOutcome> PreflightAsync(SecurityExecutionContext context, CancellationToken cancellationToken = default)
     {
         PreflightCount++;
+        Journal?.Add($"preflight:{Id}");
+
+        if (CancelDuringPreflight is not null)
+        {
+            CancelDuringPreflight.Cancel();
+            throw new OperationCanceledException(CancelDuringPreflight.Token);
+        }
+
         return Task.FromResult(_preflightOk
             ? OperationOutcome.Ok()
             : OperationOutcome.Fail($"{Id} kan inte köras här."));
@@ -74,11 +126,20 @@ internal sealed class FakeOperation : ISecurityOperation
     public Task<OperationSnapshot> CaptureStateAsync(SecurityExecutionContext context, CancellationToken cancellationToken = default)
     {
         SnapshotCount++;
+        Journal?.Add($"snapshot:{Id}");
+
+        if (CancelDuringSnapshot is not null)
+        {
+            CancelDuringSnapshot.Cancel();
+            throw new OperationCanceledException(CancelDuringSnapshot.Token);
+        }
 
         if (_throwOnSnapshot)
         {
             throw new InvalidOperationException("snapshot failed");
         }
+
+        CancelAfterSnapshot?.Cancel();
 
         return Task.FromResult(new OperationSnapshot
         {
@@ -94,11 +155,23 @@ internal sealed class FakeOperation : ISecurityOperation
         ApplyCount++;
 
         // The contract: an operation must refuse unless it was handed an
-        // Apply context. Nothing can currently construct one.
+        // Apply context. Nothing in the product can construct one.
         if (context.Mode != SecurityExecutionMode.Apply)
         {
             throw new InvalidOperationException("Apply called without an Apply context.");
         }
+
+        Journal?.Add($"apply:{Id}");
+
+        if (CancelDuringApply is not null)
+        {
+            CancelDuringApply.Cancel();
+            throw new OperationCanceledException(CancelDuringApply.Token);
+        }
+
+        // Applied for real, and only then cancelled. The change is on the
+        // machine and something has to undo it.
+        CancelAfterApply?.Cancel();
 
         if (_throwOnApply)
         {
@@ -113,6 +186,14 @@ internal sealed class FakeOperation : ISecurityOperation
     public Task<OperationOutcome> VerifyAsync(SecurityExecutionContext context, CancellationToken cancellationToken = default)
     {
         VerifyCount++;
+        Journal?.Add($"verify:{Id}");
+
+        if (CancelDuringVerify is not null)
+        {
+            CancelDuringVerify.Cancel();
+            throw new OperationCanceledException(CancelDuringVerify.Token);
+        }
+
         return Task.FromResult(_verifyOk
             ? OperationOutcome.Ok()
             : OperationOutcome.Fail($"{Id} kunde inte bekräftas."));
@@ -124,6 +205,12 @@ internal sealed class FakeOperation : ISecurityOperation
         CancellationToken cancellationToken = default)
     {
         RollbackCount++;
+        Journal?.Add($"rollback:{Id}");
+
+        // The assertion that matters: rollback must not be handed a token
+        // that is already cancelled.
+        RollbackSawCancelledToken = cancellationToken.IsCancellationRequested;
+
         return Task.FromResult(_rollbackOk
             ? OperationOutcome.Ok()
             : OperationOutcome.Fail($"{Id} kunde inte återställas."));
@@ -141,7 +228,13 @@ internal sealed class FakeOperation : ISecurityOperation
 public class SecurityTransactionTests
 {
     private static SecurityTransaction Build(RecordingLogger logger, params ISecurityOperation[] operations) =>
-        new(operations, logger);
+        new(operations, new RecordingManifestStore([]), TestMachineSummary.Create(), logger);
+
+    private static SecurityTransaction Build(
+        RecordingLogger logger,
+        IRecoveryManifestStore store,
+        params ISecurityOperation[] operations) =>
+        new(operations, store, TestMachineSummary.Create(), logger);
 
     // ------------------------------------------------ the refusal path
 
@@ -221,22 +314,38 @@ public class SecurityTransactionTests
 
     // ------------------------------------------------ arming
 
-    private static ArmingRequest FullyArmed() => new()
+    private static ParentAuthorization FullParentConsent() => new()
     {
-        ParentAuthenticated = true,
-        TransactionConfirmed = true,
-        DeviceDesignated = true,
-        RecoveryProven = true,
-        ProcessElevated = true,
-        ParentPinConfigured = true,
-        CapabilitySatisfied = true
+        Authenticated = true,
+        TransactionConfirmed = true
     };
+
+    /// <summary>
+    /// Every machine condition satisfied. Note what this takes: stub sources
+    /// that exist only in the test assembly, a capability analysis that says
+    /// the process is elevated, and a Production runtime. A caller cannot
+    /// write this - which is the entire point of the refactor.
+    /// </summary>
+    private static VerifiedMachineFacts FullyVerifiedMachine(
+        bool designated = true,
+        bool recoveryProven = true,
+        bool parentPin = true,
+        bool elevated = true,
+        KidShell.Core.Runtime.IRuntimeEnvironment? environment = null) =>
+        MachineFactVerifier.Verify(
+            environment ?? TestRuntime.Production,
+            WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Pro()) with { IsProcessElevated = elevated },
+            new StubDesignationSource(designated),
+            new StubRecoverySource(recoveryProven),
+            new StubParentPinSource(parentPin),
+            [RequiredCapability.None]);
 
     [Fact]
     public void Even_every_condition_met_cannot_arm_this_build()
     {
         var (decision, context) = SecurityArming.TryArm(
-            FullyArmed(),
+            FullParentConsent(),
+            FullyVerifiedMachine(),
             TestRuntime.Production,
             WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Pro()));
 
@@ -253,15 +362,11 @@ public class SecurityTransactionTests
     [Fact]
     public void Arming_names_every_missing_condition_separately()
     {
-        var request = FullyArmed() with
-        {
-            ProcessElevated = false,
-            RecoveryProven = false,
-            DeviceDesignated = false
-        };
+        var machine = FullyVerifiedMachine(elevated: false, recoveryProven: false, designated: false);
 
         var (decision, _) = SecurityArming.TryArm(
-            request,
+            FullParentConsent(),
+            machine,
             TestRuntime.Production,
             WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Pro()));
 
@@ -292,13 +397,17 @@ public class SecurityTransactionTests
     [Fact]
     public void A_development_machine_is_never_a_designated_device()
     {
-        // There is deliberately no API that designates a device from inside
-        // the app; the request field exists so a future installer can assert
-        // it, and defaults to denied.
-        var request = FullyArmed() with { DeviceDesignated = false };
+        // Note the source says the device IS designated. The verifier
+        // overrules it, because a machine somebody is developing KidShell on
+        // is not a machine KidShell may lock down - and that call is not left
+        // to a source implementation that could get it wrong.
+        var machine = FullyVerifiedMachine(designated: true, environment: TestRuntime.Development);
+
+        Assert.False(machine.DeviceDesignated);
 
         var (decision, _) = SecurityArming.TryArm(
-            request,
+            FullParentConsent(),
+            machine,
             TestRuntime.Development,
             WindowsCapabilityAnalyzer.Analyze(SecurityFixtures.Windows11Home()));
 
