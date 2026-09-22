@@ -1,4 +1,5 @@
 using KidShell.App.Localization;
+using KidShell.Core.Security;
 using KidShell.App.ViewModels;
 using KidShell.App.Views.Dialogs;
 using KidShell.Core.Configuration;
@@ -123,16 +124,14 @@ public sealed class PinChangeFlow : IPinChangeFlow
             var pin = first.Password ?? string.Empty;
             var confirm = second.Password ?? string.Empty;
 
-            if (pin.Length != 6 || !pin.All(char.IsAsciiDigit))
-            {
-                error.Text = Strings.Get("Dialog.ChangePinInvalid");
-                error.Visibility = Visibility.Visible;
-                continue;
-            }
+            // One shared policy decides, so the reason shown is the reason the
+            // PIN was actually refused. Telling a parent "must be six digits"
+            // when they typed six digits is worse than saying nothing.
+            var validation = ParentPinPolicy.ValidatePair(pin, confirm);
 
-            if (!string.Equals(pin, confirm, StringComparison.Ordinal))
+            if (validation != PinValidation.Ok)
             {
-                error.Text = Strings.Get("Dialog.ChangePinMismatch");
+                error.Text = DescribeValidation(validation);
                 error.Visibility = Visibility.Visible;
                 continue;
             }
@@ -140,4 +139,17 @@ public sealed class PinChangeFlow : IPinChangeFlow
             return pin;
         }
     }
+
+    /// <summary>Parent-facing wording for each way a PIN can be refused.</summary>
+    private static string DescribeValidation(PinValidation validation) => validation switch
+    {
+        PinValidation.Empty => Strings.Get("Pin.ErrorEmpty"),
+        PinValidation.NotNumeric => Strings.Get("Pin.ErrorNotNumeric"),
+        PinValidation.WrongLength => Strings.Get("Dialog.ChangePinInvalid"),
+        PinValidation.Repeated => Strings.Get("Pin.ErrorRepeated"),
+        PinValidation.Sequential => Strings.Get("Pin.ErrorSequential"),
+        PinValidation.ReservedDevelopmentPin => Strings.Get("Pin.ErrorReserved"),
+        PinValidation.ConfirmationMismatch => Strings.Get("Dialog.ChangePinMismatch"),
+        _ => Strings.Get("Dialog.ChangePinInvalid")
+    };
 }
