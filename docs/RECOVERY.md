@@ -1,0 +1,152 @@
+# KidShell recovery
+
+**If you are reading this because something went wrong: nothing KidShell has
+shipped so far changes Windows. If you cannot sign in, the cause is not
+KidShell.**
+
+That will stop being true when the security milestones run. This document
+describes how to get back, and is written to be usable from a different account
+on a bad day.
+
+---
+
+## Nothing has been applied yet
+
+Every 0.x build runs in `AuditOnly`. It detects, evaluates and plans. There is
+no implementation of `ISecurityOperation`, `ISecurityMutator` or
+`IAppControlDeploymentChannel` anywhere in the product, and tests assert that.
+
+So, today:
+
+* no Windows account has been created, changed or disabled;
+* no AppLocker policy has been written;
+* no Assigned Access configuration exists;
+* no service has been installed;
+* UAC, the Winlogon shell and the Task Manager policy are untouched.
+
+---
+
+## Getting KidShell out of the way
+
+### The app will not close
+
+Alt+F4, or Task Manager (Ctrl+Shift+Esc) → end `KidShell`. Nothing prevents
+either.
+
+### You do not know the parent PIN
+
+**In a developer (Debug) build** the fallback PIN `246810` works while no real
+PIN has been set.
+
+**In a release build** there is no bypass, by design. Reset it by deleting the
+configuration:
+
+1. Close KidShell.
+2. Delete `kidshell.config.json` from
+   `%LOCALAPPDATA%\Packages\<KidShell package>\LocalState\`.
+3. Start KidShell. It runs first-run setup again.
+
+That loses the child profile, app list and settings — everything is in that one
+file. It does not touch Windows.
+
+### Start clean
+
+Delete the whole `LocalState` folder, or uninstall KidShell from Settings →
+Apps. Both remove every trace; KidShell writes nothing outside that folder.
+
+---
+
+## When a security transaction exists (0.3 and later)
+
+### Before anything is applied
+
+A **recovery manifest** is written first, to:
+
+```
+%LOCALAPPDATA%\Packages\<KidShell package>\LocalState\recovery\recovery-<id>.json
+```
+
+It is indented, human-readable JSON in plain language, and contains the
+previous value of everything about to change plus a manual rollback hint per
+step. It deliberately holds **no PIN, hash, salt or password** — a file meant to
+be read during a crisis is the worst place for a secret.
+
+A transaction whose manifest could not be written does not proceed.
+
+### How rollback works
+
+```
+Preflight all → Snapshot all → Apply each → Verify each
+any failure   → Rollback everything applied, newest first
+```
+
+Verification reads the change back rather than trusting that applying it
+returned success, because Windows can accept a write and not honour it.
+
+Three outcomes matter:
+
+| State | Meaning | What to do |
+| --- | --- | --- |
+| `Committed` | Applied and verified | Nothing |
+| `RolledBack` | Failed, everything undone | Nothing. Read the failure message. |
+| `RollbackFailed` | Failed **and** the undo failed | Follow the manifest by hand. This is the only state that needs a human. |
+
+### Undoing by hand
+
+1. Sign in as the **recovery administrator** — the manifest names it under
+   `machine.recoveryAdministrator`. Pre-flight refuses to run a transaction
+   without one precisely so this account exists.
+2. Open the newest `recovery-*.json`.
+3. Work through `steps` **in reverse order**. Each has `previousValue`,
+   `existedBefore` and `manualRollbackHint`.
+   * `existedBefore: false` → the thing was created; delete it.
+   * `existedBefore: true` → restore `previousValue`.
+4. Sign out and back in.
+
+---
+
+## If a child account has been created and you cannot sign in
+
+This is the scenario the whole design exists to prevent, so it should not
+happen — pre-flight blocks any plan that would leave no enabled administrator.
+If it does:
+
+1. Sign in as the recovery administrator named in the manifest.
+2. Settings → Accounts → Family & other users → remove or fix the child
+   account.
+3. Delete the KidShell `LocalState` folder.
+
+If no administrator can sign in at all, that is beyond what KidShell can
+repair: use Windows' own recovery (Shift + Restart → Troubleshoot) or a local
+administrator you created outside KidShell. **Make sure you have one before
+running secure setup on a real device** — it is the first pre-flight check for
+this reason.
+
+---
+
+## Where everything lives
+
+| | |
+| --- | --- |
+| Settings | `…\LocalState\kidshell.config.json` |
+| Previous settings | the same path with `.bak` |
+| Screen-time counter | `…\LocalState\screentime.json` |
+| Recovery manifests | `…\LocalState\recovery\` |
+| Log | `…\LocalState\logs\kidshell.log` |
+
+The exact paths for the current install are shown in Parent Mode → Säkerhet →
+Avancerat.
+
+---
+
+## Before running secure setup on a real device
+
+The list pre-flight enforces, worth checking yourself first:
+
+- [ ] A second administrator account exists, is enabled, and you know its
+      password.
+- [ ] It is **not** the account intended for the child.
+- [ ] UAC is on.
+- [ ] You have read the generated plan.
+- [ ] The device is one you can afford to reset.
+- [ ] It is not the only computer in the house.

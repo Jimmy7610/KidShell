@@ -366,6 +366,18 @@ See [`assets/README.md`](assets/README.md) for provenance and licensing.
 Scope, principles and the out-of-scope list live in
 **[`docs/ROADMAP.md`](docs/ROADMAP.md)**, which is authoritative.
 
+### Documentation
+
+| | |
+| --- | --- |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Version progression, principles, out of scope |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Threat model, what is actually in force, escape-test matrix |
+| [`docs/PRIVACY.md`](docs/PRIVACY.md) | Every file written, and what is never collected |
+| [`docs/RECOVERY.md`](docs/RECOVERY.md) | Getting back in when something goes wrong |
+| [`docs/TESTING.md`](docs/TESTING.md) | How the suite is organised and what it does not cover |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing boundary, update rules |
+| [`docs/architecture/`](docs/architecture/) | Milestone architecture notes |
+
 Milestones 0.3 and later are the ones that will eventually change a machine.
 None of them has, and none of them will on a development machine.
 
