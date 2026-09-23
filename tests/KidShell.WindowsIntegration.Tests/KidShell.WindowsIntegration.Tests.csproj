@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\src\KidShell.WindowsIntegration\KidShell.WindowsIntegration.csproj" />
     <ProjectReference Include="..\..\src\KidShell.SecurityHost\KidShell.SecurityHost.csproj" />
     <ProjectReference Include="..\..\src\KidShell.Watchdog\KidShell.Watchdog.csproj" />
+    <ProjectReference Include="..\..\src\KidShell.Recovery\KidShell.Recovery.csproj" />
   </ItemGroup>
 
 </Project>
