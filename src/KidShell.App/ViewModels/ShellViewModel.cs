@@ -3,6 +3,7 @@ using KidShell.App.Services;
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
+using KidShell.Core.ScreenTime;
 using KidShell.Core.Security;
 
 namespace KidShell.App.ViewModels;
@@ -25,6 +26,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IDeveloperOptions _developerOptions;
     private readonly IParentPinService _pinService;
+    private readonly IScreenTimeCoordinator _screenTime;
     private readonly IKidShellLogger _logger;
 
     private ShellMode _mode = ShellMode.Child;
@@ -35,6 +37,7 @@ public sealed class ShellViewModel : ObservableObject
         IDialogService dialogs,
         IDeveloperOptions developerOptions,
         IParentPinService pinService,
+        IScreenTimeCoordinator screenTime,
         IKidShellLogger logger,
         OnboardingViewModel onboarding,
         ChildHomeViewModel child,
@@ -45,6 +48,7 @@ public sealed class ShellViewModel : ObservableObject
         _dialogs = dialogs;
         _developerOptions = developerOptions;
         _pinService = pinService;
+        _screenTime = screenTime;
         _logger = logger;
 
         Onboarding = onboarding;
@@ -78,6 +82,12 @@ public sealed class ShellViewModel : ObservableObject
         if (_mode == ShellMode.Onboarding)
         {
             Onboarding.Reset();
+        }
+        else
+        {
+            // Time starts counting the moment a configured child sees their
+            // screen - not when Parent Mode is opened, and not during setup.
+            _screenTime.Start();
         }
     }
 
@@ -186,6 +196,12 @@ public sealed class ShellViewModel : ObservableObject
     {
         Child.Refresh();
         Mode = ShellMode.Child;
+
+        // The counter was deliberately not running during setup: a parent
+        // spending twenty minutes choosing a theme must not spend the child's
+        // allowance doing it.
+        _screenTime.Start();
+
         OnPropertyChanged(nameof(SceneThemeId));
         _logger.Info("Shell", "First-run setup finished; Child Mode is now personalised.");
     }

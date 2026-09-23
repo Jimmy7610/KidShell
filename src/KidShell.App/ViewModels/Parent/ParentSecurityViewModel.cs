@@ -253,7 +253,14 @@ public sealed class ParentSecurityViewModel : ObservableObject
         }
 
         Refresh();
+
+        // The About panel reports the same machine facts, so it is fed from the
+        // one scan rather than reading Windows a second time.
+        ReportChanged?.Invoke(this, _report?.Capabilities);
     }
+
+    /// <summary>Raised when a scan produced new machine facts.</summary>
+    public event EventHandler<KidShell.Core.Security.Readiness.WindowsSecurityCapabilities?>? ReportChanged;
 
     private async Task ShowPlanAsync()
     {

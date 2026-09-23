@@ -54,14 +54,39 @@ public sealed partial class ChildHomeView : UserControl
 
         GreetingText.Text = _viewModel.Greeting;
         Avatar.AvatarId = _viewModel.AvatarId;
+
+        RenderScreenTime();
         UpdateEmptyState();
     }
 
+    private void RenderScreenTime()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        TimeUpTitleText.Text = _viewModel.TimeUpTitle;
+        TimeUpBodyText.Text = _viewModel.TimeUpBody;
+        TimeUpState.Visibility = _viewModel.IsTimeUp ? Visibility.Visible : Visibility.Collapsed;
+
+        WarningText.Text = _viewModel.WarningText;
+        WarningBanner.Visibility = _viewModel.HasWarning ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnDismissWarning(object sender, RoutedEventArgs e) =>
+        _viewModel?.DismissWarningCommand.Execute(null);
+
     private void UpdateEmptyState()
     {
+        // Three states share this space and only one may show. Time up wins:
+        // "no apps are switched on" is true but unhelpful when the real reason
+        // the grid is gone is that the day's time has run out.
+        var timeUp = _viewModel?.IsTimeUp ?? false;
         var hasTiles = _viewModel?.Tiles.Count > 0;
-        EmptyState.Visibility = hasTiles ? Visibility.Collapsed : Visibility.Visible;
-        GridScroller.Visibility = hasTiles ? Visibility.Visible : Visibility.Collapsed;
+
+        EmptyState.Visibility = !timeUp && !hasTiles ? Visibility.Visible : Visibility.Collapsed;
+        GridScroller.Visibility = !timeUp && hasTiles ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnTileClick(object sender, RoutedEventArgs e)

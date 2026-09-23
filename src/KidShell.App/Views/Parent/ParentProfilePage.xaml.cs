@@ -9,18 +9,43 @@ namespace KidShell.App.Views.Parent;
 public sealed partial class ParentProfilePage : UserControl
 {
     private ParentProfileViewModel? _viewModel;
+    private AboutViewModel? _about;
     private bool _loading;
 
     public ParentProfilePage() => InitializeComponent();
 
-    public void Initialize(ParentProfileViewModel viewModel)
+    public void Initialize(ParentProfileViewModel viewModel, AboutViewModel about)
     {
         _viewModel = viewModel;
+        _about = about;
+
         AvatarList.ItemsSource = viewModel.Avatars;
         ThemeBox.ItemsSource = viewModel.ThemeChoices;
         RerunOnboardingButton.Command = viewModel.RerunOnboardingCommand;
+
         viewModel.PropertyChanged += (_, _) => Render();
+        about.PropertyChanged += (_, _) => RenderAbout();
+
         Render();
+        RenderAbout();
+    }
+
+    /// <summary>
+    /// Om KidShell. Rebuilt whenever the readiness report arrives, because the
+    /// Windows facts are not known at construction time.
+    /// </summary>
+    private void RenderAbout()
+    {
+        if (_about is null)
+        {
+            return;
+        }
+
+        AboutFacts.ItemsSource = _about.Facts;
+
+        DevelopmentWarning.Visibility = _about.IsDevelopmentBuild
+            ? Microsoft.UI.Xaml.Visibility.Visible
+            : Microsoft.UI.Xaml.Visibility.Collapsed;
     }
 
     private void Render()

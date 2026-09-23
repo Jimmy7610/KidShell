@@ -197,6 +197,87 @@
                 </Grid>
             </Border>
 
+
+            <!--
+                Om KidShell.
+
+                Every line is derived: the version from the assembly, the
+                edition from the readiness report, the security state from what
+                KidShell can verify. A constant somebody has to remember to
+                update is a constant that eventually lies.
+            -->
+            <Border Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="14">
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=About.Title}" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=About.Subtitle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- A developer build says so loudly: its PIN is published. -->
+                    <Border
+                        x:Name="DevelopmentWarning"
+                        Background="{StaticResource TintAmberBrush}"
+                        CornerRadius="12"
+                        Padding="14,11"
+                        Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                Grid.Column="0"
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Glyph="&#xE7BA;"
+                                VerticalAlignment="Top" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryTextStyle}"
+                                Text="{loc:Str Key=About.DevelopmentWarning}"
+                                TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+
+                    <ItemsControl x:Name="AboutFacts">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutFact">
+                                <Grid Margin="0,0,0,12" ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Grid.Column="0"
+                                        Style="{StaticResource CaptionTextStyle}"
+                                        Text="{x:Bind Label}"
+                                        TextWrapping="Wrap"
+                                        VerticalAlignment="Top" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock
+                                            FontWeight="SemiBold"
+                                            Style="{StaticResource BodyTextStyle}"
+                                            Text="{x:Bind Value}"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextStyle}"
+                                            Text="{x:Bind Detail}"
+                                            TextWrapping="Wrap"
+                                            Visibility="{x:Bind Detail, Converter={StaticResource StringToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

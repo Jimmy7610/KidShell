@@ -2,6 +2,7 @@
     x:Class="KidShell.App.Views.Parent.ParentScreenTimePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:KidShell.App.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:loc="using:KidShell.App.Localization"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -33,6 +34,104 @@
                         Style="{StaticResource AppToggleStyle}"
                         Toggled="OnEnabledToggled" />
                 </Grid>
+            </Border>
+
+            <!-- Today: what is actually happening, not what was configured. -->
+            <Border x:Name="TodayPanel" Background="{StaticResource TintGreenBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="14">
+
+                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=ScreenTime.TodayTitle}" />
+
+                    <TextBlock
+                        x:Name="StatusText"
+                        Style="{StaticResource BodyTextStyle}"
+                        TextWrapping="Wrap" />
+
+                    <!-- Today's figures follow what is saved, not the draft. -->
+                    <Border
+                        x:Name="UnsavedNotice"
+                        Background="{StaticResource TintAmberBrush}"
+                        CornerRadius="10"
+                        Padding="12,9"
+                        Visibility="Collapsed">
+                        <TextBlock
+                            x:Name="UnsavedNoticeText"
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
+                    </Border>
+
+                    <ProgressBar
+                        x:Name="UsageBar"
+                        AutomationProperties.Name="{loc:Str Key=ScreenTime.Used}"
+                        Height="8"
+                        Maximum="100"
+                        Minimum="0" />
+
+                    <Grid>
+                        <TextBlock x:Name="UsedText" Style="{StaticResource CaptionTextStyle}" />
+                        <TextBlock
+                            x:Name="RemainingText"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource CaptionTextStyle}" />
+                    </Grid>
+
+                    <TextBlock
+                        x:Name="BonusText"
+                        Style="{StaticResource CaptionTextStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+
+                    <!-- Clock rollback is reported, never fought. -->
+                    <TextBlock
+                        x:Name="ClockWarningText"
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="{loc:Str Key=ScreenTime.ClockWarning}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+
+                    <StackPanel Spacing="6">
+                        <TextBlock FontWeight="SemiBold" Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.ExtendTitle}" />
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.ExtendHint}" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- Wraps so four buttons still fit at 1366x768 and 150%. -->
+                    <controls:WrapPanel HorizontalSpacing="8" VerticalSpacing="8">
+                        <Button
+                            x:Name="Extend15Button"
+                            Click="OnExtend15"
+                            Content="{loc:Str Key=ScreenTime.Extend15}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            x:Name="Extend30Button"
+                            Click="OnExtend30"
+                            Content="{loc:Str Key=ScreenTime.Extend30}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            x:Name="Extend60Button"
+                            Click="OnExtend60"
+                            Content="{loc:Str Key=ScreenTime.Extend60}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            x:Name="ExtendRestButton"
+                            Click="OnExtendRestOfDay"
+                            Content="{loc:Str Key=ScreenTime.ExtendRestOfDay}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                        <Button
+                            x:Name="ResetTodayButton"
+                            Click="OnResetToday"
+                            Content="{loc:Str Key=ScreenTime.ResetToday}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
+                    </controls:WrapPanel>
+
+                    <TextBlock
+                        x:Name="GrantMessageText"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource StatusOkBrush}"
+                        Style="{StaticResource CaptionTextStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+
+                </StackPanel>
             </Border>
 
             <Border x:Name="LimitsPanel" Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
@@ -88,6 +187,78 @@
                             TickFrequency="60"
                             TickPlacement="Outside"
                             ValueChanged="OnWeekendChanged" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- A daily window on top of the allowance. -->
+            <Border x:Name="HoursPanel" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="14">
+
+                    <Grid>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=ScreenTime.RestrictHours}" />
+                            <TextBlock
+                                Margin="0,3,0,0"
+                                Style="{StaticResource CaptionTextStyle}"
+                                Text="{loc:Str Key=ScreenTime.RestrictHoursHint}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch
+                            x:Name="HoursToggle"
+                            AutomationProperties.Name="{loc:Str Key=ScreenTime.RestrictHours}"
+                            Style="{StaticResource AppToggleStyle}"
+                            Toggled="OnHoursToggled" />
+                    </Grid>
+
+                    <StackPanel x:Name="HoursControls" Spacing="12">
+                        <StackPanel Spacing="4">
+                            <Grid>
+                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.From}" />
+                                <TextBlock
+                                    x:Name="FromValueText"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource BrandBlueBrush}"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource BodyTextStyle}" />
+                            </Grid>
+                            <Slider
+                                x:Name="FromSlider"
+                                AutomationProperties.Name="{loc:Str Key=ScreenTime.From}"
+                                Maximum="23"
+                                Minimum="0"
+                                StepFrequency="1"
+                                TickFrequency="6"
+                                TickPlacement="Outside"
+                                ValueChanged="OnFromChanged" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <Grid>
+                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.Until}" />
+                                <TextBlock
+                                    x:Name="UntilValueText"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource BrandBlueBrush}"
+                                    HorizontalAlignment="Right"
+                                    Style="{StaticResource BodyTextStyle}" />
+                            </Grid>
+                            <Slider
+                                x:Name="UntilSlider"
+                                AutomationProperties.Name="{loc:Str Key=ScreenTime.Until}"
+                                Maximum="24"
+                                Minimum="1"
+                                StepFrequency="1"
+                                TickFrequency="6"
+                                TickPlacement="Outside"
+                                ValueChanged="OnUntilChanged" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="HoursSummaryText"
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
                     </StackPanel>
 
                 </StackPanel>

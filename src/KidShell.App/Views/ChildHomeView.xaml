@@ -100,6 +100,49 @@
                 VerticalAlignment="Top" />
         </Grid>
 
+        <!--
+            "Time is nearly up", shown once per threshold.
+
+            A line rather than a dialog: interrupting a six-year-old mid-task
+            with something modal is how you get a child who stops trusting the
+            warning. It is dismissible, and the next threshold still appears.
+        -->
+        <Border
+            x:Name="WarningBanner"
+            Grid.Row="0"
+            Margin="0,10,0,0"
+            VerticalAlignment="Bottom"
+            Background="{StaticResource TintAmberBrush}"
+            CornerRadius="14"
+            Padding="16,10"
+            Visibility="Collapsed">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    Grid.Column="0"
+                    FontFamily="{StaticResource SymbolFontFamily}"
+                    FontSize="20"
+                    Foreground="{StaticResource StatusWarningBrush}"
+                    Glyph="&#xE823;" />
+                <TextBlock
+                    x:Name="WarningText"
+                    Grid.Column="1"
+                    FontWeight="SemiBold"
+                    Style="{StaticResource BodyTextStyle}"
+                    TextWrapping="Wrap"
+                    VerticalAlignment="Center" />
+                <Button
+                    Grid.Column="2"
+                    Click="OnDismissWarning"
+                    Content="{loc:Str Key=Child.WarningOk}"
+                    Style="{StaticResource QuietButtonStyle}" />
+            </Grid>
+        </Border>
+
         <!-- ============================= App grid ============================= -->
         <Grid Grid.Row="1" Margin="0,22,0,10">
             <ScrollViewer
@@ -152,6 +195,44 @@
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
             </ScrollViewer>
+
+            <!--
+                Time is up.
+
+                It covers the grid rather than closing anything: slamming the
+                screen off mid-drawing teaches a child to distrust the machine.
+                The wording sends them to an adult instead of just refusing.
+            -->
+            <Border
+                x:Name="TimeUpState"
+                MaxWidth="520"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Style="{StaticResource PanelStyle}"
+                Translation="0,0,26"
+                Visibility="Collapsed">
+                <StackPanel Spacing="14">
+                    <Viewbox MaxHeight="88" HorizontalAlignment="Center">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="64"
+                            Foreground="{StaticResource BrandBlueBrush}"
+                            Glyph="&#xE916;" />
+                    </Viewbox>
+                    <TextBlock
+                        x:Name="TimeUpTitleText"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        x:Name="TimeUpBodyText"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SecondaryTextStyle}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
 
             <!-- Shown when a parent has switched everything off -->
             <Border

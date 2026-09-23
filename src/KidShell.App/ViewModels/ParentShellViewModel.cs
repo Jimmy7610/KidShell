@@ -6,6 +6,8 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Runtime;
+using KidShell.Core.ScreenTime;
 using KidShell.Core.Security.Readiness;
 
 namespace KidShell.App.ViewModels;
@@ -52,6 +54,8 @@ public sealed class ParentShellViewModel : ObservableObject
         ISecurityReadinessService readiness,
         ISecurityDialogs securityDialogs,
         IDeveloperOptions developerOptions,
+        IRuntimeEnvironment runtime,
+        ScreenTimeEngine screenTimeEngine,
         IKidShellLogger logger)
     {
         _state = state;
@@ -66,10 +70,15 @@ public sealed class ParentShellViewModel : ObservableObject
 
         Overview = new ParentOverviewViewModel();
         Apps = new ParentAppsViewModel(addAppFlow, MarkDirty);
-        ScreenTime = new ParentScreenTimeViewModel(MarkDirty);
+        ScreenTime = new ParentScreenTimeViewModel(MarkDirty, screenTimeEngine, state);
         Web = new ParentWebViewModel(MarkDirty);
         Security = new ParentSecurityViewModel(pinService, developerOptions, readiness, securityDialogs);
         Profile = new ParentProfileViewModel(MarkDirty, () => _ = RerunOnboardingAsync());
+        About = new AboutViewModel(runtime);
+
+        // One scan feeds both surfaces: Säkerhet shows the detail, Om KidShell
+        // shows the summary, and neither reads the machine twice.
+        Security.ReportChanged += (_, capabilities) => About.Load(capabilities);
 
         SelectPageCommand = new RelayCommand(parameter =>
         {
@@ -96,6 +105,9 @@ public sealed class ParentShellViewModel : ObservableObject
     public ParentAppsViewModel Apps { get; }
 
     public ParentScreenTimeViewModel ScreenTime { get; }
+
+    /// <summary>Om KidShell: version, build and what this machine can do.</summary>
+    public AboutViewModel About { get; }
 
     public ParentWebViewModel Web { get; }
 

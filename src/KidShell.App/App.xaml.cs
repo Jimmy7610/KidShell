@@ -103,6 +103,11 @@ public partial class App : Application
             sp => new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<ScreenTimeEngine>();
 
+        // Something has to tick the engine and notice when a warning threshold
+        // is crossed. Without this the engine is a tested calculator nobody
+        // calls - which is exactly what it was until now.
+        services.AddSingleton<IScreenTimeCoordinator, ScreenTimeCoordinator>();
+
         services.AddSingleton<ChildSessionManager>();
         services.AddSingleton<IWatchdog, ShellHealthMonitor>();
 

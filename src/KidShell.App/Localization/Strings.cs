@@ -22,6 +22,15 @@ public static class Strings
         ["Child.ParentAccessHint"] = "Håll in i tre sekunder",
         ["Child.ParentAccessAutomation"] = "För vuxna. Håll knappen intryckt i tre sekunder för att öppna föräldraläget.",
         ["Child.Greeting"] = "Hej {0}!",
+        // Screen time, as a child reads it
+        ["Child.TimeUpTitle"] = "Tiden är slut för i dag",
+        ["Child.TimeUpBody"] = "Bra jobbat! Gå och säg till en vuxen om du vill ha mer tid.",
+        ["Child.OutsideHoursTitle"] = "Datorn vilar nu",
+        ["Child.OutsideHoursBody"] = "Just nu är det inte datortid. Fråga en vuxen om du undrar.",
+        ["Child.WarningMinutes"] = "{0} minuter kvar",
+        ["Child.WarningOneMinute"] = "En minut kvar",
+        ["Child.WarningOk"] = "Okej",
+
         ["Child.Encouragement"] = "Du är fantastisk!",
         ["Child.EmptyGridTitle"] = "Inga appar är påslagna",
         ["Child.EmptyGridBody"] = "En vuxen kan slå på appar i Föräldraläge.",
@@ -79,18 +88,18 @@ public static class Strings
         ["Overview.AppsValue"] = "{0} tillåtna",
         ["Overview.AppsHint"] = "Av totalt {0} konfigurerade.",
         ["Overview.ScreenTimeTitle"] = "Skärmtid",
-        ["Overview.ScreenTimeNoLimit"] = "Ingen gräns i MVP 0.1",
+        ["Overview.ScreenTimeNoLimit"] = "Ingen gräns inställd",
         ["Overview.ScreenTimeConfigured"] = "{0} min vardag · {1} min helg",
-        ["Overview.ScreenTimeHint"] = "Inställningen sparas men används inte ännu.",
+        ["Overview.ScreenTimeHint"] = "Gäller i Barnläge. Windows är inte låst.",
         ["Overview.WebTitle"] = "Webbfilter",
         ["Overview.WebNotConfigured"] = "Inte konfigurerat",
-        ["Overview.WebHint"] = "Valet sparas lokalt. Ingen webbläsare styrs ännu.",
+        ["Overview.WebHint"] = "Valet sparas lokalt. Webbläsarregler skrivs först vid säker installation.",
         ["Overview.SecurityTitle"] = "Säkerhet",
         ["Overview.SecurityValue"] = "Utvecklingsläge",
         ["Overview.SecurityHint"] = "Windows är inte låst.",
-        ["Overview.BannerTitle"] = "MVP 0.1 låser inte Windows",
+        ["Overview.BannerTitle"] = "Windows är inte låst på den här datorn",
         ["Overview.BannerBody"] =
-            "Den här versionen är ett visuellt och arkitekturellt skal. Barnet kan fortfarande minimera KidShell och nå resten av Windows. Riktig låsning kommer i en senare milstolpe.",
+            "KidShell styr vad barnet ser och hur länge, men Windows självt är orört. Barnet kan fortfarande minimera KidShell och nå resten av datorn. Riktig låsning görs vid säker installation på en dator du valt för ändamålet.",
 
         // ---------- Apps page ----------
         ["Apps.Title"] = "Tillåtna appar",
@@ -133,9 +142,78 @@ public static class Strings
         ["ScreenTime.HoursAndMinutes"] = "{0} h {1} min",
         ["ScreenTime.Hours"] = "{0} timmar",
         ["ScreenTime.OneHour"] = "1 timme",
-        ["ScreenTime.NoticeTitle"] = "Konfiguration finns – kontroll saknas",
+        ["ScreenTime.NoticeTitle"] = "Gäller i Barnläge, inte i hela Windows",
         ["ScreenTime.NoticeBody"] =
-            "KidShell sparar de här tiderna men avbryter ingenting ännu. Tidskontrollen kräver bakgrundsövervakning som kommer i en senare milstolpe.",
+            "KidShell håller koll på tiden och slutar starta program när den tar slut. Så länge Windows inte är låst kan barnet fortfarande lämna Barnläge – då gäller inte tiden.",
+
+        // Daily window
+        ["ScreenTime.RestrictHours"] = "Begränsa när datorn får användas",
+        ["ScreenTime.RestrictHoursHint"] = "Ett barn med en timme kvar klockan 23 ska ändå sova.",
+        ["ScreenTime.From"] = "Från",
+        ["ScreenTime.Until"] = "Till",
+        ["ScreenTime.HoursSummary"] = "Datorn får användas mellan {0} och {1}.",
+        ["ScreenTime.HoursOff"] = "Datorn får användas när som helst på dygnet.",
+
+        // Today
+        ["ScreenTime.TodayTitle"] = "I dag",
+        ["ScreenTime.Used"] = "Använt",
+        ["ScreenTime.Remaining"] = "Kvar",
+        ["ScreenTime.StatusOff"] = "Skärmtid är avstängd. Ingen tid räknas.",
+        ["ScreenTime.UnsavedNotice"] =
+            "Du har ändringar som inte är sparade. Siffrorna här visar det som gäller just nu – spara för att de nya tiderna ska börja räknas.",
+        ["ScreenTime.StatusUnknown"] = "Tiden har inte räknats i dag än.",
+        ["ScreenTime.StatusExpired"] = "Dagens tid är slut.",
+        ["ScreenTime.StatusOutsideHours"] = "Datorn får inte användas just nu.",
+        ["ScreenTime.StatusRemaining"] = "{0} kvar i dag.",
+        ["ScreenTime.BonusGranted"] = "Du har gett {0} extra i dag.",
+        ["ScreenTime.ClockWarning"] =
+            "Datorns klocka har ställts tillbaka. Tiden räknas från en klocka som inte går att ändra, så ingen tid har försvunnit.",
+
+        // Extensions
+        ["ScreenTime.ExtendTitle"] = "Ge mer tid i dag",
+        ["ScreenTime.ExtendHint"] = "Gäller bara i dag och börjar gälla direkt.",
+        ["ScreenTime.Extend15"] = "+15 min",
+        ["ScreenTime.Extend30"] = "+30 min",
+        ["ScreenTime.Extend60"] = "+1 timme",
+        ["ScreenTime.ExtendRestOfDay"] = "Resten av dagen",
+        ["ScreenTime.ResetToday"] = "Nollställ dagen",
+        ["ScreenTime.GrantedExtension"] = "{0} extra tillagt.",
+        ["ScreenTime.GrantedRestOfDay"] = "Resten av dagen är fri.",
+        ["ScreenTime.ResetDone"] = "Dagens räknare är nollställd.",
+
+        // ---------- About ----------
+        ["About.Title"] = "Om KidShell",
+        ["About.Subtitle"] = "Version, byggläge och vad den här datorn klarar.",
+        ["About.Version"] = "Version",
+        ["About.Build"] = "Byggläge",
+        ["About.Commit"] = "Ändring {0}",
+        ["About.BuildRelease"] = "Release",
+        ["About.BuildDevelopment"] = "UTVECKLING",
+        ["About.DevelopmentWarning"] =
+            "Det här är ett utvecklingsbygge. Det accepterar en PIN-kod som står i dokumentationen och ska inte användas av ett barn på riktigt.",
+        ["About.Windows"] = "Windows",
+        ["About.Build.Number"] = "Build {0} · {1}",
+        ["About.StandardMode"] = "Standardläge",
+        ["About.StandardHint"] = "Fungerar på alla Windows-utgåvor.",
+        ["About.SecureMode"] = "Säkert läge",
+        ["About.SecureHint"] = "Den här utgåvan stöder Windows begränsade läge.",
+        ["About.SecureUnsupportedHint"] = "{0} har inte Windows begränsade läge. Det kräver Pro, Enterprise, Education eller IoT Enterprise.",
+        ["About.AppControl"] = "Appkontroll i Windows",
+        ["About.AppControlHint"] =
+            "Att Windows kan spärra program är inte samma sak som att det går att installera reglerna här. KidShell skiljer på de två.",
+        ["About.SecurityStatus"] = "Säkerhetsläge",
+        ["About.SecurityNotApplied"] = "Inget är tillämpat",
+        ["About.SecurityNotAppliedHint"] = "KidShell har inte ändrat någon Windows-inställning på den här datorn.",
+        ["About.Updates"] = "Uppdateringar",
+        ["About.UpdatesOn"] = "På",
+        ["About.UpdatesOff"] = "Avstängda",
+        ["About.UpdatesHint"] =
+            "Automatiska uppdateringar är avstängda tills paketet är signerat. En uppdaterare som installerar osignerade paket är en säkerhetsrisk.",
+        ["About.Licence"] = "Licens",
+        ["About.LicenceValue"] = "MIT-licens. Öppen källkod.",
+        ["About.Available"] = "Tillgängligt",
+        ["About.PartlyAvailable"] = "Delvis",
+        ["About.NotSupported"] = "Stöds inte",
 
         // ---------- Web ----------
         ["Web.Title"] = "Webbfilter",

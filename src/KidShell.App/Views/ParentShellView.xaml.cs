@@ -28,7 +28,7 @@ public sealed partial class ParentShellView : UserControl
         PageScreenTime.Initialize(viewModel.ScreenTime);
         PageWeb.Initialize(viewModel.Web);
         PageSecurity.Initialize(viewModel.Security);
-        PageProfile.Initialize(viewModel.Profile);
+        PageProfile.Initialize(viewModel.Profile, viewModel.About);
 
         SaveButton.Command = viewModel.SaveCommand;
         BackButton.Command = viewModel.BackCommand;
