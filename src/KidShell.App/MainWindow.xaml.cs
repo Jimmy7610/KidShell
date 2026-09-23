@@ -28,6 +28,7 @@ public sealed partial class MainWindow : Window
 
     private readonly ShellViewModel _viewModel;
     private readonly ISystemStatusService _status;
+    private readonly IChildPresentation _presentation;
     private readonly IAppStateService _state;
     private readonly IDialogService _dialogs;
     private readonly IFilePickerService _picker;
@@ -39,7 +40,8 @@ public sealed partial class MainWindow : Window
         IAppStateService state,
         IDialogService dialogs,
         IFilePickerService picker,
-        IKidShellLogger logger)
+        IKidShellLogger logger,
+        IChildPresentation presentation)
     {
         _viewModel = viewModel;
         _status = status;
@@ -51,6 +53,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         Title = Strings.Get("App.Title");
+
+        _presentation = presentation;
 
         ConfigureWindow();
         ConfigureTitleBar();
@@ -232,6 +236,11 @@ public sealed partial class MainWindow : Window
         {
             PinOverlay.PrepareForEntry();
         }
+
+        // Child Mode is borderless full screen in a shipped build, windowed in
+        // a developer one. Presentation only: it hides the rest of Windows
+        // rather than preventing it, and every row of the escape matrix says so.
+        _presentation.Apply(AppWindow, _viewModel.IsChildMode);
 
         ApplySceneTheme();
     }

@@ -118,6 +118,11 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
+
+        // Presentation, not security: Child Mode is borderless full screen in a
+        // shipped build and windowed in a developer one, so nobody gets trapped
+        // on the machine the code is written on.
+        services.AddSingleton<IChildPresentation, ChildPresentation>();
         services.AddSingleton<IAddAppFlow, AddAppFlow>();
         services.AddSingleton<IPinChangeFlow, PinChangeFlow>();
         services.AddSingleton<ISecurityDialogs, SecurityDialogs>();
