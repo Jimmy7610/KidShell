@@ -112,7 +112,7 @@ Run before any release-shaped commit:
 | `KidShell.Core.Tests` | `net10.0` | Rules, plans, transactions, configuration, screen time, the escape matrix. Runs anywhere. |
 | `KidShell.WindowsIntegration.Tests` | `net10.0-windows` | Every operation that can change Windows, run against fakes. |
 
-**885 tests. None of them changes the machine they run on.**
+**915 tests. None of them changes the machine they run on.**
 
 ### How the Windows suite stays safe
 

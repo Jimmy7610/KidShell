@@ -21,7 +21,7 @@ never run. Those two facts are both true and neither replaces the other.
 | | |
 | --- | --- |
 | **Written** | Nine security operations, each with preflight, snapshot, apply, verify and rollback |
-| **Tested** | 885 tests, every mutating operation exercised against fakes |
+| **Tested** | 915 tests, every mutating operation exercised against fakes |
 | **Executed** | Never, anywhere |
 
 The structural reason is deliberate. Every operation requires an Apply-mode

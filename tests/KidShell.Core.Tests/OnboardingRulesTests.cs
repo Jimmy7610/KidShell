@@ -57,7 +57,10 @@ public class OnboardingRulesTests
         var (service, state) = Build(KidShellRuntimeMode.Production);
 
         Assert.Equal(OnboardingCompletion.Completed, service.Complete(FullDraft("417392")));
-        Assert.NotEmpty(state.Committed!.ParentPin.Hash);
+
+        // IsConfigured is the real question: a hash with no salt is not a
+        // usable PIN, and asserting on one field alone would miss that.
+        Assert.True(state.Committed!.ParentPin.IsConfigured);
     }
 
     [Fact]
@@ -79,10 +82,9 @@ public class OnboardingRulesTests
 
         var pin = state.Committed!.ParentPin;
 
-        Assert.NotEmpty(pin.Hash);
-        Assert.NotEmpty(pin.Salt);
-        Assert.DoesNotContain("417392", pin.Hash, StringComparison.Ordinal);
-        Assert.DoesNotContain("417392", pin.Salt, StringComparison.Ordinal);
+        Assert.True(pin.IsConfigured);
+        Assert.DoesNotContain("417392", pin.Hash ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain("417392", pin.Salt ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -101,7 +103,7 @@ public class OnboardingRulesTests
         // What must never happen is 123456 becoming the parent's PIN.
         if (result == OnboardingCompletion.Completed)
         {
-            Assert.Empty(state.Committed!.ParentPin.Hash);
+            Assert.False(state.Committed!.ParentPin.IsConfigured);
         }
         else
         {
