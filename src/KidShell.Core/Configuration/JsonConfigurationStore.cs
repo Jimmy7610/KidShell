@@ -65,13 +65,62 @@ public sealed class JsonConfigurationStore : IConfigurationStore
             }
             catch (Exception ex) when (ex is JsonException or IOException or InvalidDataException or UnauthorizedAccessException or NotSupportedException)
             {
-                _logger.Error("Config", "Configuration file could not be read; falling back to defaults.", ex);
+                _logger.Error("Config", "Configuration file could not be read.", ex);
                 QuarantineCorruptFile();
+
+                // The backup exists precisely for this moment, and until now it
+                // was written and never read: a corrupt primary threw away the
+                // parent's entire configuration while a good copy sat beside
+                // it. Losing a child's profile, app list and PIN to one bad
+                // write is a far worse outcome than the write itself.
+                if (TryLoadBackup(out var restored, out var migrated))
+                {
+                    _logger.Warning("Config",
+                        "Configuration was restored from the previous good file.");
+
+                    return new ConfigurationLoadResult(
+                        restored!,
+                        ConfigurationLoadStatus.RecoveredFromBackup,
+                        ex.Message,
+                        WasMigrated: migrated);
+                }
+
+                _logger.Error("Config", "No usable backup either; falling back to defaults.");
+
                 return new ConfigurationLoadResult(
                     KidShellConfiguration.CreateDefault(),
                     ConfigurationLoadStatus.RecoveredFromCorruption,
                     ex.Message);
             }
+        }
+    }
+
+    /// <summary>
+    /// Reads the previous good document, if there is one and it parses.
+    ///
+    /// Deliberately quiet about its own failures: this runs while already
+    /// handling a corrupt primary, and a throw here would turn a recoverable
+    /// situation into an unhandled one.
+    /// </summary>
+    private bool TryLoadBackup(out KidShellConfiguration? configuration, out bool wasMigrated)
+    {
+        configuration = null;
+        wasMigrated = false;
+
+        if (!File.Exists(BackupPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            configuration = Deserialize(File.ReadAllText(BackupPath), out wasMigrated);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Config", "The backup configuration could not be read either.", ex);
+            return false;
         }
     }
 
