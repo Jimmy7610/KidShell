@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Tests for the only project that can change Windows.
+
+    NOTHING HERE TOUCHES THE MACHINE. Every operation is exercised against a
+    fake platform - an in-memory account list, an in-memory registry, a tool
+    runner that returns canned output. The real implementations in Platform/
+    are never constructed by a test, which is what makes it safe to run this
+    suite on a developer's own computer.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>KidShell.WindowsIntegration.Tests</RootNamespace>
+    <AssemblyName>KidShell.WindowsIntegration.Tests</AssemblyName>
+    <IsPackable>false</IsPackable>
+    <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KidShell.Core\KidShell.Core.csproj" />
+    <ProjectReference Include="..\..\src\KidShell.WindowsIntegration\KidShell.WindowsIntegration.csproj" />
+    <ProjectReference Include="..\..\src\KidShell.SecurityHost\KidShell.SecurityHost.csproj" />
+    <ProjectReference Include="..\..\src\KidShell.Watchdog\KidShell.Watchdog.csproj" />
+  </ItemGroup>
+
+</Project>
