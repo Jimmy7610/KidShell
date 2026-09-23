@@ -171,7 +171,7 @@ public sealed class PinChangeFlow : IPinChangeFlow
 
             if (validation != PinValidation.Ok)
             {
-                error.Text = DescribeValidation(validation);
+                error.Text = KidShell.App.Localization.PinMessages.Describe(validation);
                 error.Visibility = Visibility.Visible;
                 continue;
             }
@@ -180,16 +180,4 @@ public sealed class PinChangeFlow : IPinChangeFlow
         }
     }
 
-    /// <summary>Parent-facing wording for each way a PIN can be refused.</summary>
-    private static string DescribeValidation(PinValidation validation) => validation switch
-    {
-        PinValidation.Empty => Strings.Get("Pin.ErrorEmpty"),
-        PinValidation.NotNumeric => Strings.Get("Pin.ErrorNotNumeric"),
-        PinValidation.WrongLength => Strings.Get("Dialog.ChangePinInvalid"),
-        PinValidation.Repeated => Strings.Get("Pin.ErrorRepeated"),
-        PinValidation.Sequential => Strings.Get("Pin.ErrorSequential"),
-        PinValidation.ReservedDevelopmentPin => Strings.Get("Pin.ErrorReserved"),
-        PinValidation.ConfirmationMismatch => Strings.Get("Dialog.ChangePinMismatch"),
-        _ => Strings.Get("Dialog.ChangePinInvalid")
-    };
 }

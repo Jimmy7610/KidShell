@@ -18,7 +18,6 @@ public sealed partial class ChildHomeView : UserControl
     public void Initialize(
         ChildHomeViewModel viewModel,
         bool developerMode,
-        bool developmentPinActive,
         Action onSettingsRequested,
         Action onParentAccessRequested)
     {
@@ -32,13 +31,6 @@ public sealed partial class ChildHomeView : UserControl
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         DeveloperBadge.Visibility = developerMode ? Visibility.Visible : Visibility.Collapsed;
-
-        // Name the state that actually matters. "Development build" is a
-        // detail; "the PIN printed in the README opens Parent Mode right now"
-        // is the thing somebody needs to notice.
-        DeveloperBadgeText.Text = developmentPinActive
-            ? Localization.Strings.Get("Dev.BadgeOpenPin")
-            : Localization.Strings.Get("Dev.Badge");
 
         Render();
     }
@@ -54,6 +46,14 @@ public sealed partial class ChildHomeView : UserControl
 
         GreetingText.Text = _viewModel.Greeting;
         Avatar.AvatarId = _viewModel.AvatarId;
+
+        // Rendered every time, not captured at startup. Name the state that
+        // actually matters: "development build" is a detail, "the PIN printed
+        // in the README opens Parent Mode right now" is what somebody needs to
+        // notice - and it stops being true the moment a parent sets a real one.
+        DeveloperBadgeText.Text = _viewModel.DevelopmentPinActive
+            ? Localization.Strings.Get("Dev.BadgeOpenPin")
+            : Localization.Strings.Get("Dev.Badge");
 
         RenderScreenTime();
         UpdateEmptyState();

@@ -326,6 +326,32 @@ public static class Strings
 
         ["Setup.NameTitle"] = "Vad heter barnet som ska använda datorn?",
         ["Setup.NameBody"] = "Namnet används för att hälsa på barnet i Barnläge.",
+        // Parent PIN step
+        ["Setup.PinTitle"] = "Skapa en föräldra-PIN",
+        ["Setup.PinBody"] =
+            "Den här koden krävs för att öppna Föräldraläge. Välj en som barnet inte kan gissa.",
+        ["Setup.PinBodyDeveloper"] =
+            "Den här koden krävs för att öppna Föräldraläge. I utvecklingsläge kan du hoppa över steget – då används standardkoden tills du väljer en egen.",
+        ["Setup.PinLabel"] = "PIN-kod (sex siffror)",
+        ["Setup.PinConfirmLabel"] = "Skriv koden igen",
+        ["Setup.PinHint"] =
+            "Undvik 123456, 000000 och barnets födelsedatum. Koden sparas aldrig i klartext.",
+        ["Setup.PinRequired"] =
+            "En riktig föräldra-PIN krävs innan installationen kan slutföras.",
+
+        // Rules step
+        ["Setup.RulesTitle"] = "Regler för datorn",
+        ["Setup.RulesBody"] = "Du kan ändra allt det här senare i Föräldraläge.",
+        ["Setup.RulesWebHint"] =
+            "Valet sparas nu. Webbläsarregler skrivs i Windows först vid säker installation.",
+        ["Setup.RulesTime"] = "{0} vardag · {1} helg",
+        ["Setup.RulesNoTime"] = "Ingen tidsgräns",
+
+        // What setup did not do
+        ["Setup.DoneSecurityTitle"] = "Windows är inte låst ännu",
+        ["Setup.DoneSecurityBody"] =
+            "Den här installationen har ställt in KidShell, inte Windows. Barnet kan fortfarande lämna Barnläge. Säker installation görs separat i Föräldraläge → Säkerhet, på en dator du valt för ändamålet.",
+
         ["Setup.NamePlaceholder"] = "Skriv barnets namn",
         ["Setup.NameLabel"] = "Barnets namn",
         ["Setup.NameEmpty"] = "Skriv barnets namn för att fortsätta.",

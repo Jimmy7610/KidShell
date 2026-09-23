@@ -2,6 +2,7 @@ using System.ComponentModel;
 using KidShell.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 
 namespace KidShell.App.Views;
 
@@ -76,10 +77,12 @@ public sealed partial class OnboardingView : UserControl
         _loading = true;
 
         StepWelcome.Visibility = Show(_viewModel.IsWelcome);
+        StepParentPin.Visibility = Show(_viewModel.IsParentPin);
         StepName.Visibility = Show(_viewModel.IsName);
         StepAvatar.Visibility = Show(_viewModel.IsAvatar);
         StepAge.Visibility = Show(_viewModel.IsAge);
         StepTheme.Visibility = Show(_viewModel.IsTheme);
+        StepRules.Visibility = Show(_viewModel.IsRules);
         StepDone.Visibility = Show(_viewModel.IsDone);
 
         StepIndicatorText.Text = _viewModel.StepIndicator;
@@ -99,7 +102,29 @@ public sealed partial class OnboardingView : UserControl
         ThemeBodyText.Text = _viewModel.ThemeBody;
         DoneTitleText.Text = _viewModel.DoneTitle;
         DoneSummaryText.Text = _viewModel.DoneSummary;
+        DoneRulesText.Text = _viewModel.RulesSummary;
         DoneAvatar.AvatarId = _viewModel.SelectedAvatarId;
+
+        PinBodyText.Text = _viewModel.PinBody;
+
+        // The PIN boxes are never written back from the view model. A PIN
+        // sitting in a field is a PIN somebody can read over a shoulder, and
+        // stepping back deliberately clears them so the parent retypes - which
+        // re-confirms it too.
+
+        RulesScreenTimeToggle.IsOn = _viewModel.ScreenTimeEnabled;
+        RulesWeekdaySlider.Value = _viewModel.WeekdayMinutes;
+        RulesWeekendSlider.Value = _viewModel.WeekendMinutes;
+        RulesWeekdayText.Text = _viewModel.WeekdayText;
+        RulesWeekendText.Text = _viewModel.WeekendText;
+
+        RulesTimeControls.Opacity = _viewModel.ScreenTimeEnabled ? 1 : 0.55;
+        RulesWeekdaySlider.IsEnabled = _viewModel.ScreenTimeEnabled;
+        RulesWeekendSlider.IsEnabled = _viewModel.ScreenTimeEnabled;
+
+        RulesWebNone.IsChecked = _viewModel.WebNone;
+        RulesWebAllowlist.IsChecked = _viewModel.WebAllowlist;
+        RulesWebOpen.IsChecked = _viewModel.WebOpen;
 
         var message = _viewModel.ValidationMessage;
         ValidationPanel.Visibility = Show(!string.IsNullOrEmpty(message));
@@ -108,6 +133,71 @@ public sealed partial class OnboardingView : UserControl
         _loading = false;
 
         static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    // ------------------------------------------------------ parent PIN
+
+    private void OnPinChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_loading && _viewModel is not null)
+        {
+            _viewModel.PinText = PinBox.Password;
+        }
+    }
+
+    private void OnPinConfirmChanged(object sender, RoutedEventArgs e)
+    {
+        if (!_loading && _viewModel is not null)
+        {
+            _viewModel.PinConfirmText = PinConfirmBox.Password;
+        }
+    }
+
+    // ----------------------------------------------------------- rules
+
+    private void OnRulesScreenTimeToggled(object sender, RoutedEventArgs e)
+    {
+        if (!_loading && _viewModel is not null)
+        {
+            _viewModel.ScreenTimeEnabled = RulesScreenTimeToggle.IsOn;
+        }
+    }
+
+    private void OnRulesWeekdayChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_loading && _viewModel is not null)
+        {
+            _viewModel.WeekdayMinutes = e.NewValue;
+        }
+    }
+
+    private void OnRulesWeekendChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        if (!_loading && _viewModel is not null)
+        {
+            _viewModel.WeekendMinutes = e.NewValue;
+        }
+    }
+
+    private void OnRulesWebChecked(object sender, RoutedEventArgs e)
+    {
+        if (_loading || _viewModel is null)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(sender, RulesWebNone))
+        {
+            _viewModel.WebNone = true;
+        }
+        else if (ReferenceEquals(sender, RulesWebAllowlist))
+        {
+            _viewModel.WebAllowlist = true;
+        }
+        else if (ReferenceEquals(sender, RulesWebOpen))
+        {
+            _viewModel.WebOpen = true;
+        }
     }
 
     private void OnNameChanged(object sender, TextChangedEventArgs e)

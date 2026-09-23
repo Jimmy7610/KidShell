@@ -111,6 +111,42 @@
                     </StackPanel>
 
                     <!-- ===================== 2. Name ===================== -->
+                    <!-- ===================== 2. Parent PIN ===================== -->
+                    <StackPanel x:Name="StepParentPin" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                        <TextBlock
+                            Style="{StaticResource SetupHeadlineTextStyle}"
+                            Text="{loc:Str Key=Setup.PinTitle}" />
+                        <TextBlock
+                            x:Name="PinBodyText"
+                            Style="{StaticResource SetupBodyTextStyle}" />
+
+                        <StackPanel MaxWidth="360" Spacing="12">
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Setup.PinLabel}" />
+                                <PasswordBox
+                                    x:Name="PinBox"
+                                    AutomationProperties.Name="{loc:Str Key=Setup.PinLabel}"
+                                    MaxLength="6"
+                                    PasswordChanged="OnPinChanged" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Setup.PinConfirmLabel}" />
+                                <PasswordBox
+                                    x:Name="PinConfirmBox"
+                                    AutomationProperties.Name="{loc:Str Key=Setup.PinConfirmLabel}"
+                                    MaxLength="6"
+                                    PasswordChanged="OnPinConfirmChanged" />
+                            </StackPanel>
+
+                            <TextBlock
+                                Style="{StaticResource SetupCaptionTextStyle}"
+                                Text="{loc:Str Key=Setup.PinHint}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- ===================== 3. Name ===================== -->
                     <StackPanel x:Name="StepName" Grid.Row="1" Spacing="16" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource SetupHeadlineTextStyle}"
@@ -304,6 +340,112 @@
                     </StackPanel>
 
                     <!-- ===================== 6. Finish ===================== -->
+                    <!-- ===================== 7. Rules ===================== -->
+                    <StackPanel x:Name="StepRules" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                        <TextBlock
+                            Style="{StaticResource SetupHeadlineTextStyle}"
+                            Text="{loc:Str Key=Setup.RulesTitle}" />
+                        <TextBlock
+                            Style="{StaticResource SetupBodyTextStyle}"
+                            Text="{loc:Str Key=Setup.RulesBody}" />
+
+                        <!--
+                            460, not 300. At 300 the web options below the
+                            screen-time card were scrolled out of sight with no
+                            visible scrollbar, so the step looked like it had one
+                            radio button and no way to reach the others. There is
+                            ample room at 1366x768 for the taller card.
+                        -->
+                        <ScrollViewer
+                            HorizontalScrollMode="Disabled"
+                            MaxHeight="460"
+                            VerticalScrollBarVisibility="Auto">
+                            <StackPanel MaxWidth="460" Spacing="14">
+
+                                <Border Background="{StaticResource PanelBrush}" CornerRadius="14" Padding="16,13">
+                                    <StackPanel Spacing="10">
+                                        <Grid>
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{loc:Str Key=ScreenTime.Enable}"
+                                                VerticalAlignment="Center" />
+                                            <ToggleSwitch
+                                                x:Name="RulesScreenTimeToggle"
+                                                AutomationProperties.Name="{loc:Str Key=ScreenTime.Enable}"
+                                                Style="{StaticResource AppToggleStyle}"
+                                                Toggled="OnRulesScreenTimeToggled" />
+                                        </Grid>
+
+                                        <StackPanel x:Name="RulesTimeControls" Spacing="8">
+                                            <Grid>
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" />
+                                                <TextBlock
+                                                    x:Name="RulesWeekdayText"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{StaticResource BrandBlueBrush}"
+                                                    HorizontalAlignment="Right"
+                                                    Style="{StaticResource CaptionTextStyle}" />
+                                            </Grid>
+                                            <Slider
+                                                x:Name="RulesWeekdaySlider"
+                                                AutomationProperties.Name="{loc:Str Key=ScreenTime.Weekdays}"
+                                                Maximum="300" Minimum="0"
+                                                StepFrequency="15" TickFrequency="60"
+                                                ValueChanged="OnRulesWeekdayChanged" />
+
+                                            <Grid>
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" />
+                                                <TextBlock
+                                                    x:Name="RulesWeekendText"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{StaticResource BrandBlueBrush}"
+                                                    HorizontalAlignment="Right"
+                                                    Style="{StaticResource CaptionTextStyle}" />
+                                            </Grid>
+                                            <Slider
+                                                x:Name="RulesWeekendSlider"
+                                                AutomationProperties.Name="{loc:Str Key=ScreenTime.Weekends}"
+                                                Maximum="300" Minimum="0"
+                                                StepFrequency="15" TickFrequency="60"
+                                                ValueChanged="OnRulesWeekendChanged" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Background="{StaticResource PanelBrush}" CornerRadius="14" Padding="16,13">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock
+                                            FontWeight="SemiBold"
+                                            Style="{StaticResource BodyTextStyle}"
+                                            Text="{loc:Str Key=Web.Title}" />
+                                        <RadioButton
+                                            x:Name="RulesWebNone"
+                                            Checked="OnRulesWebChecked"
+                                            Content="{loc:Str Key=Web.ModeNone}"
+                                            GroupName="SetupWeb" />
+                                        <RadioButton
+                                            x:Name="RulesWebAllowlist"
+                                            Checked="OnRulesWebChecked"
+                                            Content="{loc:Str Key=Web.ModeAllowlist}"
+                                            GroupName="SetupWeb" />
+                                        <RadioButton
+                                            x:Name="RulesWebOpen"
+                                            Checked="OnRulesWebChecked"
+                                            Content="{loc:Str Key=Web.ModeOpen}"
+                                            GroupName="SetupWeb" />
+                                        <TextBlock
+                                            Style="{StaticResource SetupCaptionTextStyle}"
+                                            Text="{loc:Str Key=Setup.RulesWebHint}"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                            </StackPanel>
+                        </ScrollViewer>
+                    </StackPanel>
+
+                    <!-- ===================== 8. Done ===================== -->
                     <StackPanel x:Name="StepDone" Grid.Row="1" Spacing="14" Visibility="Collapsed">
                         <Border
                             Width="148" Height="148"
@@ -332,6 +474,36 @@
                                 x:Name="DoneSummaryText"
                                 Foreground="{StaticResource BrandBlueBrush}"
                                 Style="{StaticResource StatusChipTextStyle}" />
+                        </Border>
+
+                        <TextBlock
+                            x:Name="DoneRulesText"
+                            HorizontalAlignment="Center"
+                            Style="{StaticResource SetupCaptionTextStyle}"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+
+                        <!--
+                            What has NOT happened. Setup configures KidShell; it
+                            does not touch Windows, and a parent who assumes
+                            otherwise has been misled by the absence of this
+                            paragraph rather than by anything the product said.
+                        -->
+                        <Border
+                            MaxWidth="460"
+                            Background="{StaticResource TintAmberBrush}"
+                            CornerRadius="14"
+                            Padding="16,12">
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    FontWeight="SemiBold"
+                                    Style="{StaticResource CaptionTextStyle}"
+                                    Text="{loc:Str Key=Setup.DoneSecurityTitle}" />
+                                <TextBlock
+                                    Style="{StaticResource CaptionTextStyle}"
+                                    Text="{loc:Str Key=Setup.DoneSecurityBody}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
                         </Border>
                     </StackPanel>
 

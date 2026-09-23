@@ -86,6 +86,15 @@ public sealed class OnboardingService : IOnboardingService
         var config = _state.CreateDraft();
         config.Child = draft.ToProfile();
 
+        // The rules the parent chose during setup. Applied here rather than
+        // left for them to discover in Parent Mode: finishing first-run with a
+        // machine that has no limits and no prompt to add any is how a
+        // parental-control product ends up unused.
+        config.ScreenTime.IsEnabled = draft.ScreenTimeEnabled;
+        config.ScreenTime.WeekdayMinutes = draft.WeekdayMinutes;
+        config.ScreenTime.WeekendMinutes = draft.WeekendMinutes;
+        config.Web.Mode = draft.WebMode;
+
         // The PIN is hashed here and the plaintext never leaves the draft,
         // which is discarded with the setup session.
         if (draft.ParentPin is { } pin && ParentPinPolicy.Validate(pin) == PinValidation.Ok)

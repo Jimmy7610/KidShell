@@ -3,6 +3,8 @@ using KidShell.App.Localization;
 using KidShell.App.Services;
 using KidShell.App.Themes;
 using KidShell.Core.Configuration;
+using KidShell.Core.Security;
+using KidShell.Core.Runtime;
 using KidShell.Core.Mvvm;
 using KidShell.Core.Onboarding;
 using Microsoft.UI.Xaml.Media;
@@ -12,11 +14,25 @@ namespace KidShell.App.ViewModels;
 public enum OnboardingStep
 {
     Welcome = 0,
-    Name = 1,
-    Avatar = 2,
-    Age = 3,
-    Theme = 4,
-    Done = 5
+
+    /// <summary>
+    /// The parent PIN.
+    ///
+    /// Second, not last. It is the one thing a Release build cannot finish
+    /// without, and asking for it at the end would mean a parent discovering
+    /// that after choosing a name, an avatar, an age and a theme.
+    /// </summary>
+    ParentPin = 1,
+
+    Name = 2,
+    Avatar = 3,
+    Age = 4,
+    Theme = 5,
+
+    /// <summary>Screen time and web, grouped: both are one decision each.</summary>
+    Rules = 6,
+
+    Done = 7
 }
 
 /// <summary>One avatar tile on the setup avatar screen.</summary>
@@ -112,16 +128,23 @@ public sealed class OnboardingViewModel : ObservableObject
 {
     private readonly IOnboardingService _onboarding;
     private readonly IDialogService _dialogs;
+    private readonly IRuntimeEnvironment _environment;
 
     private OnboardingDraft _draft = new();
     private OnboardingStep _step = OnboardingStep.Welcome;
     private string _nameText = string.Empty;
+    private string _pinText = string.Empty;
+    private string _pinConfirmText = string.Empty;
     private string? _validationMessage;
 
-    public OnboardingViewModel(IOnboardingService onboarding, IDialogService dialogs)
+    public OnboardingViewModel(
+        IOnboardingService onboarding,
+        IDialogService dialogs,
+        IRuntimeEnvironment environment)
     {
         _onboarding = onboarding;
         _dialogs = dialogs;
+        _environment = environment;
 
         foreach (var id in AvatarIds.All)
         {
@@ -169,7 +192,7 @@ public sealed class OnboardingViewModel : ObservableObject
     /// <summary>Raised on every step change so the view can run its transition.</summary>
     public event EventHandler<OnboardingStep>? StepChanged;
 
-    public const int TotalSteps = 6;
+    public static readonly int TotalSteps = Enum.GetValues<OnboardingStep>().Length;
 
     public OnboardingStep CurrentStep
     {
@@ -188,6 +211,10 @@ public sealed class OnboardingViewModel : ObservableObject
     }
 
     public bool IsWelcome => CurrentStep == OnboardingStep.Welcome;
+
+    public bool IsParentPin => CurrentStep == OnboardingStep.ParentPin;
+
+    public bool IsRules => CurrentStep == OnboardingStep.Rules;
 
     public bool IsName => CurrentStep == OnboardingStep.Name;
 
@@ -253,6 +280,168 @@ public sealed class OnboardingViewModel : ObservableObject
         private set => SetProperty(ref _validationMessage, value);
     }
 
+    // --------------------------------------------------------- parent PIN
+
+    public string PinText
+    {
+        get => _pinText;
+        set
+        {
+            if (SetProperty(ref _pinText, value ?? string.Empty))
+            {
+                ValidationMessage = null;
+            }
+        }
+    }
+
+    public string PinConfirmText
+    {
+        get => _pinConfirmText;
+        set
+        {
+            if (SetProperty(ref _pinConfirmText, value ?? string.Empty))
+            {
+                ValidationMessage = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the PIN step may be skipped.
+    ///
+    /// Only in a developer build, and the screen says so. A Release build
+    /// cannot finish setup without a real PIN, because finishing without one
+    /// would leave Parent Mode either unreachable or - if the published
+    /// fallback were ever reinstated - open to anybody who read the
+    /// documentation.
+    /// </summary>
+    public bool CanSkipPin => _environment.IsDevelopment;
+
+    public string PinBody => CanSkipPin
+        ? Strings.Get("Setup.PinBodyDeveloper")
+        : Strings.Get("Setup.PinBody");
+
+    // --------------------------------------------------------------- rules
+
+    public bool ScreenTimeEnabled
+    {
+        get => _draft.ScreenTimeEnabled;
+        set
+        {
+            if (_draft.ScreenTimeEnabled == value)
+            {
+                return;
+            }
+
+            _draft.ScreenTimeEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RulesSummary));
+        }
+    }
+
+    public double WeekdayMinutes
+    {
+        get => _draft.WeekdayMinutes;
+        set
+        {
+            var minutes = (int)Math.Round(value);
+
+            if (_draft.WeekdayMinutes == minutes)
+            {
+                return;
+            }
+
+            _draft.WeekdayMinutes = minutes;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WeekdayText));
+            OnPropertyChanged(nameof(RulesSummary));
+        }
+    }
+
+    public double WeekendMinutes
+    {
+        get => _draft.WeekendMinutes;
+        set
+        {
+            var minutes = (int)Math.Round(value);
+
+            if (_draft.WeekendMinutes == minutes)
+            {
+                return;
+            }
+
+            _draft.WeekendMinutes = minutes;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(WeekendText));
+            OnPropertyChanged(nameof(RulesSummary));
+        }
+    }
+
+    public string WeekdayText => FormatMinutes(_draft.WeekdayMinutes);
+
+    public string WeekendText => FormatMinutes(_draft.WeekendMinutes);
+
+    public bool WebNone
+    {
+        get => _draft.WebMode == WebMode.NoBrowser;
+        set => SetWebMode(value, WebMode.NoBrowser);
+    }
+
+    public bool WebAllowlist
+    {
+        get => _draft.WebMode == WebMode.Allowlist;
+        set => SetWebMode(value, WebMode.Allowlist);
+    }
+
+    public bool WebOpen
+    {
+        get => _draft.WebMode == WebMode.Open;
+        set => SetWebMode(value, WebMode.Open);
+    }
+
+    private void SetWebMode(bool isSelected, WebMode mode)
+    {
+        if (!isSelected || _draft.WebMode == mode)
+        {
+            return;
+        }
+
+        _draft.WebMode = mode;
+
+        OnPropertyChanged(nameof(WebNone));
+        OnPropertyChanged(nameof(WebAllowlist));
+        OnPropertyChanged(nameof(WebOpen));
+        OnPropertyChanged(nameof(RulesSummary));
+    }
+
+    /// <summary>One line summarising the rules, shown on the final screen.</summary>
+    public string RulesSummary
+    {
+        get
+        {
+            var time = _draft.ScreenTimeEnabled
+                ? Strings.Format("Setup.RulesTime", WeekdayText, WeekendText)
+                : Strings.Get("Setup.RulesNoTime");
+
+            var web = _draft.WebMode switch
+            {
+                WebMode.NoBrowser => Strings.Get("Web.ModeNone"),
+                WebMode.Allowlist => Strings.Get("Web.ModeAllowlist"),
+                _ => Strings.Get("Web.ModeOpen")
+            };
+
+            return $"{time} · {web}";
+        }
+    }
+
+    internal static string FormatMinutes(int minutes) => minutes switch
+    {
+        60 => Strings.Get("ScreenTime.OneHour"),
+        < 60 => Strings.Format("ScreenTime.Minutes", minutes),
+        _ when minutes % 60 == 0 => Strings.Format("ScreenTime.Hours", minutes / 60),
+        _ => Strings.Format("ScreenTime.HoursAndMinutes", minutes / 60, minutes % 60)
+    };
+
     /// <summary>Starts a clean session. Never pre-filled from an existing profile.</summary>
     public void Reset()
     {
@@ -275,6 +464,9 @@ public sealed class OnboardingViewModel : ObservableObject
             theme.IsSelected = false;
         }
 
+        PinText = string.Empty;
+        PinConfirmText = string.Empty;
+
         CurrentStep = OnboardingStep.Welcome;
         NotifyDraftState();
     }
@@ -284,6 +476,15 @@ public sealed class OnboardingViewModel : ObservableObject
         switch (CurrentStep)
         {
             case OnboardingStep.Welcome:
+                CurrentStep = OnboardingStep.ParentPin;
+                break;
+
+            case OnboardingStep.ParentPin:
+                if (!TryCommitPin())
+                {
+                    return;
+                }
+
                 CurrentStep = OnboardingStep.Name;
                 break;
 
@@ -323,6 +524,13 @@ public sealed class OnboardingViewModel : ObservableObject
                     return;
                 }
 
+                CurrentStep = OnboardingStep.Rules;
+                break;
+
+            case OnboardingStep.Rules:
+                // Every value has a workable default, so there is nothing to
+                // validate - a parent who accepts the suggestion gets something
+                // sensible rather than nothing.
                 CurrentStep = OnboardingStep.Done;
                 break;
 
@@ -346,7 +554,45 @@ public sealed class OnboardingViewModel : ObservableObject
             NameText = _draft.Name;
         }
 
+        // The PIN is deliberately NOT restored into the boxes when stepping
+        // back: a PIN sitting in a visible field is a PIN somebody can read
+        // over a shoulder. The parent retypes it, which also re-confirms it.
+        if (CurrentStep == OnboardingStep.Name)
+        {
+            PinText = string.Empty;
+            PinConfirmText = string.Empty;
+        }
+
         CurrentStep = CurrentStep - 1;
+    }
+
+    /// <summary>
+    /// Validates the PIN pair and puts it on the draft.
+    ///
+    /// Through <see cref="ParentPinPolicy.ValidatePair"/> so the reason is the
+    /// real one. Telling a parent "must be six digits" when they typed a
+    /// six-digit sequence is how a form teaches somebody it is broken.
+    /// </summary>
+    private bool TryCommitPin()
+    {
+        // A developer skipping the step leaves the draft without a PIN, which
+        // the fallback covers in Debug and which Release refuses outright.
+        if (CanSkipPin && PinText.Length == 0 && PinConfirmText.Length == 0)
+        {
+            _draft.ParentPin = null;
+            return true;
+        }
+
+        var validation = ParentPinPolicy.ValidatePair(PinText, PinConfirmText);
+
+        if (validation != PinValidation.Ok)
+        {
+            ValidationMessage = PinMessages.Describe(validation);
+            return false;
+        }
+
+        _draft.ParentPin = PinText;
+        return true;
     }
 
     private bool TryCommitName()
@@ -430,6 +676,17 @@ public sealed class OnboardingViewModel : ObservableObject
             return;
         }
 
+        // A production build without a PIN is a specific, fixable problem, and
+        // it used to surface as the generic "could not save" - which left the
+        // parent stuck on the last screen with no idea what to do. Send them
+        // back to the step that fixes it.
+        if (result == OnboardingCompletion.ParentPinRequired)
+        {
+            CurrentStep = OnboardingStep.ParentPin;
+            ValidationMessage = Strings.Get("Setup.PinRequired");
+            return;
+        }
+
         // Nothing was written, so the parent stays on the final screen and can
         // simply try again.
         ValidationMessage = Strings.Get("Setup.SaveFailed");
@@ -439,6 +696,8 @@ public sealed class OnboardingViewModel : ObservableObject
     private void NotifyStepState()
     {
         OnPropertyChanged(nameof(IsWelcome));
+        OnPropertyChanged(nameof(IsParentPin));
+        OnPropertyChanged(nameof(IsRules));
         OnPropertyChanged(nameof(IsName));
         OnPropertyChanged(nameof(IsAvatar));
         OnPropertyChanged(nameof(IsAge));
@@ -462,5 +721,6 @@ public sealed class OnboardingViewModel : ObservableObject
         OnPropertyChanged(nameof(ThemeBody));
         OnPropertyChanged(nameof(DoneTitle));
         OnPropertyChanged(nameof(DoneSummary));
+        OnPropertyChanged(nameof(RulesSummary));
     }
 }

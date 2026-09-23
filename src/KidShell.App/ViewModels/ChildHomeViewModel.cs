@@ -5,6 +5,7 @@ using KidShell.Core.Configuration;
 using KidShell.Core.Launching;
 using KidShell.Core.Mvvm;
 using KidShell.Core.ScreenTime;
+using KidShell.Core.Security;
 
 namespace KidShell.App.ViewModels;
 
@@ -30,6 +31,7 @@ public sealed class ChildHomeViewModel : ObservableObject
     private readonly IAppLauncher _launcher;
     private readonly IDialogService _dialogs;
     private readonly IScreenTimeCoordinator _screenTime;
+    private readonly IParentPinService _pins;
 
     private string _greeting = string.Empty;
     private string _avatarId = "fox";
@@ -41,12 +43,14 @@ public sealed class ChildHomeViewModel : ObservableObject
         IAppLauncher launcher,
         IDialogService dialogs,
         ISystemStatusService status,
-        IScreenTimeCoordinator screenTime)
+        IScreenTimeCoordinator screenTime,
+        IParentPinService pins)
     {
         _state = state;
         _launcher = launcher;
         _dialogs = dialogs;
         _screenTime = screenTime;
+        _pins = pins;
         Status = status;
 
         _status = screenTime.Current;
@@ -87,6 +91,16 @@ public sealed class ChildHomeViewModel : ObservableObject
         get => _hasTiles;
         private set => SetProperty(ref _hasTiles, value);
     }
+
+    /// <summary>
+    /// Whether the published fallback PIN would currently open Parent Mode.
+    ///
+    /// Read live rather than captured at startup. The badge used to be set once
+    /// when the view was created, so it still announced "standard-PIN" after a
+    /// parent had chosen a real one - a warning that had stopped being true,
+    /// which is worse than no warning at all.
+    /// </summary>
+    public bool DevelopmentPinActive => _pins.IsDevelopmentFallbackActive;
 
     // ----------------------------------------------------------- screen time
 
@@ -153,6 +167,8 @@ public sealed class ChildHomeViewModel : ObservableObject
         }
 
         HasTiles = Tiles.Count > 0;
+
+        OnPropertyChanged(nameof(DevelopmentPinActive));
 
         // A parent may have granted more time or changed the allowance while
         // this screen was hidden.
