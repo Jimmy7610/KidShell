@@ -3,13 +3,20 @@
 Authoritative version progression. The README links here rather than
 duplicating it.
 
-**Current status: 0.2 development, on branch `work/full-roadmap`.**
+**Current status: 1.0.0-rc.1 — code complete, not validated on hardware.**
 
 > **WINDOWS LOCKDOWN STATUS: NOT ENABLED.**
-> No KidShell build has ever applied a Windows restriction. Every security
-> capability below is either detection, planning or artifact generation until
-> a milestone explicitly says otherwise — and that milestone requires a
-> dedicated test device, not a development machine.
+>
+> No KidShell build has ever applied a Windows restriction. What changed at the
+> release candidate is that the code to do so now exists and is tested — nine
+> operations, each with preflight, snapshot, apply, verify and rollback.
+>
+> They have never run. Every build is structurally incapable of running them:
+> the Apply context they require cannot be constructed, and reflection tests
+> keep it that way. Enabling it is a visible code change, not a flag.
+>
+> The remaining work is validation on a dedicated device. See
+> [`DEDICATED-DEVICE-VALIDATION.md`](DEDICATED-DEVICE-VALIDATION.md).
 
 ---
 

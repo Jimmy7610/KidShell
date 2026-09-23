@@ -101,3 +101,50 @@ Run before any release-shaped commit:
 11. Säkerhet reports this machine's real edition, build and capabilities
 12. "Kör introduktionen igen" clears the profile and keeps the app list
 13. 1366×768 has no clipping
+
+
+---
+
+## The two suites
+
+| Project | Target | What it covers |
+| --- | --- | --- |
+| `KidShell.Core.Tests` | `net10.0` | Rules, plans, transactions, configuration, screen time, the escape matrix. Runs anywhere. |
+| `KidShell.WindowsIntegration.Tests` | `net10.0-windows` | Every operation that can change Windows, run against fakes. |
+
+**885 tests. None of them changes the machine they run on.**
+
+### How the Windows suite stays safe
+
+Every operation is written against an interface in `Platform/`, and the tests
+supply a fake for each: an in-memory account directory, a registry that is a
+dictionary, a service control manager that is a list, a tool runner that returns
+canned output. The real implementations are never constructed by a test.
+
+That is not a testing convenience. It is what makes the suite safe to run on a
+developer's own computer, and it is why CI can run it on a build agent without
+the workflow having to change any Windows setting.
+
+### Reaching the apply path at all
+
+No KidShell build can construct an Apply-mode `SecurityExecutionContext` — that
+is the structural guarantee the whole security design rests on. It also meant
+that for a long time **none of the apply, verify, cancel or rollback logic was
+reachable by any test**, which is exactly how a cancellation path that skipped
+rollback survived review.
+
+The tests forge one by reflection, deliberately: reaching past the language
+rather than calling an API, so the product guarantee stays literally true and
+forging the token remains an obvious, ugly, test-only act. It buys nothing real,
+because performing a mutation still needs a platform service, and every one in
+the test project is a fake.
+
+### Mutation testing the important fixes
+
+Where a fix matters, it is verified by breaking it again. The cancellation fix
+was confirmed by restoring the old `throw;` and watching three tests fail; the
+CI guards were confirmed by planting a P/Invoke outside the platform layer, a
+version mismatch and a broken documentation link, and watching the build fail
+each time.
+
+A test that passes before and after the fix is not testing the fix.

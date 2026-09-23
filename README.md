@@ -8,11 +8,26 @@
 
 KidShell är ett barnvänligt Windows-skal som gör en vanlig Windows-dator enklare att använda för barn och lättare att styra för en förälder. Barnet möts av ett tydligt **Barnläge** med stora appkort, medan föräldern har ett separat **Föräldraläge** för profil, appar, PIN, skärmtid, webb och säkerhet.
 
-> **Utvecklingsstatus: 0.2 development / pre-production foundation**
+> **Status: 1.0.0-rc.1 — CODE COMPLETE, INTE VALIDERAD PÅ RIKTIG HÅRDVARA**
 >
 > **WINDOWS LOCKDOWN STATUS: NOT ENABLED**
 >
-> KidShell har fortfarande **inte** aktiverat någon riktig Windows-låsning. Inga Windows-konton har skapats, ingen AppLocker-policy har applicerats, Assigned Access är inte aktiverat och inga tjänster eller systempolicyer har installerats. Säkerhetsdelarna som finns idag är analys, planering, policygenerering, simulering och recovery-arkitektur.
+> Skillnaden mellan de två raderna är hela poängen.
+>
+> **Code complete** betyder att koden för att låsa Windows nu finns och är
+> testad: barnkonton, AppLocker-distribution, Assigned Access, autostart,
+> vakttjänst, webbpolicy, säker utloggning och återställning — var och en som
+> en transaktion med preflight, ögonblicksbild, tillämpning, verifiering och
+> återställning.
+>
+> **Not enabled** betyder att ingenting av det har körts. Ingen KidShell-version
+> som byggts kan skapa ett Apply-läge: typen har privat konstruktor och en enda
+> publik fabrik som returnerar granskningsläge, och reflektionstester bevakar
+> det. Den här datorn är oförändrad, och en byte-identisk före/efter-granskning
+> av Windows-tillståndet visar det vid varje milstolpe.
+>
+> Nästa steg är validering på en dedikerad dator. Se
+> [`docs/DEDICATED-DEVICE-VALIDATION.md`](docs/DEDICATED-DEVICE-VALIDATION.md).
 
 ## Skärmbilder
 
@@ -222,9 +237,9 @@ Assigned Access är inte tillgängligt på Windows Home och är därför avsett 
 
 ## Standard Mode och Secure Mode
 
-### Standard Mode — planerat
+### Standardläge — kodfärdigt, inte validerat
 
-Avsett att fungera så långt Windows-utgåvan tillåter, inklusive Home:
+Fungerar så långt Windows-utgåvan tillåter, inklusive Home:
 
 - separat standardkonto för barnet
 - KidShell autostart
@@ -235,27 +250,40 @@ Avsett att fungera så långt Windows-utgåvan tillåter, inklusive Home:
 - recovery
 - dokumenterad appkontroll där deployment faktiskt stöds
 
-### Secure Mode — planerat
+### Säkert läge — kodfärdigt, inte validerat
 
-På kompatibla Windows-utgåvor:
+På Windows Pro, Enterprise, Education och IoT Enterprise:
 
-- allt i Standard Mode
-- Assigned Access / restricted user experience
-- starkare OS-nivåisolering
+- allt i Standardläge
+- Assigned Access som *restricted user experience* — den flerapps-variant
+  Microsoft dokumenterar, inte enapps-kiosk, som skulle göra varje app
+  föräldern godkänt oåtkomlig
+- starkare isolering på OS-nivå
 
-KidShell ska aldrig märka en dator som **Skyddad** bara för att funktionerna finns. Riktig enforcement måste först appliceras och verifieras.
+Windows 11 Home har inte Assigned Access, och KidShell säger det rakt ut i
+stället för att erbjuda en knapp som skulle misslyckas.
+
+KidShell märker aldrig en dator som **Skyddad** bara för att funktionerna finns.
+Verkligt skydd kräver att reglerna tillämpats **och** att KidShell läst tillbaka
+dem och bekräftat att de gäller.
 
 ## Watchdog och sessioner
 
-KidShell har idag:
+`KidShell.Watchdog` är en riktig Windows-tjänst. Den gör en enda sak: startar
+om KidShell om KidShell slutar köra.
 
-- child session manager
-- process/session-abstraktion
-- watchdog-logik
-- crash-loop detection
-- development session controller
+- ingen konfigurationsfil, ingen pipe, ingen socket, inga kommandon — en tjänst
+  som körs som LocalSystem och läser instruktioner från något ett barnkonto kan
+  skriva till är en rättighetseskalering med ett vänligt namn
+- startar skalet med `CreateProcessAsUser` på sessionens token, så KidShell körs
+  som barnet och aldrig som LocalSystem
+- kraschslinga upptäcks; efter några snabba omstarter slutar den försöka och
+  låter den lugna skärmen stå kvar
+- faller **aldrig** tillbaka på att visa skrivbordet — då vore det enklaste
+  sättet ut ur KidShell att krascha det
 
-En riktig Windows watchdog-service är **inte installerad eller implementerad för produktion ännu**.
+Tjänsten är byggd och testad men **inte installerad** på den här datorn.
+Installationen sker genom säkerhetstransaktionen på en dedikerad dator.
 
 ## Uppdateringar
 
@@ -275,26 +303,40 @@ Modellen kräver bland annat HTTPS, signaturkontroll och SHA-256-verifiering.
 
 Automatiska produktionsuppdateringar är fortfarande avstängda eftersom KidShell ännu inte har en riktig kodsigneringskedja.
 
-## Vad KidShell INTE gör ännu
+## Vad KidShell inte gör på den här datorn
 
-Nuvarande build är **inte färdig parental-control-säkerhet**.
+Skillnaden mot tidigare versioner: koden finns nu. Den har bara inte körts.
 
-Följande är inte aktiverat på en riktig dator:
+**Byggt och testat, men aldrig kört någonstans:**
 
-- skapande eller ändring av Windows-barnkonto
-- AppLocker enforcement-policy
-- Assigned Access / kiosk
-- Windows-autostart för barnkontot
-- watchdog-service
-- shell replacement
-- Group Policy-förändringar
-- UAC-förändringar
-- systemomfattande webbpolicy
-- säker produktionsinstaller
-- automatisk produktionsuppdatering
-- kodsignering
+| | |
+| --- | --- |
+| Skapa Windows-barnkonto | `CreateChildAccountOperation` |
+| Ta bort administratörsrollen | `DemoteChildAccountOperation` |
+| AppLocker-distribution | `AppLockerDeploymentOperation` |
+| Tjänsten Programidentitet | `ApplicationIdentityServiceOperation` |
+| Assigned Access | `AssignedAccessOperation` |
+| Autostart för barnkontot | `ChildAutostartOperation` |
+| Webbläsarpolicy för Edge | `BrowserPolicyOperation` |
+| Vakttjänst | `WatchdogServiceOperation` |
+| Säker utloggning | `ChildSessionLogoutOperation` |
 
-Explorer, Task Manager och vanliga Windows-genvägar är därför fortfarande tillgängliga när KidShell körs utan riktig lockdown.
+**Inte byggt, och medvetet inte:**
+
+- byte av Windows-skal (shell replacement) — Assigned Access är det
+  dokumenterade sättet
+- ändringar i grupprincip eller UAC
+- automatisk inloggning
+- odokumenterade registerknep för att tvinga fram AppLocker på Home
+
+**Finns inte ännu av skäl utanför koden:**
+
+- kodsigneringscertifikat, och därmed automatiska uppdateringar
+- distributionsinfrastruktur
+
+Explorer, Aktivitetshanteraren och vanliga Windows-genvägar är alltså
+fortfarande tillgängliga. Hela listan finns i
+[`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Windows-krav
 
@@ -344,11 +386,19 @@ Kör:
 dotnet test KidShell.sln -c Release
 ```
 
-Nuvarande verifierade nivå på `main`:
+Nuvarande verifierade nivå:
 
-**542 automatiska tester passerar.**
+**885 automatiska tester passerar** i två projekt — `KidShell.Core.Tests`
+och `KidShell.WindowsIntegration.Tests`.
 
-GitHub Actions kör dessutom restore, build, test och en separat kontroll som letar efter uppenbara maskinmuterande anrop i produktkoden.
+Inget test ändrar den här datorn. Varje Windows-operation körs mot en falsk
+plattform: en kontokatalog i minnet, ett register som är en ordbok, en
+tjänstehanterare som är en lista.
+
+GitHub Actions kör dessutom restore, build, båda testsviterna, självtesterna för
+hjälparen och vakttjänsten, en scan efter maskinmuterande anrop, en kontroll att
+P/Invoke stannar i plattformslagret, en versionskontroll och en länkkontroll av
+dokumentationen.
 
 ## Arkitektur
 
@@ -402,14 +452,14 @@ Se [`docs/PRIVACY.md`](docs/PRIVACY.md).
 | 0.1 | Application shell | ✅ Klar |
 | 0.1.1 | First-run onboarding | ✅ Klar |
 | 0.1.5 | Security readiness / dry-run | ✅ Klar |
-| **0.2** | **Produkt-UX, production PIN, app discovery** | **Pågår** |
-| 0.3 | Transactional Windows integration | Förberedd i Core |
-| 0.4 | Barnkonto + appkontroll | Förberedd / dry-run |
-| 0.5 | Skärmtid, webb, watchdog | Delvis implementerad |
-| 0.6 | Installer, updater, deployment | Planerad |
-| 0.7 | Hardening och escape testing | Planerad |
-| 0.8 | Release candidate | Kräver separat testdator |
-| 1.0 | Produktionsrelease | Blockerad tills riktig device-validation är klar |
+| 0.2 | Produkt-UX, production PIN, app discovery | ✅ Klar |
+| 0.3 | Transaktionell Windows-integration | ✅ Klar |
+| 0.4 | Barnkonto + appkontroll | ✅ Kodfärdig |
+| 0.5 | Skärmtid, webb, watchdog | ✅ Klar |
+| 0.6 | Installer, updater, deployment | ✅ Kodfärdig |
+| 0.7 | Härdning och escape-matris | ✅ Klar |
+| **1.0.0-rc.1** | **Release candidate** | **✅ Du är här** |
+| 1.0 | Produktionsrelease | Blockerad: kräver dedikerad testdator, Pro-hårdvara och ett riktigt signeringscertifikat |
 
 Den detaljerade och auktoritativa roadmapen finns i
 **[`docs/ROADMAP.md`](docs/ROADMAP.md)**.
@@ -423,6 +473,7 @@ Den detaljerade och auktoritativa roadmapen finns i
 | [`docs/PRIVACY.md`](docs/PRIVACY.md) | Vad som sparas och inte samlas in |
 | [`docs/RECOVERY.md`](docs/RECOVERY.md) | Recovery och rollback |
 | [`docs/TESTING.md`](docs/TESTING.md) | Teststrategi |
+| [`docs/DEDICATED-DEVICE-VALIDATION.md`](docs/DEDICATED-DEVICE-VALIDATION.md) | Validering på dedikerad dator — nästa steg |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing och deployment |
 | [`docs/architecture/`](docs/architecture/) | Arkitekturanteckningar per milestone |
 
@@ -440,7 +491,7 @@ Se [LICENSE](LICENSE).
 
 KidShell is a child-friendly Windows shell designed to make an ordinary Windows PC simpler for a child to use and easier for a parent to manage. The child sees a clear **Child Mode** with large app cards, while the parent gets a separate **Parent Mode** for profile, apps, PIN, screen time, web and security.
 
-> **Development status: 0.2 development / pre-production foundation**
+> **Status: 1.0.0-rc.1 — CODE COMPLETE, NOT VALIDATED ON REAL HARDWARE**
 >
 > **WINDOWS LOCKDOWN STATUS: NOT ENABLED**
 >
@@ -654,9 +705,9 @@ Assigned Access is not available on Windows Home and is intended for future **Se
 
 ## Standard Mode and Secure Mode
 
-### Standard Mode — planned
+### Standard Mode — code complete, not validated
 
-Designed to work as far as the Windows edition allows, including Home:
+Works as far as the Windows edition allows, including Home:
 
 - dedicated standard child account
 - KidShell autostart
@@ -667,27 +718,40 @@ Designed to work as far as the Windows edition allows, including Home:
 - recovery
 - documented application control where deployment is actually supported
 
-### Secure Mode — planned
+### Secure Mode — code complete, not validated
 
-On compatible Windows editions:
+On Windows Pro, Enterprise, Education and IoT Enterprise:
 
 - everything in Standard Mode
-- Assigned Access / restricted user experience
+- Assigned Access as a *restricted user experience* — the multi-app shape
+  Microsoft documents, not single-app kiosk, which would make every app the
+  parent approved unreachable
 - stronger OS-level containment
 
-KidShell must never label a machine **Protected** merely because a capability exists. Real enforcement must be applied and independently verified first.
+Windows 11 Home does not have Assigned Access, and KidShell says so plainly
+rather than offering a button that would fail.
+
+KidShell never labels a machine **Protected** merely because a capability
+exists. Real protection requires the rules to have been applied **and** for
+KidShell to have read them back and confirmed they are in force.
 
 ## Watchdog and sessions
 
-KidShell currently includes:
+`KidShell.Watchdog` is a real Windows service. It does one thing: restart
+KidShell if KidShell stops running.
 
-- child session manager
-- process/session abstraction
-- watchdog logic
-- crash-loop detection
-- development session controller
+- no configuration file, no pipe, no socket, no commands — a LocalSystem
+  service that reads instructions from anywhere a child account can write is a
+  privilege escalation with a friendly name
+- starts the shell with `CreateProcessAsUser` on the session token, so KidShell
+  runs as the child and never as LocalSystem
+- crash-loop detection; after a few rapid restarts it stops trying and leaves
+  the calm failure screen in place
+- **never** falls back to showing the desktop, which would make crashing
+  KidShell the easiest way out of it
 
-A real Windows watchdog service is **not yet installed or implemented for production**.
+The service is built and tested but **not installed** on this machine.
+Installation happens through the security transaction on a dedicated device.
 
 ## Updates
 
@@ -707,26 +771,39 @@ The model requires HTTPS, signature verification and SHA-256 verification.
 
 Automatic production updates remain disabled because KidShell does not yet have a production code-signing chain.
 
-## What KidShell does NOT do yet
+## What KidShell does not do on this machine
 
-The current build is **not finished parental-control security**.
+What changed from earlier versions: the code now exists. It simply has not
+been run.
 
-The following are not enabled on a real machine:
+**Built and tested, never executed anywhere:**
 
-- creation or modification of a Windows child account
-- AppLocker enforcement policy
-- Assigned Access / kiosk mode
-- Windows autostart for the child account
-- watchdog service
-- shell replacement
-- Group Policy changes
-- UAC changes
-- system-wide web policy
-- production installer
-- automatic production updater
-- code signing
+| | |
+| --- | --- |
+| Create the Windows child account | `CreateChildAccountOperation` |
+| Remove the administrator role | `DemoteChildAccountOperation` |
+| AppLocker deployment | `AppLockerDeploymentOperation` |
+| Application Identity service | `ApplicationIdentityServiceOperation` |
+| Assigned Access | `AssignedAccessOperation` |
+| Child-account autostart | `ChildAutostartOperation` |
+| Microsoft Edge policy | `BrowserPolicyOperation` |
+| Watchdog service | `WatchdogServiceOperation` |
+| Secure sign-out | `ChildSessionLogoutOperation` |
 
-Explorer, Task Manager and normal Windows shortcuts are therefore still available when KidShell runs without real lockdown.
+**Not built, deliberately:**
+
+- shell replacement — Assigned Access is the documented mechanism
+- Group Policy or UAC changes
+- automatic logon
+- undocumented registry tricks to force AppLocker onto Home
+
+**Absent for reasons outside the code:**
+
+- a code-signing certificate, and therefore automatic updates
+- distribution infrastructure
+
+Explorer, Task Manager and normal Windows shortcuts are therefore still
+available. The full picture is in [`docs/SECURITY.md`](docs/SECURITY.md).
 
 ## Windows requirements
 
@@ -776,11 +853,19 @@ Run:
 dotnet test KidShell.sln -c Release
 ```
 
-Current verified level on `main`:
+Current verified level:
 
-**542 automated tests passing.**
+**885 automated tests passing** across two projects — `KidShell.Core.Tests`
+and `KidShell.WindowsIntegration.Tests`.
 
-GitHub Actions also performs restore, build, test, and a separate source scan for obvious machine-changing calls in product code.
+No test changes this machine. Every Windows operation runs against a fake
+platform: an in-memory account directory, a registry that is a dictionary, a
+service control manager that is a list.
+
+GitHub Actions also performs restore, build, both test suites, the helper and
+watchdog self-tests, a source scan for machine-changing calls, a check that
+P/Invoke stays inside the platform layer, a version-coherence check and a
+documentation link check.
 
 ## Architecture
 
@@ -855,6 +940,7 @@ The detailed and authoritative roadmap lives in
 | [`docs/PRIVACY.md`](docs/PRIVACY.md) | What is stored and what is never collected |
 | [`docs/RECOVERY.md`](docs/RECOVERY.md) | Recovery and rollback |
 | [`docs/TESTING.md`](docs/TESTING.md) | Test strategy |
+| [`docs/DEDICATED-DEVICE-VALIDATION.md`](docs/DEDICATED-DEVICE-VALIDATION.md) | Dedicated-device validation — the next step |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | Packaging, signing and deployment |
 | [`docs/architecture/`](docs/architecture/) | Architecture notes by milestone |
 
