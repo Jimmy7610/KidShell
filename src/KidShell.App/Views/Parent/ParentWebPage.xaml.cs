@@ -43,6 +43,12 @@ public sealed partial class ParentWebPage : UserControl
         AllowlistPanel.IsHitTestVisible = _viewModel.IsAllowlist;
 
         RenderAllowlist();
+        RenderPolicy();
+
+        ValidationText.Text = _viewModel.ValidationMessage ?? string.Empty;
+        ValidationText.Visibility = _viewModel.HasValidationMessage
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         _loading = false;
     }
@@ -51,6 +57,22 @@ public sealed partial class ParentWebPage : UserControl
         EmptyAllowlistText.Visibility = _viewModel?.AllowedDomains.Count > 0
             ? Visibility.Collapsed
             : Visibility.Visible;
+
+    /// <summary>
+    /// Shows the exact Edge policy values this configuration would produce.
+    /// Nothing here writes them; the preview exists so the parent can read what
+    /// secure setup would do before agreeing to it.
+    /// </summary>
+    private void RenderPolicy()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        PolicyPreviewText.Text = _viewModel.PolicyPreview;
+        PolicyWarnings.ItemsSource = _viewModel.PolicyWarnings;
+    }
 
     private void OnModeChecked(object sender, RoutedEventArgs e)
     {

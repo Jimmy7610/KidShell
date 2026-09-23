@@ -114,11 +114,69 @@
                         </ItemsRepeater.ItemTemplate>
                     </ItemsRepeater>
 
+                    <!-- Why the last entry was refused. Silence was the old behaviour. -->
+                    <TextBlock
+                        x:Name="ValidationText"
+                        Foreground="{StaticResource StatusWarningBrush}"
+                        Style="{StaticResource CaptionTextStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+
                     <TextBlock
                         x:Name="EmptyAllowlistText"
                         Style="{StaticResource CaptionTextStyle}"
                         Text="{loc:Str Key=Web.EmptyAllowlist}"
                         Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!--
+                Exactly what would be written, before anything is written.
+
+                "Review the exact machine changes" is not a slogan if the parent
+                cannot see them. This is a preview only: the values reach the
+                registry through the security transaction at secure setup, never
+                from this page.
+            -->
+            <Border x:Name="PolicyPanel" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="3">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Web.PreviewTitle}" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Web.PreviewSubtitle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ItemsControl x:Name="PolicyWarnings">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock
+                                    Margin="0,0,0,6"
+                                    Style="{StaticResource CaptionTextStyle}"
+                                    Text="{x:Bind}"
+                                    TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border
+                        Background="{StaticResource PanelBrush}"
+                        CornerRadius="10"
+                        Padding="12,10">
+                        <ScrollViewer
+                            HorizontalScrollBarVisibility="Auto"
+                            HorizontalScrollMode="Enabled"
+                            MaxHeight="220"
+                            VerticalScrollBarVisibility="Auto">
+                            <TextBlock
+                                x:Name="PolicyPreviewText"
+                                FontFamily="Consolas"
+                                FontSize="12"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextStyle}" />
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </Border>
 

@@ -253,6 +253,10 @@ public static class Strings
         ["Web.AddDomainPlaceholder"] = "till exempel svt.se",
         ["Web.AddDomain"] = "Lägg till",
         ["Web.RemoveDomainAutomation"] = "Ta bort {0}",
+        ["Web.PreviewTitle"] = "Det här skrivs vid säker installation",
+        ["Web.PreviewSubtitle"] =
+            "Exakt de här värdena sätts i Microsoft Edge. Ingenting skrivs härifrån – det sker först när du genomför säker installation på en dator du valt.",
+
         ["Web.EmptyAllowlist"] = "Inga godkända sidor ännu.",
         ["Web.NoticeTitle"] = "Valet sparas lokalt",
         ["Web.NoticeBody"] =
