@@ -96,12 +96,20 @@
                                                 Glyph="&#xE774;" />
                                             <TextBlock Style="{StaticResource BodyTextStyle}" Text="{x:Bind}" />
                                         </StackPanel>
+                                        <!--
+                                            Icon-only, so it needs a name. A
+                                            screen reader on this row otherwise
+                                            announces "button" with no clue
+                                            which site it would remove.
+                                        -->
                                         <Button
+                                            AutomationProperties.Name="{x:Bind}"
                                             Click="OnRemoveDomainClick"
                                             HorizontalAlignment="Right"
                                             Padding="8,4"
                                             Style="{StaticResource QuietButtonStyle}"
-                                            Tag="{x:Bind}">
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{x:Bind}">
                                             <FontIcon
                                                 FontFamily="{StaticResource SymbolFontFamily}"
                                                 FontSize="13"

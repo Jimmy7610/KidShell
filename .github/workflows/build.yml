@@ -260,6 +260,19 @@ jobs:
 
           Write-Host 'Release script parses, keeps its signing guards, and no key is committed.'
 
+      - name: Check accessibility names
+        shell: pwsh
+        run: |
+          # An icon-only button with no accessible name is announced as just
+          # "button". On the list of allowed websites, a parent using Narrator
+          # would then have to guess which row it belongs to - and the wrong
+          # guess deletes the wrong site.
+          #
+          # A lint, not a substitute for using the product with a screen reader.
+          # It catches the one failure that is both common and mechanically
+          # detectable.
+          & .	ools\check-accessibility.ps1
+
       - name: Check documentation links
         shell: pwsh
         run: |

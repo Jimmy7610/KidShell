@@ -541,8 +541,15 @@
                             x:Name="BackButton"
                             Content="{loc:Str Key=Setup.Back}"
                             Style="{StaticResource SetupSecondaryButtonStyle}" />
+                        <!--
+                            The label changes per step and is set in code-behind.
+                            The default here is not decoration: without it the
+                            button has no accessible name until the first render,
+                            and a screen reader would announce it as "button".
+                        -->
                         <Button
                             x:Name="PrimaryButton"
+                            Content="{loc:Str Key=Setup.Continue}"
                             Style="{StaticResource SetupPrimaryButtonStyle}" />
                     </StackPanel>
                 </Grid>
