@@ -414,6 +414,90 @@
                 </Border>
             </StackPanel>
 
+
+            <!--
+                Återställning.
+
+                Almost always this says "nothing has been changed", and that is
+                the whole content. The case it exists for is the rare one: a
+                change failed AND its rollback failed, so the machine is in a
+                state nobody chose. That must be impossible to miss.
+            -->
+            <Border x:Name="RecoveryPanel" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="12">
+
+                    <Grid>
+                        <StackPanel Spacing="3" VerticalAlignment="Center">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Recovery.Title}" />
+                            <TextBlock
+                                x:Name="RecoveryHeadline"
+                                FontWeight="SemiBold"
+                                Style="{StaticResource BodyTextStyle}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button
+                            x:Name="RecoveryRefreshButton"
+                            Content="{loc:Str Key=Recovery.Refresh}"
+                            HorizontalAlignment="Right"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            VerticalAlignment="Center" />
+                    </Grid>
+
+                    <TextBlock
+                        x:Name="RecoveryExplanation"
+                        Style="{StaticResource SecondaryTextStyle}"
+                        TextWrapping="Wrap" />
+
+                    <ItemsRepeater x:Name="RecoveryList">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:RecoveryEntryViewModel">
+                                <Border
+                                    Background="{StaticResource PanelBrush}"
+                                    CornerRadius="10"
+                                    Padding="12,10">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock
+                                                FontWeight="SemiBold"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind When}" />
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextStyle}"
+                                                Text="{x:Bind Summary}" />
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Style="{StaticResource StatusChipStyle}" VerticalAlignment="Center">
+                                            <TextBlock Style="{StaticResource StatusChipTextStyle}" Text="{x:Bind State}" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+
+                    <!-- Where the files are, so a parent can find them without KidShell. -->
+                    <StackPanel Spacing="3">
+                        <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Recovery.LocationTitle}" />
+                        <TextBlock
+                            x:Name="RecoveryLocation"
+                            IsTextSelectionEnabled="True"
+                            Style="{StaticResource CaptionTextStyle}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Recovery.ToolHint}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
         </StackPanel>
     </ScrollViewer>
 </UserControl>

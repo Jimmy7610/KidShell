@@ -240,6 +240,29 @@ public static class Strings
         ["About.PartlyAvailable"] = "Delvis",
         ["About.NotSupported"] = "Stöds inte",
 
+        // ---------- Recovery ----------
+        ["Recovery.Title"] = "Återställning",
+        ["Recovery.Refresh"] = "Läs om",
+        ["Recovery.Loading"] = "Läser...",
+        ["Recovery.NothingApplied"] = "Ingenting har ändrats i Windows",
+        ["Recovery.Count"] = "{0} registrerade ändringar",
+        ["Recovery.NeedsAttention"] = "{0} ändring(ar) behöver åtgärdas",
+        ["Recovery.NormalBody"] =
+            "KidShell skriver en återställningsfil innan någon Windows-inställning ändras. Så länge ingenting har ändrats finns det inget att återställa.",
+        ["Recovery.AttentionBody"] =
+            "En ändring gick fel och kunde inte ångras automatiskt. Datorn kan vara i ett läge som ingen valt. Öppna återställningsfilen och följ stegen, eller kör KidShell.Recovery.exe som administratör.",
+        ["Recovery.EntrySummary"] = "{0} steg",
+        ["Recovery.StateCommitted"] = "Genomförd",
+        ["Recovery.StateRolledBack"] = "Återställd",
+        ["Recovery.StateRollbackFailed"] = "Behöver åtgärdas",
+        ["Recovery.StateRefused"] = "Avbröts",
+        ["Recovery.StateCancelled"] = "Avbruten",
+        ["Recovery.StateUnfinished"] = "Avslutades aldrig",
+        ["Recovery.LocationTitle"] = "Återställningsfiler",
+        ["Recovery.UnknownLocation"] = "(okänd plats)",
+        ["Recovery.ToolHint"] =
+            "KidShell.Recovery.exe läser de här filerna utan att KidShell behöver starta. Kör den som administratör om KidShell inte går att öppna.",
+
         // ---------- Web ----------
         ["Web.Title"] = "Webbfilter",
         ["Web.Subtitle"] = "Välj hur mycket av internet {0} kommer åt.",
@@ -524,6 +547,15 @@ public static class Strings
         ["Dialog.ExitBodyDeveloper"] =
             "I utvecklingsläge stänger den här knappen bara KidShell. Ingen Windows-användare loggas ut.",
         ["Dialog.ExitPrimary"] = "Avsluta KidShell",
+        ["Dialog.ExitBodySignOut"] =
+            "Barnet loggas ut från Windows och kommer till inloggningsskärmen. Osparat arbete i öppna program går förlorat.",
+        ["Dialog.ExitPrimarySignOut"] = "Logga ut barnet",
+        ["Dialog.ExitSignOutFailed"] =
+            "Utloggningen kunde inte genomföras. KidShell stängs i stället – datorn är fortfarande inloggad.",
+        ["Dialog.ExitUnsaved"] =
+            "Du har ändringar som inte är sparade. Om du avslutar nu försvinner de.",
+        ["Dialog.ExitDiscard"] = "Avsluta ändå",
+        ["Dialog.ExitStay"] = "Stanna kvar",
         ["Dialog.ChangePinTitle"] = "Ändra PIN-kod",
         ["Dialog.ChangePinBody"] = "Ange en ny sexsiffrig PIN-kod.",
         ["Dialog.ChangePinConfirm"] = "Upprepa PIN-koden",

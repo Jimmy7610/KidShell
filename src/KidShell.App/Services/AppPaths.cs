@@ -28,8 +28,23 @@ public static class AppPaths
     /// <summary>
     /// Recovery manifests. A folder rather than a file: each transaction gets
     /// its own, and they outlive the transaction that wrote them.
+    ///
+    /// MACHINE-WIDE, NOT IN LOCALSTATE
+    /// -------------------------------
+    /// These used to live beside the configuration, in the package's
+    /// LocalState. That is inside the profile of whichever account ran
+    /// KidShell - which, on a locked-down machine, is the child's. The entire
+    /// purpose of a recovery manifest is that a DIFFERENT administrator can
+    /// read it when KidShell will not start, and a file inside an unreachable
+    /// profile cannot be read at the moment it is needed.
+    ///
+    /// The elevated helper and KidShell.Recovery.exe both use this path, so all
+    /// three agree on where the files are. They disagreed once, which meant the
+    /// Säkerhet page told a parent to look somewhere the tool would not.
     /// </summary>
-    public static string RecoveryDirectory => Path.Combine(DataDirectory, "recovery");
+    public static string RecoveryDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "KidShell", "security", "recovery");
 
     /// <summary>
     /// Where generated policy artifacts are written for review. Nothing here
