@@ -1,8 +1,14 @@
 name: Build and test
 
 # KidShell is a packaged WinUI 3 app, so the build needs a Windows runner.
-# This workflow restores, builds and tests. It deliberately does NOT sign,
-# publish, deploy or touch anything outside the runner.
+#
+# WHAT THIS WORKFLOW DELIBERATELY DOES NOT DO
+# -------------------------------------------
+# It does not sign, publish, deploy, or hold any secret. It does not install a
+# service, create a user, apply AppLocker or Assigned Access, import a
+# certificate, or change any Windows security setting on the runner. The
+# security tests prove KidShell cannot change Windows; a CI job that changed
+# Windows to test them would be self-defeating.
 
 on:
   push:
@@ -36,17 +42,39 @@ jobs:
         run: dotnet build KidShell.sln -p:Platform=x64 --configuration Release --no-restore
 
       - name: Test
-        # KidShell.Core targets plain net10.0 and its tests touch no machine
-        # state, so they run anywhere. The security tests in particular assert
-        # that nothing can change Windows - they must never need a real one.
+        # Both suites. KidShell.Core targets plain net10.0 and touches no
+        # machine state; KidShell.WindowsIntegration.Tests runs every mutating
+        # operation against fakes, so neither needs - or is allowed - a real
+        # machine to change.
         run: dotnet test KidShell.sln --configuration Release --no-build --verbosity normal
+
+      - name: Component self-tests
+        shell: pwsh
+        run: |
+          # The helper and the watchdog prove they start and reject bad input.
+          # Neither installs, starts or changes anything; --self-test is
+          # written to be safe to run on a build agent.
+          foreach ($component in @('KidShell.SecurityHost', 'KidShell.Watchdog', 'KidShell.Recovery')) {
+            $exe = "src\$component\bin\Release\net10.0-windows\$component.exe"
+
+            if (-not (Test-Path $exe)) {
+              Write-Host "::error::$component was not built."
+              exit 1
+            }
+
+            & $exe --self-test
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::$component self-test failed."
+              exit 1
+            }
+          }
 
       - name: Verify no mutation path was introduced
         shell: pwsh
         run: |
           # A cheap second line of defence behind the reflection tests: fail
-          # the build if source gains an obvious machine-changing call. The
-          # tests are authoritative; this catches a new file nobody tested.
+          # the build if source gains an obvious machine-changing call where
+          # one has no business being.
           #
           # Enumerate the files explicitly. This used to pass 'src\**\*.cs' to
           # Select-String -Path, which does NOT recurse - PowerShell's '**' is
@@ -54,60 +82,50 @@ jobs:
           # segment, so it only ever looked one directory deep and quietly
           # matched nothing. A scan that finds nothing looks exactly like a
           # scan that passes, which is the worst way for a guard to fail.
-          $files = @(
+          #
+          # SCOPE. KidShell.WindowsIntegration is the one project allowed to
+          # change Windows, and it does so only from an ISecurityOperation that
+          # a transaction drives. It is excluded here and covered by the
+          # reflection tests instead. Everywhere else - Core, the UI, the
+          # watchdog - a machine-changing call is a bug.
+          $scanned = @(
             Get-ChildItem -Path 'src' -Recurse -Filter '*.cs' -File |
-              Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' }
+              Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
+              Where-Object { $_.FullName -notmatch '\\KidShell\.WindowsIntegration\\' }
           )
 
-          # So: assert the enumeration actually found source. If this guard
-          # ever silently stops looking again, the build says so.
-          if ($files.Count -eq 0) {
-            Write-Host '::error::Source scan found no .cs files under src/. The scan is broken, not clean.'
+          # Assert the enumeration actually found source. If this guard ever
+          # silently stops looking again, the build says so.
+          if ($scanned.Count -eq 0) {
+            Write-Host '::error::Source scan found no .cs files. The scan is broken, not clean.'
             exit 1
           }
 
-          Write-Host "Scanning $($files.Count) source file(s)."
+          Write-Host "Scanning $($scanned.Count) source file(s) outside KidShell.WindowsIntegration."
 
           # Named APIs whose only purpose is to change the machine. Each maps
-          # to something on KidShell's do-not-do list: create or alter accounts,
-          # deploy app-control policy, configure kiosk mode, install a service,
-          # force autologon, or restart Windows.
+          # to something on KidShell's do-not-do list.
           $patterns = @(
             # Local accounts and group membership
-            'New-LocalUser',
-            'Remove-LocalUser',
-            'Set-LocalUser',
-            'Add-LocalGroupMember',
-            'Remove-LocalGroupMember',
-            'NetUserAdd',
-            'NetUserDel',
-            'NetUserSetInfo',
-            'NetLocalGroupAddMembers',
-            'NetLocalGroupDelMembers',
+            'New-LocalUser', 'Remove-LocalUser', 'Set-LocalUser',
+            'Add-LocalGroupMember', 'Remove-LocalGroupMember',
+            'NetUserAdd', 'NetUserDel', 'NetUserSetInfo',
+            'NetLocalGroupAddMembers', 'NetLocalGroupDelMembers',
 
             # Application control
-            'Set-AppLockerPolicy',
-            'ConvertFrom-CIPolicy',
-            'CiTool.exe',
+            'Set-AppLockerPolicy', 'ConvertFrom-CIPolicy', 'CiTool.exe',
 
             # Kiosk / assigned access
-            'Set-AssignedAccess',
-            'Clear-AssignedAccess',
+            'Set-AssignedAccess', 'Clear-AssignedAccess', 'MDM_AssignedAccess',
 
             # Services
-            'CreateServiceW',
-            'ChangeServiceConfig',
-            'New-Service',
+            'CreateServiceW', 'ChangeServiceConfig', 'New-Service',
 
             # Autologon and shell replacement
-            'AutoAdminLogon',
-            'DefaultPassword',
+            'AutoAdminLogon', 'DefaultPassword', 'Winlogon\Shell',
 
             # Ending the session or the machine
-            'ExitWindowsEx',
-            'InitiateSystemShutdown',
-            'Restart-Computer',
-            'Stop-Computer'
+            'ExitWindowsEx', 'InitiateSystemShutdown', 'Restart-Computer', 'Stop-Computer'
           )
 
           # Comments are not calls. KidShell's source documents these APIs at
@@ -121,7 +139,7 @@ jobs:
 
           $hits = @()
           foreach ($p in $patterns) {
-            foreach ($match in ($files | Select-String -Pattern $p -SimpleMatch)) {
+            foreach ($match in ($scanned | Select-String -Pattern $p -SimpleMatch)) {
               if (-not (Test-IsComment $match.Line)) {
                 $hits += $match
               }
@@ -129,9 +147,151 @@ jobs:
           }
 
           if ($hits.Count -gt 0) {
-            Write-Host '::error::A machine-changing call appeared in src/.'
+            Write-Host '::error::A machine-changing call appeared outside KidShell.WindowsIntegration.'
             $hits | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
             exit 1
           }
 
-          Write-Host "No machine-changing calls found in src/ ($($patterns.Count) patterns checked)."
+          Write-Host "Clean ($($patterns.Count) patterns checked)."
+
+      - name: Verify mutations stay inside operations
+        shell: pwsh
+        run: |
+          # The other half of the rule above. Inside KidShell.WindowsIntegration
+          # mutations are allowed - but only from the Platform layer, which the
+          # operations drive. A mutating call appearing anywhere else in that
+          # project means something bypassed the transaction boundary.
+          $outside = @(
+            Get-ChildItem -Path 'src\KidShell.WindowsIntegration' -Recurse -Filter '*.cs' -File |
+              Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' } |
+              Where-Object { $_.FullName -notmatch '\\Platform\\' }
+          )
+
+          if ($outside.Count -eq 0) {
+            Write-Host '::error::Found no files outside Platform/. The scan is broken.'
+            exit 1
+          }
+
+          $patterns = @(
+            'NetUserAdd', 'NetUserDel', 'NetLocalGroupAddMembers',
+            'ExitWindowsEx', 'CreateServiceW', 'DllImport'
+          )
+
+          $hits = @()
+          foreach ($p in $patterns) {
+            foreach ($match in ($outside | Select-String -Pattern $p -SimpleMatch)) {
+              $t = $match.Line.Trim()
+              if (-not ($t.StartsWith('//') -or $t.StartsWith('*') -or $t.StartsWith('/*'))) {
+                $hits += $match
+              }
+            }
+          }
+
+          if ($hits.Count -gt 0) {
+            Write-Host '::error::A platform call appeared outside KidShell.WindowsIntegration\Platform.'
+            $hits | ForEach-Object { Write-Host "$($_.Path):$($_.LineNumber): $($_.Line.Trim())" }
+            exit 1
+          }
+
+          Write-Host "Mutations stay in Platform/ ($($outside.Count) files checked)."
+
+      - name: Verify the version is coherent
+        shell: pwsh
+        run: |
+          # The MSIX manifest and Directory.Build.props must agree. A package
+          # whose manifest claims one version while its binaries claim another
+          # is how an update check starts lying.
+          [xml] $props = Get-Content 'Directory.Build.props'
+          $packageVersion = $props.SelectSingleNode('/Project/PropertyGroup/KidShellPackageVersion').InnerText.Trim()
+
+          [xml] $manifest = Get-Content 'src\KidShell.App\Package.appxmanifest'
+          $identity = $manifest.SelectSingleNode("//*[local-name()='Identity']")
+          $manifestVersion = $identity.GetAttribute('Version')
+
+          if ($manifestVersion -ne $packageVersion) {
+            Write-Host "::error::Package.appxmanifest says $manifestVersion; Directory.Build.props says $packageVersion."
+            exit 1
+          }
+
+          Write-Host "Version $packageVersion agrees across the manifest and the build props."
+
+      - name: Validate the release script without secrets
+        shell: pwsh
+        run: |
+          # Parse-check only. Running the packaging step here would produce an
+          # artifact nobody consumes, and running it with -Sign would need a
+          # secret this workflow deliberately does not have.
+          $errors = $null
+          $tokens = $null
+
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'tools\build-release.ps1'), [ref] $tokens, [ref] $errors) | Out-Null
+
+          if ($errors.Count -gt 0) {
+            Write-Host '::error::tools\build-release.ps1 does not parse.'
+            $errors | ForEach-Object { Write-Host "  $($_.Message)" }
+            exit 1
+          }
+
+          # The signing boundary must survive refactoring: the script has to
+          # refuse to sign a build whose tests were skipped, and has to refuse
+          # -Sign without material.
+          $text = Get-Content 'tools\build-release.ps1' -Raw
+
+          foreach ($guard in @(
+            'Refusing to sign a build whose tests were skipped',
+            '-Sign was requested but no signing material was supplied'
+          )) {
+            if ($text -notmatch [regex]::Escape($guard)) {
+              Write-Host "::error::The release script lost a signing guard: $guard"
+              exit 1
+            }
+          }
+
+          # And no secret may be committed alongside it.
+          $secrets = Get-ChildItem -Path . -Recurse -Include *.pfx, *.p12, *.snk, *.key -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notmatch '\\(bin|obj|\.git)\\' }
+
+          if ($secrets) {
+            Write-Host '::error::Signing material is present in the repository.'
+            $secrets | ForEach-Object { Write-Host "  $($_.FullName)" }
+            exit 1
+          }
+
+          Write-Host 'Release script parses, keeps its signing guards, and no key is committed.'
+
+      - name: Check documentation links
+        shell: pwsh
+        run: |
+          # Relative links between the docs break quietly when a file is
+          # renamed, and the document most likely to be read during a crisis is
+          # the one nobody clicks through in review.
+          $docs = Get-ChildItem -Path . -Recurse -Filter '*.md' -File |
+            Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules|\.git)\\' }
+
+          $broken = @()
+
+          foreach ($doc in $docs) {
+            $content = Get-Content $doc.FullName -Raw
+
+            foreach ($match in [regex]::Matches($content, '\[[^\]]*\]\(([^)#]+?)(#[^)]*)?\)')) {
+              $target = $match.Groups[1].Value.Trim()
+
+              # External links and anchors are somebody else's problem.
+              if ($target -match '^(https?:|mailto:)') { continue }
+
+              $resolved = Join-Path $doc.DirectoryName $target
+
+              if (-not (Test-Path $resolved)) {
+                $broken += "$($doc.Name) -> $target"
+              }
+            }
+          }
+
+          if ($broken.Count -gt 0) {
+            Write-Host '::error::Broken relative links in documentation.'
+            $broken | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+
+          Write-Host "Checked $($docs.Count) document(s); every relative link resolves."
