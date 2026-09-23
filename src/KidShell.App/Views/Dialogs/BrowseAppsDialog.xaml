@@ -1,0 +1,172 @@
+<ContentDialog
+    x:Class="KidShell.App.Views.Dialogs.BrowseAppsDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:loc="using:KidShell.App.Localization"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="using:KidShell.App.ViewModels"
+    Title="{loc:Str Key=Discover.Title}"
+    CloseButtonText="{loc:Str Key=AddApp.Cancel}"
+    SecondaryButtonText="{loc:Str Key=Discover.Manual}"
+    mc:Ignorable="d">
+
+    <!--
+        480, matching the other dialogs. 560 overflowed the ContentDialog's own
+        width on a 1366-wide window and clipped the Add buttons off the right
+        edge - invisible on a large monitor, broken on the size KidShell targets.
+    -->
+    <Grid Width="480" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock
+            Grid.Row="0"
+            Style="{StaticResource SecondaryTextStyle}"
+            Text="{loc:Str Key=Discover.Subtitle}"
+            TextWrapping="Wrap" />
+
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox
+                x:Name="SearchBox"
+                Grid.Column="0"
+                AutomationProperties.Name="{loc:Str Key=Discover.Search}"
+                PlaceholderText="{loc:Str Key=Discover.Search}"
+                Style="{StaticResource FormTextBoxStyle}"
+                TextChanged="OnSearchChanged" />
+
+            <Button
+                x:Name="RefreshButton"
+                Grid.Column="1"
+                AutomationProperties.Name="{loc:Str Key=Discover.Refresh}"
+                Content="{loc:Str Key=Discover.Refresh}"
+                Style="{StaticResource SecondaryButtonStyle}" />
+        </Grid>
+
+        <Grid Grid.Row="2" Height="340">
+
+            <ScrollViewer x:Name="ResultScroller" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater x:Name="ResultList">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="6" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DiscoveredAppViewModel">
+                            <Border
+                                Background="{StaticResource PanelBrush}"
+                                CornerRadius="12"
+                                Padding="14,11">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Spacing="3">
+                                        <TextBlock
+                                            FontWeight="SemiBold"
+                                            Style="{StaticResource BodyTextStyle}"
+                                            Text="{x:Bind DisplayName}"
+                                            TextTrimming="CharacterEllipsis" />
+
+                                        <!-- Publisher where the scanner found one. -->
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextStyle}"
+                                            Text="{x:Bind Publisher}"
+                                            TextTrimming="CharacterEllipsis"
+                                            Visibility="{x:Bind HasPublisher}" />
+
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <!-- Win32 / Packaged / Launcher: it changes what a parent can expect. -->
+                                            <Border
+                                                Background="{StaticResource TintNeutralBrush}"
+                                                CornerRadius="6"
+                                                Padding="7,2">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Style="{StaticResource CaptionTextStyle}"
+                                                    Text="{x:Bind KindLabel}" />
+                                            </Border>
+
+                                            <!-- Needs a closer look before a child gets it. -->
+                                            <Border
+                                                Background="{StaticResource TintAmberBrush}"
+                                                CornerRadius="6"
+                                                Padding="7,2"
+                                                Visibility="{x:Bind NeedsSecurityReview}">
+                                                <TextBlock
+                                                    FontSize="11"
+                                                    Style="{StaticResource CaptionTextStyle}"
+                                                    Text="{x:Bind SecurityReviewNote}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <Button
+                                        Grid.Column="1"
+                                        AutomationProperties.Name="{x:Bind AutomationName}"
+                                        Click="OnAddClick"
+                                        Content="{x:Bind AddButtonLabel}"
+                                        IsEnabled="{x:Bind CanAdd}"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Tag="{x:Bind}"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <StackPanel
+                x:Name="LoadingPanel"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="10"
+                Visibility="Collapsed">
+                <ProgressRing IsActive="True" Width="36" Height="36" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{loc:Str Key=Discover.Scanning}" />
+            </StackPanel>
+
+            <TextBlock
+                x:Name="EmptyText"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Style="{StaticResource SecondaryTextStyle}"
+                TextAlignment="Center"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </Grid>
+
+        <StackPanel Grid.Row="3" Spacing="6">
+            <TextBlock
+                x:Name="SummaryText"
+                Style="{StaticResource CaptionTextStyle}" />
+
+            <!-- Adding a card is not the same as permitting the program. -->
+            <TextBlock
+                Style="{StaticResource CaptionTextStyle}"
+                Text="{loc:Str Key=Discover.NotPermissionNote}"
+                TextWrapping="Wrap" />
+
+            <TextBlock
+                x:Name="ErrorText"
+                Foreground="{StaticResource StatusWarningBrush}"
+                Style="{StaticResource CaptionTextStyle}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>

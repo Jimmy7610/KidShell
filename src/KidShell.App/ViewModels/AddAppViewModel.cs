@@ -71,6 +71,55 @@ public sealed class AddAppViewModel : ObservableObject
         BrowseCommand = new RelayCommand(() => _ = BrowseAsync());
     }
 
+    /// <summary>
+    /// Fills the form from something the parent picked out of the installed-
+    /// applications list, so the common path is "choose Paint, press Add"
+    /// rather than "type a path".
+    ///
+    /// A packaged app has no executable a parent could point at - the AUMID is
+    /// its identity, both for launching and for future application control -
+    /// so it goes into the same field the launcher reads.
+    /// </summary>
+    public void PrefillFrom(KidShell.Core.Apps.DiscoveredApplication application)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+
+        DisplayName = application.DisplayName;
+        ProgramName = application.DisplayName;
+        ExecutablePath = application.LaunchTarget;
+        Arguments = application.Arguments;
+
+        // A guessed icon is better than the generic one, and the parent can
+        // still change it before adding.
+        SelectedIconIndex = GuessIconIndex(application.DisplayName);
+    }
+
+    /// <summary>
+    /// Picks a plausible icon from the name. Deliberately crude: it is a
+    /// starting point for the parent, not a classification.
+    /// </summary>
+    internal int GuessIconIndex(string displayName)
+    {
+        var name = displayName.ToLowerInvariant();
+
+        var key = name switch
+        {
+            _ when name.Contains("paint") || name.Contains("rita") || name.Contains("draw") => IconKeys.Paint,
+            _ when name.Contains("calc") || name.Contains("räkna") || name.Contains("miniräkn") => IconKeys.Calculator,
+            _ when name.Contains("music") || name.Contains("musik") || name.Contains("spotify") => IconKeys.Music,
+            _ when name.Contains("video") || name.Contains("film") || name.Contains("vlc") || name.Contains("media") => IconKeys.Video,
+            _ when name.Contains("book") || name.Contains("läs") || name.Contains("read") => IconKeys.Reading,
+            _ when name.Contains("edge") || name.Contains("chrome") || name.Contains("firefox") || name.Contains("webb") => IconKeys.Browser,
+            _ when name.Contains("minecraft") || name.Contains("lego") || name.Contains("bygg") => IconKeys.Blocks,
+            _ when name.Contains("game") || name.Contains("spel") || name.Contains("scratch") => IconKeys.Games,
+            _ when name.Contains("learn") || name.Contains("lär") || name.Contains("skol") => IconKeys.Learn,
+            _ => IconKeys.Generic
+        };
+
+        var index = Icons.ToList().FindIndex(i => i.Key == key);
+        return index >= 0 ? index : Icons.Count - 1;
+    }
+
     public ObservableCollection<IconChoice> Icons { get; } = [];
 
     public ObservableCollection<AccentChoice> Accents { get; } = [];

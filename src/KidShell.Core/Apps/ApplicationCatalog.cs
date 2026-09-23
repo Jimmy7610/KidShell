@@ -181,6 +181,58 @@ public sealed class ApplicationCatalog : IApplicationCatalog
     /// are irrelevant on Windows, and quotes routinely survive from shortcut
     /// command lines.
     /// </summary>
+    /// <summary>
+    /// Whether a discovered application is already in the child's grid.
+    ///
+    /// Matched on what IDENTIFIES the application - the executable path, or the
+    /// AUMID for a packaged app - never on the display name. A parent who
+    /// renamed Paint to "Rita" has still added Paint, and offering it again
+    /// would produce two cards that start the same program.
+    /// </summary>
+    public static bool IsAlreadyAdded(
+        DiscoveredApplication application,
+        IEnumerable<Configuration.KidAppDefinition> existing)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(existing);
+
+        foreach (var app in existing)
+        {
+            if (string.IsNullOrWhiteSpace(app.ExecutablePath))
+            {
+                continue;
+            }
+
+            if (application.Kind == ApplicationKind.Packaged)
+            {
+                // An AUMID is compared literally: it is already a canonical
+                // identifier, and normalising it as a path would mangle it.
+                if (!string.IsNullOrWhiteSpace(application.Aumid) &&
+                    string.Equals(app.ExecutablePath, application.Aumid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(application.ExecutablePath))
+            {
+                continue;
+            }
+
+            if (string.Equals(
+                    NormalizePath(app.ExecutablePath),
+                    NormalizePath(application.ExecutablePath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static string NormalizePath(string path)
     {
         var trimmed = (path ?? string.Empty).Trim().Trim('"');

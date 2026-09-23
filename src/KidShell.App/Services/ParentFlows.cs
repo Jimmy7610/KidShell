@@ -2,6 +2,7 @@ using KidShell.App.Localization;
 using KidShell.Core.Security;
 using KidShell.App.ViewModels;
 using KidShell.App.Views.Dialogs;
+using KidShell.Core.Apps;
 using KidShell.Core.Configuration;
 using KidShell.Core.Launching;
 using Microsoft.UI.Xaml;
@@ -13,7 +14,14 @@ namespace KidShell.App.Services;
 /// <summary>Shows the "Lägg till app" dialog and returns what the parent configured.</summary>
 public interface IAddAppFlow
 {
-    Task<KidAppDefinition?> RequestNewAppAsync();
+    /// <summary>
+    /// Asks the parent for a new app.
+    ///
+    /// <paramref name="existing"/> is what is already in the child's grid, so
+    /// the browser can mark those rather than letting the same program be
+    /// added twice.
+    /// </summary>
+    Task<KidAppDefinition?> RequestNewAppAsync(IReadOnlyCollection<KidAppDefinition> existing);
 }
 
 /// <summary>Collects and validates a new parent PIN.</summary>
@@ -28,17 +36,49 @@ public sealed class AddAppFlow : IAddAppFlow
     private readonly IDialogService _dialogs;
     private readonly IFilePickerService _picker;
     private readonly IExecutableResolver _resolver;
+    private readonly IApplicationCatalog _catalog;
 
-    public AddAppFlow(IDialogService dialogs, IFilePickerService picker, IExecutableResolver resolver)
+    public AddAppFlow(
+        IDialogService dialogs,
+        IFilePickerService picker,
+        IExecutableResolver resolver,
+        IApplicationCatalog catalog)
     {
         _dialogs = dialogs;
         _picker = picker;
         _resolver = resolver;
+        _catalog = catalog;
     }
 
-    public async Task<KidAppDefinition?> RequestNewAppAsync()
+    /// <summary>
+    /// Two steps: pick an application, then decide how its card looks.
+    ///
+    /// Browsing comes FIRST because typing a path is an expert affordance and a
+    /// hopeless default for a parent who just wants Paint. The manual form is
+    /// still there - a program the scanners missed, an unusual install - but it
+    /// is the second button rather than the only one.
+    /// </summary>
+    public async Task<KidAppDefinition?> RequestNewAppAsync(IReadOnlyCollection<KidAppDefinition> existing)
     {
+        var browser = new AppBrowserViewModel(_catalog);
+        browser.SetExisting(existing);
+
+        var browseDialog = new BrowseAppsDialog(browser);
+        var browseResult = await _dialogs.ShowDialogAsync(browseDialog);
+
+        // Closed without choosing and without asking for the manual form.
+        if (browseResult == ContentDialogResult.None && browseDialog.Chosen is null)
+        {
+            return null;
+        }
+
         var viewModel = new AddAppViewModel(_picker, _resolver);
+
+        if (browseDialog.Chosen is { } chosen)
+        {
+            viewModel.PrefillFrom(chosen);
+        }
+
         var dialog = new AddAppDialog(viewModel);
 
         // Keep the dialog open when validation fails rather than silently

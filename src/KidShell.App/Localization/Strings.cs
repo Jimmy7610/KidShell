@@ -113,6 +113,31 @@ public static class Strings
         ["Apps.DisabledTag"] = "Avstängd",
         ["Apps.Count"] = "{0} av {1} appar är påslagna",
 
+        // ---------- Installed application browser ----------
+        ["Discover.Title"] = "Välj ett program",
+        ["Discover.Subtitle"] = "Program som är installerade på den här datorn. Välj ett så fyller KidShell i resten.",
+        ["Discover.Search"] = "Sök bland programmen",
+        ["Discover.Refresh"] = "Sök igen",
+        ["Discover.Scanning"] = "Letar efter installerade program...",
+        ["Discover.Manual"] = "Lägg till manuellt",
+        ["Discover.Add"] = "Lägg till",
+        ["Discover.AlreadyAdded"] = "Tillagd",
+        ["Discover.AutomationAdd"] = "Lägg till {0}",
+        ["Discover.AutomationAdded"] = "{0} är redan tillagd",
+        ["Discover.Count"] = "Visar {0} av {1} program.",
+        ["Discover.NoMatches"] = "Inget program matchar \"{0}\".",
+        ["Discover.NothingFound"] = "Inga program hittades. Du kan lägga till ett manuellt i stället.",
+        ["Discover.ScanFailed"] = "Alla program kunde inte läsas. Listan kan vara ofullständig.",
+        ["Discover.KindWin32"] = "Program",
+        ["Discover.KindPackaged"] = "Microsoft Store",
+        ["Discover.KindLauncher"] = "Startprogram",
+        ["Discover.KindProtocol"] = "Systemlänk",
+        ["Discover.KindUnknown"] = "Okänd typ",
+        ["Discover.ReviewLauncher"] = "Startar andra program",
+        ["Discover.ReviewBrowser"] = "Når hela webben",
+        ["Discover.NotPermissionNote"] =
+            "Att lägga till ett program visar det i Barnläge. Det är inte samma sak som att Windows tillåter det – det bestäms först vid säker installation.",
+
         // ---------- Add app dialog ----------
         ["AddApp.Title"] = "Lägg till app",
         ["AddApp.NameLabel"] = "Namn som barnet ser",
