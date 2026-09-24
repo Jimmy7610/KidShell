@@ -241,7 +241,7 @@ if ($SkipTests) {
 } else {
     Write-Step 'Testing'
 
-    $testOutput = & dotnet test (Join-Path $repoRoot 'KidShell.sln') -c $Configuration --no-build 2>&1
+    $testOutput = & dotnet test (Join-Path $repoRoot 'KidShell.sln') -c $Configuration -p:Platform=$Platform --no-build 2>&1
     $testOutput | Out-Host
 
     if ($LASTEXITCODE -ne 0) { Stop-Build 'Tests failed. A release is not built from a red suite.' }
