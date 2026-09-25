@@ -11,7 +11,7 @@
     x:Name="RootControl"
     mc:Ignorable="d">
 
-    <Grid Padding="{StaticResource StagePadding}">
+    <Grid x:Name="Stage" Padding="{StaticResource StagePadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -115,7 +115,7 @@
             ResponsiveLayout, which is tested against the whole supported
             matrix rather than against the monitor this was written on.
         -->
-        <Grid Grid.Row="1" Margin="0,20,0,14" ColumnSpacing="18">
+        <Grid x:Name="BodyGrid" Grid.Row="1" Margin="0,20,0,14" ColumnSpacing="18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="360" />
@@ -130,91 +130,105 @@
                 Style="{StaticResource PanelStyle}"
                 Padding="12"
                 Translation="0,0,22">
-                <StackPanel AutomationProperties.Name="{loc:Str Key=Nav.Automation}">
-                    <RadioButton
-                        x:Name="NavOverview"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.Overview}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.Overview}"
-                        Tag="Overview">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelOverview" Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
+                <!--
+                    The rail scrolls if it has to.
 
-                    <RadioButton
-                        x:Name="NavApps"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.Apps}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.Apps}"
-                        Tag="Apps">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelApps" Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
+                    Six items at their full height need more than a 480-epx
+                    window leaves for them, and a Border with a corner radius
+                    clips what it contains - so the last item was laid out,
+                    never drawn, and could not be reached by pointer or by
+                    keyboard. There was nothing on screen to suggest it existed.
+                -->
+                <ScrollViewer
+                    HorizontalScrollMode="Disabled"
+                    VerticalScrollBarVisibility="Auto"
+                    ZoomMode="Disabled">
+                    <StackPanel AutomationProperties.Name="{loc:Str Key=Nav.Automation}">
+                        <RadioButton
+                            x:Name="NavOverview"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.Overview}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.Overview}"
+                            Tag="Overview">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelOverview" Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton
-                        x:Name="NavScreenTime"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.ScreenTime}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.ScreenTime}"
-                        Tag="ScreenTime">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelScreenTime" Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
+                        <RadioButton
+                            x:Name="NavApps"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.Apps}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.Apps}"
+                            Tag="Apps">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelApps" Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton
-                        x:Name="NavWeb"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.Web}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.Web}"
-                        Tag="Web">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelWeb" Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
+                        <RadioButton
+                            x:Name="NavScreenTime"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.ScreenTime}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.ScreenTime}"
+                            Tag="ScreenTime">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelScreenTime" Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton
-                        x:Name="NavSecurity"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.Security}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.Security}"
-                        Tag="Security">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelSecurity" Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
+                        <RadioButton
+                            x:Name="NavWeb"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.Web}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.Web}"
+                            Tag="Web">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelWeb" Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
 
-                    <RadioButton
-                        x:Name="NavProfile"
-                        Checked="OnNavChecked"
-                        GroupName="ParentNav"
-                        Style="{StaticResource NavigationItemStyle}"
-                        AutomationProperties.Name="{loc:Str Key=Nav.Profile}"
-                        ToolTipService.ToolTip="{loc:Str Key=Nav.Profile}"
-                        Tag="Profile">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock x:Name="NavLabelProfile" Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </RadioButton>
-                </StackPanel>
+                        <RadioButton
+                            x:Name="NavSecurity"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.Security}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.Security}"
+                            Tag="Security">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelSecurity" Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+
+                        <RadioButton
+                            x:Name="NavProfile"
+                            Checked="OnNavChecked"
+                            GroupName="ParentNav"
+                            Style="{StaticResource NavigationItemStyle}"
+                            AutomationProperties.Name="{loc:Str Key=Nav.Profile}"
+                            ToolTipService.ToolTip="{loc:Str Key=Nav.Profile}"
+                            Tag="Profile">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" />
+                                <TextBlock x:Name="NavLabelProfile" Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </RadioButton>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <!-- ========== Page host ========== -->

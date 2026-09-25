@@ -4,6 +4,7 @@ using System.Text.Json;
 using KidShell.App.ViewModels;
 using KidShell.App.ViewModels.Parent;
 using KidShell.Core.Configuration;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -170,6 +171,17 @@ internal sealed class LayoutAudit
     /// </summary>
     internal static readonly Viewport[] Matrix =
     [
+        // Below the window's own minimum, and reachable anyway.
+        //
+        // OverlappedPresenter.PreferredMinimumWidth does not say what unit it
+        // is in, and microsoft-ui-xaml issue 10452 reports that it mishandles
+        // a window moved between displays of different scale - open, with no
+        // maintainer reply. A floor that the framework may or may not apply in
+        // the unit we assumed is not a floor, so rather than depend on it,
+        // these two sizes check that the layout survives underneath it.
+        new(640, 480, "below the minimum; reachable at high DPI"),
+        new(700, 500, "below the minimum; reachable at high DPI"),
+
         new(780, 560, "minimum supported window"),
         new(819, 614, "1024x768 @125%"),
         new(960, 600, "1440x900 @150%"),
@@ -437,6 +449,18 @@ internal sealed class LayoutAudit
     /// </summary>
     private async Task ResizeAsync(Viewport viewport)
     {
+        // The window refuses to be resized below its own preferred minimum,
+        // which would quietly turn the two sub-minimum entries into another
+        // audit of 780x560. Lifted here rather than once at the start so that
+        // posing a single screen gets it too. Nothing puts it back, and
+        // nothing needs to: the audit closes the window when it finishes, and
+        // a posed window is a developer looking at one screen.
+        if (_window.AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = 1;
+            presenter.PreferredMinimumHeight = 1;
+        }
+
         // Out of the way of the screen edges first: a window is easier to make
         // large when it is not already up against them.
         _window.AppWindow.Move(new Windows.Graphics.PointInt32(0, 0));
@@ -779,6 +803,17 @@ internal sealed class LayoutAudit
                 clip = Intersected(clip, BoundsOf(scroller, root));
             }
 
+            // A rounded Border clips whatever it contains, which is how the
+            // navigation rail hid its own last item on a short window: the
+            // buttons were laid out past the bottom of the panel, inside the
+            // window, unclipped by anything the audit was looking at, and
+            // simply not drawn. Clipping is not only something the window edge
+            // does.
+            if (node is Border { CornerRadius.TopLeft: > 0 } rounded)
+            {
+                clip = Intersected(clip, BoundsOf(rounded, root));
+            }
+
             if (IsParked(element, root, window))
             {
                 return;
@@ -789,7 +824,7 @@ internal sealed class LayoutAudit
                 ReportSiblingOverlaps(panel, root, clip, viewport, screen);
             }
 
-            Check(element, root, window, viewport, screen, scrollable);
+            Check(element, root, window, clip, viewport, screen, scrollable);
         }
 
         var count = VisualTreeHelper.GetChildrenCount(node);
@@ -803,6 +838,7 @@ internal sealed class LayoutAudit
         FrameworkElement element,
         FrameworkElement root,
         Rect window,
+        Rect clip,
         Viewport viewport,
         string screen,
         bool scrollable)
@@ -869,6 +905,23 @@ internal sealed class LayoutAudit
             // An element mid-transition has no path to the root yet. It will
             // be measured on the next screen.
             return;
+        }
+
+        // A panel is a container for real content, so content of its own that
+        // sits outside the box it is drawn in has been lost. Everything else
+        // is checked against the window instead: a control's own background
+        // may legitimately be larger than what encloses it - a default
+        // RadioButton has a MinWidth of 120, and eight of them inside a
+        // 72-epx rail is how a strictly-drawn version of this rule produced
+        // seven thousand complaints about a navigation bar that looks right.
+        if (element is Panel && !scrollable)
+        {
+            var hidden = bounds.Bottom - clip.Bottom;
+
+            if (hidden > SqueezeTolerance)
+            {
+                _findings.Add(Record("clipped", $"{hidden:F0} epx of it is below the panel it is drawn in"));
+            }
         }
 
         var overflowRight = bounds.Right - window.Right;
@@ -995,7 +1048,7 @@ internal sealed class LayoutAudit
         // Except compares by value and would quietly drop the repeats - which
         // turned forty-five shortened labels into "3" the first time.
         static bool IsDefect(Finding f) =>
-            f.Kind is "off-window" or "unreachable-control" or "squeezed" or "overlapping";
+            f.Kind is "clipped" or "off-window" or "unreachable-control" or "squeezed" or "overlapping";
 
         var defects = findings.Where(IsDefect).ToList();
         var notes = findings.Where(f => !IsDefect(f)).ToList();

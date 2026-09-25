@@ -42,7 +42,11 @@ public sealed partial class ParentShellView : UserControl
 
         // The layout follows the space actually available, not the size the
         // window happened to open at.
-        SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
+        SizeChanged += (_, e) =>
+        {
+            ApplyLayout(e.NewSize.Width);
+            ApplyHeight(e.NewSize.Height);
+        };
 
         Render();
     }
@@ -108,6 +112,41 @@ public sealed partial class ParentShellView : UserControl
         FooterBrand.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
         HeaderTagline.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
         HeaderChildText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+
+        // Narrower than the design allows for, so the avatar loses the width
+        // it needs and is drawn as a sliver. It says nothing the header does
+        // not, and a distorted picture of a child is worse than none.
+        HeaderChild.Visibility = width >= ResponsiveLayout.MinimumSupportedWidth
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Gives the page back the space the frame was using, on a very short
+    /// window.
+    ///
+    /// The frame's padding and the gap around the body come to 62 epx of
+    /// height, which is generous and right at any ordinary size. At 480 it was
+    /// enough to push the Spara/Avsluta row five pixels off the bottom of the
+    /// screen.
+    ///
+    /// 480 is below the minimum KidShell asks for, but the minimum is set
+    /// through an API that is documented without a unit and has an open bug
+    /// about scaling, so it is not something to rely on. The layout holding
+    /// underneath it costs a few pixels of padding and means it does not
+    /// matter which way that bug goes.
+    /// </summary>
+    private void ApplyHeight(double height)
+    {
+        if (height <= 0 || double.IsNaN(height))
+        {
+            return;
+        }
+
+        var tight = ResponsiveLayout.IsShort(height);
+
+        Stage.Padding = tight ? new Thickness(40, 12, 40, 10) : new Thickness(40, 22, 40, 20);
+        BodyGrid.Margin = tight ? new Thickness(0, 10, 0, 8) : new Thickness(0, 20, 0, 14);
     }
 
     private void ApplyNavigationMode(NavigationMode mode)

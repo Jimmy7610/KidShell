@@ -239,6 +239,17 @@ public static class ResponsiveLayout
     public static bool IsShort(double height) =>
         !double.IsNaN(height) && height > 0 && height < ShortWindowHeight;
 
+    /// <summary>
+    /// The narrowest window KidShell is designed for.
+    ///
+    /// Everything narrower is still laid out without losing anything, because
+    /// the window's own minimum is set through an API whose unit is
+    /// undocumented and which has an open bug about moving between displays of
+    /// different scale. Below this, decoration is dropped rather than
+    /// squeezed - the child's avatar at 640 epx was a vertical sliver.
+    /// </summary>
+    public const double MinimumSupportedWidth = 780;
+
     /// <summary>The height a Barnläge app card is drawn at when there is room.</summary>
     public const double PreferredTileHeight = 186;
 
