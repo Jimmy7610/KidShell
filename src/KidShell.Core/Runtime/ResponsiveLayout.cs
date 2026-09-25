@@ -216,4 +216,65 @@ public static class ResponsiveLayout
 
         return availableWidth < needed;
     }
+
+    /// <summary>
+    /// The height below which a tall fixed panel has to give up its
+    /// decoration.
+    ///
+    /// Several supported configurations are short rather than narrow:
+    /// 1440x900 and 1600x900 at 150% both give 600 effective pixels of
+    /// height, and 1920x1080 at 175% gives 617. A panel that is centred
+    /// vertically and taller than that does not merely look cramped - it hangs
+    /// off both ends, and whatever is at the bottom becomes unreachable.
+    /// </summary>
+    public const double ShortWindowHeight = 700;
+
+    /// <summary>
+    /// Whether the window is too short to afford decorative height.
+    ///
+    /// Decoration means an illustration or a large icon that carries no
+    /// information. Text is never the thing that gives way: the rule is to
+    /// drop ornament first, then scroll, and never to shrink the words.
+    /// </summary>
+    public static bool IsShort(double height) =>
+        !double.IsNaN(height) && height > 0 && height < ShortWindowHeight;
+
+    /// <summary>The height a Barnläge app card is drawn at when there is room.</summary>
+    public const double PreferredTileHeight = 186;
+
+    /// <summary>
+    /// The smallest a card may get before it stops being a card.
+    ///
+    /// The icon and the name both have to stay legible from a distance, by a
+    /// child who may not read well. Below this the honest answer is to scroll,
+    /// not to keep shrinking.
+    /// </summary>
+    public const double MinimumTileHeight = 138;
+
+    /// <summary>
+    /// How tall each app card should be so that a given number of rows fits.
+    ///
+    /// On a short window the cards kept their full height, two rows came to
+    /// more than the space available, and because the grid is centred the
+    /// result was a row sliced through the middle of its label at the bottom
+    /// and nothing to suggest it. Trimming the card a little is much better
+    /// than that, and much better than shrinking the name inside it - so the
+    /// card gives way down to a floor, and past the floor the grid scrolls.
+    /// </summary>
+    public static double TileHeight(
+        double availableHeight,
+        int rows = 2,
+        double spacing = 22,
+        double preferred = PreferredTileHeight,
+        double minimum = MinimumTileHeight)
+    {
+        if (double.IsNaN(availableHeight) || availableHeight <= 0 || rows <= 0)
+        {
+            return preferred;
+        }
+
+        var perRow = (availableHeight - (spacing * (rows - 1))) / rows;
+
+        return Math.Clamp(perRow, minimum, preferred);
+    }
 }

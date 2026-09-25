@@ -25,6 +25,10 @@ public sealed partial class ChildHomeView : UserControl
         // The footer follows the width; see ApplyLayout.
         SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
 
+        // The cards follow the height of the grid area rather than of the
+        // window, because the header and the footer take a share of it first.
+        GridScroller.SizeChanged += (_, e) => ApplyGridHeight(e.NewSize.Height);
+
         _viewModel = viewModel;
         _onSettingsRequested = onSettingsRequested;
         _onParentAccessRequested = onParentAccessRequested;
@@ -140,5 +144,32 @@ public sealed partial class ChildHomeView : UserControl
         FooterBrand.Visibility = ResponsiveLayout.Classify(width) == LayoutSize.Compact
             ? Visibility.Collapsed
             : Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Fits the cards to the height the grid actually got.
+    ///
+    /// The columns look after themselves, but the rows did not: at 819x614
+    /// two rows of full-height cards came to more than the space available,
+    /// and since the grid is centred, the bottom row was sliced through its
+    /// own label with no scrollbar in view to suggest there was more. The
+    /// cards now shrink a little first, and only scroll once they have
+    /// reached the smallest size a child can still read.
+    /// </summary>
+    private void ApplyGridHeight(double height)
+    {
+        if (height <= 0 || double.IsNaN(height) || AppGrid.Layout is not UniformGridLayout layout)
+        {
+            return;
+        }
+
+        layout.MinItemHeight = ResponsiveLayout.TileHeight(height - GridScroller.Padding.Top - GridScroller.Padding.Bottom);
+
+        // Centred while it fits, top-aligned once it does not: a centred grid
+        // taller than its viewport loses its first row as well as its last,
+        // and no amount of scrolling brings the top one back.
+        AppGrid.VerticalAlignment = AppGrid.DesiredSize.Height > height
+            ? VerticalAlignment.Top
+            : VerticalAlignment.Center;
     }
 }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using KidShell.App.Localization;
 using KidShell.App.ViewModels;
+using KidShell.Core.Runtime;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -22,6 +23,28 @@ public sealed partial class PinOverlayView : UserControl
     {
         InitializeComponent();
         KeyDown += OnKeyDown;
+        SizeChanged += (_, e) => ApplyLayout(e.NewSize.Height);
+    }
+
+    /// <summary>
+    /// Trims the card's ornament on a short window.
+    ///
+    /// The keypad scrolls if it has to, but scrolling to reach Cancel is a
+    /// poor experience for the one screen a parent uses most, so the height
+    /// that can be given back without losing anything is given back first:
+    /// the padlock badge is decoration, and the generous padding around the
+    /// card is there to look calm rather than to say anything.
+    /// </summary>
+    private void ApplyLayout(double height)
+    {
+        var tight = ResponsiveLayout.IsShort(height);
+
+        LockBadge.Visibility = tight ? Visibility.Collapsed : Visibility.Visible;
+        TitleText.Margin = tight ? new Thickness(0) : new Thickness(0, 12, 0, 0);
+        Dots.Margin = tight ? new Thickness(0, 10, 0, 2) : new Thickness(0, 18, 0, 4);
+        Keypad.Margin = tight ? new Thickness(0, 8, 0, 0) : new Thickness(0, 16, 0, 0);
+        CancelButton.Margin = tight ? new Thickness(0, 10, 0, 0) : new Thickness(0, 18, 0, 0);
+        Card.Padding = tight ? new Thickness(34, 18, 34, 16) : new Thickness(34, 30, 34, 26);
     }
 
     public void Initialize(PinOverlayViewModel viewModel)

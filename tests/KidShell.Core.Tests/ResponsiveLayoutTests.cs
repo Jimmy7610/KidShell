@@ -268,4 +268,92 @@ public class ResponsiveLayoutTests
                 $"{physical}px @ {scale}% kept two columns of {(content - 18) / 2:F0} epx");
         }
     }
+
+    [Theory]
+    [InlineData(560, true)]    // the smallest window KidShell supports
+    [InlineData(600, true)]    // 1440x900 and 1600x900 at 150%
+    [InlineData(617, true)]    // 1920x1080 at 175%
+    [InlineData(699, true)]
+    [InlineData(700, false)]
+    [InlineData(768, false)]   // 1366x768, the common laptop
+    [InlineData(1080, false)]
+    public void A_short_window_is_recognised_as_short(double height, bool expected) =>
+        Assert.Equal(expected, ResponsiveLayout.IsShort(height));
+
+    [Fact]
+    public void A_window_with_no_measured_height_is_not_called_short()
+    {
+        // Before the first layout pass the height is zero or NaN, and treating
+        // that as "short" would strip the decoration off every window for the
+        // one frame before the real size arrives.
+        Assert.False(ResponsiveLayout.IsShort(0));
+        Assert.False(ResponsiveLayout.IsShort(double.NaN));
+    }
+
+    [Fact]
+    public void An_app_card_keeps_its_full_height_when_there_is_room() =>
+        Assert.Equal(
+            ResponsiveLayout.PreferredTileHeight,
+            ResponsiveLayout.TileHeight(availableHeight: 900));
+
+    [Fact]
+    public void An_app_card_gives_way_before_the_grid_has_to_scroll()
+    {
+        // Two rows in 320 epx: without this the second row was sliced through
+        // its own label at 819x614.
+        var height = ResponsiveLayout.TileHeight(availableHeight: 320);
+
+        Assert.True(height < ResponsiveLayout.PreferredTileHeight);
+        Assert.True((height * 2) + 22 <= 320 + 0.001,
+            $"two cards of {height:F0} plus the gap do not fit in 320");
+    }
+
+    [Fact]
+    public void An_app_card_stops_shrinking_where_a_child_can_still_read_it()
+    {
+        // Past the floor the answer is to scroll, not to keep shrinking: the
+        // icon and the name have to stay legible from across a room.
+        Assert.Equal(
+            ResponsiveLayout.MinimumTileHeight,
+            ResponsiveLayout.TileHeight(availableHeight: 60));
+
+        Assert.Equal(
+            ResponsiveLayout.MinimumTileHeight,
+            ResponsiveLayout.TileHeight(availableHeight: 1));
+    }
+
+    [Fact]
+    public void An_app_card_has_a_height_before_anything_has_been_measured() =>
+        Assert.Equal(
+            ResponsiveLayout.PreferredTileHeight,
+            ResponsiveLayout.TileHeight(availableHeight: double.NaN));
+
+    [Theory]
+    [MemberData(nameof(SupportedSizes))]
+    public void Two_rows_of_cards_fit_every_supported_display(
+        int physical, int scale, double effective)
+    {
+        // The grid area is what is left after the greeting and the footer.
+        const double chrome = 240;
+
+        var available = EffectiveHeightFor(effective) - chrome;
+        var card = ResponsiveLayout.TileHeight(available);
+
+        // Either two rows fit, or the cards are already at the floor and the
+        // grid scrolls - what must never happen is a row half drawn.
+        var fits = (card * 2) + 22 <= available + 0.001;
+
+        Assert.True(fits || card <= ResponsiveLayout.MinimumTileHeight + 0.001,
+            $"{physical}px @ {scale}% got {card:F0}-epx cards in {available:F0} epx");
+    }
+
+    /// <summary>
+    /// The height that goes with a width in the supported matrix.
+    ///
+    /// The shortest supported window is 560, and the tightest real
+    /// configurations are 600 epx tall, so the pessimistic pairing is the
+    /// honest one to test against.
+    /// </summary>
+    private static double EffectiveHeightFor(double effectiveWidth) =>
+        effectiveWidth < 1000 ? 560 : effectiveWidth * 9 / 16;
 }

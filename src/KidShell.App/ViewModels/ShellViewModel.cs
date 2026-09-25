@@ -120,7 +120,12 @@ public sealed class ShellViewModel : ObservableObject
     public ShellMode Mode
     {
         get => _mode;
-        private set
+
+        // internal, not private: the layout audit drives the shell through
+        // every mode, and going the long way round - finishing setup to reach
+        // Child Mode - would make the audit depend on the very screens it is
+        // supposed to be measuring.
+        internal set
         {
             if (SetProperty(ref _mode, value))
             {

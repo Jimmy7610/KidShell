@@ -197,7 +197,11 @@ public sealed class OnboardingViewModel : ObservableObject
     public OnboardingStep CurrentStep
     {
         get => _step;
-        private set
+
+        // internal so the layout audit can render a step directly. Walking
+        // there with ContinueCommand would mean satisfying each step's
+        // validation first, which is a different test.
+        internal set
         {
             if (!SetProperty(ref _step, value))
             {

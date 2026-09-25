@@ -169,6 +169,38 @@ public sealed partial class MainWindow : Window
     {
         Activated -= OnFirstActivated;
 
+        // Developer mode only, for the same reason Ctrl+Shift+P is.
+        //
+        // The audit is driven by a file in the app's own data directory, which
+        // is a place the signed-in user can write to - so in a shipped build a
+        // child could drop that file and have KidShell resize itself out of
+        // full screen and then close. It is a development tool, and it stays
+        // one.
+        if (!_viewModel.DeveloperMode)
+        {
+            await _viewModel.ReportStartupIssuesAsync();
+            return;
+        }
+
+        // It exists so the supported display matrix can be rendered and
+        // measured rather than reasoned about.
+        if (LayoutAudit.TakeRequest() is { } auditPath)
+        {
+            var findings = await new LayoutAudit(this, _viewModel).RunAsync();
+            await LayoutAudit.WriteAsync(auditPath, findings);
+            Close();
+            return;
+        }
+
+        // Same door, but it holds one screen open instead of sweeping them
+        // all, so that the screens which are slow to reach by hand can still
+        // be looked at by a person.
+        if (LayoutAudit.TakePose() is { } pose)
+        {
+            await new LayoutAudit(this, _viewModel).PoseAsync(pose);
+            return;
+        }
+
         await _viewModel.ReportStartupIssuesAsync();
     }
 

@@ -87,15 +87,56 @@
                                     Background="{StaticResource PanelStrongBrush}"
                                     CornerRadius="{StaticResource RadiusMd}"
                                     Padding="14,9">
-                                    <Grid>
-                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <!--
+                                        Two columns, not one.
+
+                                        The name and the remove button used to
+                                        share a single cell with the button
+                                        aligned right, which works until the
+                                        name is long: a real hostname can be 63
+                                        characters, and it then ran straight
+                                        underneath the button with the glyph
+                                        sitting on top of the text. The name
+                                        now has its own column and ends in an
+                                        ellipsis; the whole value stays
+                                        available in the tooltip and to a
+                                        screen reader.
+                                    -->
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!--
+                                            A Grid, not a horizontal
+                                            StackPanel. A StackPanel measures
+                                            its children with unlimited width
+                                            in the direction it stacks, so the
+                                            name never learns how much room it
+                                            has and TextTrimming never fires -
+                                            the ellipsis was set here first and
+                                            did nothing at all.
+                                        -->
+                                        <Grid Grid.Column="0" ColumnSpacing="10" VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
                                             <FontIcon
+                                                Grid.Column="0"
                                                 FontFamily="{StaticResource SymbolFontFamily}"
                                                 FontSize="14"
                                                 Foreground="{StaticResource BrandBlueBrush}"
                                                 Glyph="&#xE774;" />
-                                            <TextBlock Style="{StaticResource BodyTextStyle}" Text="{x:Bind}" />
-                                        </StackPanel>
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind}"
+                                                TextTrimming="CharacterEllipsis"
+                                                ToolTipService.ToolTip="{x:Bind}" />
+                                        </Grid>
                                         <!--
                                             Icon-only, so it needs a name. A
                                             screen reader on this row otherwise
@@ -103,9 +144,9 @@
                                             which site it would remove.
                                         -->
                                         <Button
+                                            Grid.Column="1"
                                             AutomationProperties.Name="{x:Bind}"
                                             Click="OnRemoveDomainClick"
-                                            HorizontalAlignment="Right"
                                             Padding="8,4"
                                             Style="{StaticResource QuietButtonStyle}"
                                             Tag="{x:Bind}"
