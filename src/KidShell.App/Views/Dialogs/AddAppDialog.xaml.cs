@@ -1,3 +1,4 @@
+using KidShell.Core.Runtime;
 using KidShell.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,6 +13,9 @@ public sealed partial class AddAppDialog : ContentDialog
 
     public AddAppDialog(AddAppViewModel viewModel)
     {
+        // Sized from the window when it opens; see ApplySize.
+        Opened += (_, _) => ApplySize();
+
         _viewModel = viewModel;
         InitializeComponent();
 
@@ -89,5 +93,26 @@ public sealed partial class AddAppDialog : ContentDialog
         {
             _viewModel.SelectedAccentIndex = AccentBox.SelectedIndex;
         }
+    }
+
+    /// <summary>
+    /// Sizes the form from the window rather than from constants.
+    ///
+    /// A dialog wider than the window is unreachable at its edges, and a form
+    /// with a fixed scroll height hides its own fields on a short window.
+    /// </summary>
+    private void ApplySize()
+    {
+        var bounds = XamlRoot?.Size ?? default;
+
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        FormPanel.Width = ResponsiveLayout.DialogWidth(bounds.Width, preferred: 460);
+
+        FormScroller.MaxHeight = ResponsiveLayout.ScrollableHeight(
+            bounds.Height, reservedForChrome: 240, minimum: 200, maximum: 560);
     }
 }

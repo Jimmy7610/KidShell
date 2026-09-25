@@ -21,12 +21,12 @@
         <!-- ============================= Header ============================= -->
         <Grid Grid.Row="0" ColumnSpacing="24">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" VerticalAlignment="Top">
+            <StackPanel x:Name="HeaderBrand" Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
                     <TextBlock
                         Style="{StaticResource WordmarkTextStyle}"
@@ -43,14 +43,22 @@
                     </Canvas>
                 </Grid>
                 <TextBlock
+                    x:Name="HeaderTagline"
                     Margin="4,2,0,0"
                     Style="{StaticResource TaglineTextStyle}"
                     Text="{loc:Str Key=Parent.Subtitle}" />
             </StackPanel>
 
+            <!--
+                Centred between the wordmark and the status strip, and allowed
+                to shrink: at 800 epx the avatar used to overlap the wordmark,
+                which truncated "Föräldraläge" to "Föräldra".
+            -->
             <StackPanel
+                x:Name="HeaderChild"
                 Grid.Column="1"
                 Margin="0,6,0,0"
+                HorizontalAlignment="Center"
                 Orientation="Horizontal"
                 Spacing="16"
                 VerticalAlignment="Top">
@@ -66,9 +74,10 @@
                         </Viewbox>
                     </Border>
                 </Border>
-                <StackPanel VerticalAlignment="Center">
+                <StackPanel x:Name="HeaderChildText" VerticalAlignment="Center">
                     <TextBlock
                         x:Name="ChildSummaryText"
+                        TextTrimming="CharacterEllipsis"
                         FontFamily="{StaticResource DisplayFontFamily}"
                         FontSize="23"
                         FontWeight="SemiBold"
@@ -97,25 +106,42 @@
         </Grid>
 
         <!-- ============================= Body ============================= -->
+        <!--
+            Three columns, two of which give way.
+
+            The aside was a fixed 352 and the sidebar a fixed 218, which at
+            1024 effective pixels left roughly 400 for the content - narrower
+            than a single settings row needs. Both widths now come from
+            ResponsiveLayout, which is tested against the whole supported
+            matrix rather than against the monitor this was written on.
+        -->
         <Grid Grid.Row="1" Margin="0,20,0,14" ColumnSpacing="18">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition x:Name="AsideColumn" Width="352" />
+                <ColumnDefinition Width="*" MinWidth="360" />
+                <ColumnDefinition x:Name="AsideColumn" Width="320" />
             </Grid.ColumnDefinitions>
 
             <!-- ========== Sidebar ========== -->
-            <Border Grid.Column="0" Width="218" Style="{StaticResource PanelStyle}" Padding="12" Translation="0,0,22">
+            <Border
+                x:Name="NavigationPanel"
+                Grid.Column="0"
+                Width="218"
+                Style="{StaticResource PanelStyle}"
+                Padding="12"
+                Translation="0,0,22">
                 <StackPanel AutomationProperties.Name="{loc:Str Key=Nav.Automation}">
                     <RadioButton
                         x:Name="NavOverview"
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.Overview}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.Overview}"
                         Tag="Overview">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelOverview" Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
 
@@ -124,10 +150,12 @@
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.Apps}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.Apps}"
                         Tag="Apps">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelApps" Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
 
@@ -136,10 +164,12 @@
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.ScreenTime}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.ScreenTime}"
                         Tag="ScreenTime">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelScreenTime" Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
 
@@ -148,10 +178,12 @@
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.Web}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.Web}"
                         Tag="Web">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelWeb" Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
 
@@ -160,10 +192,12 @@
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.Security}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.Security}"
                         Tag="Security">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelSecurity" Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
 
@@ -172,10 +206,12 @@
                         Checked="OnNavChecked"
                         GroupName="ParentNav"
                         Style="{StaticResource NavigationItemStyle}"
+                        AutomationProperties.Name="{loc:Str Key=Nav.Profile}"
+                        ToolTipService.ToolTip="{loc:Str Key=Nav.Profile}"
                         Tag="Profile">
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" />
-                            <TextBlock Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="NavLabelProfile" Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
                         </StackPanel>
                     </RadioButton>
                 </StackPanel>
@@ -324,7 +360,12 @@
 
         <!-- ============================= Footer ============================= -->
         <Grid Grid.Row="2">
+            <!--
+                Hidden on a narrow window: it is decoration, and it was sitting
+                underneath the action buttons rather than beside them.
+            -->
             <StackPanel
+                x:Name="FooterBrand"
                 HorizontalAlignment="Left"
                 Orientation="Horizontal"
                 Spacing="10"

@@ -4,6 +4,7 @@ using KidShell.App.Services;
 using KidShell.App.ViewModels;
 using KidShell.App.ViewModels.Parent;
 using KidShell.Core.Configuration;
+using KidShell.Core.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -39,8 +40,131 @@ public sealed partial class ParentShellView : UserControl
         viewModel.ScreenTime.PropertyChanged += (_, _) => RenderAside();
         viewModel.Web.PropertyChanged += (_, _) => RenderAside();
 
+        // The layout follows the space actually available, not the size the
+        // window happened to open at.
+        SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
+
         Render();
     }
+
+    /// <summary>
+    /// The last layout applied, so a resize that does not cross a boundary
+    /// costs nothing.
+    /// </summary>
+    private NavigationMode? _navigationMode;
+    private bool? _asideVisible;
+
+    /// <summary>
+    /// Adapts the chrome to the width available.
+    ///
+    /// Three things give way, in this order, because that is the order in
+    /// which they stop earning their space:
+    ///
+    ///  1. the at-a-glance column, which is a convenience - everything in it
+    ///     is reachable from a page;
+    ///  2. the navigation labels, leaving an icon rail;
+    ///  3. nothing else. The content column never shrinks below what a
+    ///     settings row needs; if the window is smaller than that, the page
+    ///     scrolls.
+    ///
+    /// The decisions come from ResponsiveLayout so they are tested against the
+    /// whole supported matrix rather than against one monitor.
+    /// </summary>
+    private void ApplyLayout(double width)
+    {
+        if (width <= 0 || double.IsNaN(width))
+        {
+            return;
+        }
+
+        var aside = ResponsiveLayout.ShowAside(width);
+
+        if (_asideVisible != aside)
+        {
+            _asideVisible = aside;
+            Aside.Visibility = aside ? Visibility.Visible : Visibility.Collapsed;
+
+            // Collapse the column too, not just its content: a hidden element
+            // in a fixed-width column still reserves the width.
+            AsideColumn.Width = aside
+                ? new GridLength(ResponsiveLayout.AsideWidth)
+                : new GridLength(0);
+        }
+
+        var navigation = ResponsiveLayout.DecideNavigation(width);
+
+        if (_navigationMode != navigation)
+        {
+            _navigationMode = navigation;
+            ApplyNavigationMode(navigation);
+        }
+
+        // Decoration gives way before anything functional does. The footer
+        // wordmark was sitting underneath the action buttons rather than
+        // beside them, and the header tagline pushed the child's name into the
+        // status strip.
+        var roomy = ResponsiveLayout.Classify(width) != LayoutSize.Compact;
+
+        FooterBrand.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+        HeaderTagline.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+        HeaderChildText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ApplyNavigationMode(NavigationMode mode)
+    {
+        var expanded = mode == NavigationMode.Expanded;
+
+        NavigationPanel.Width = expanded
+            ? ResponsiveLayout.ExpandedNavigationWidth
+            : ResponsiveLayout.RailNavigationWidth;
+
+        // The labels go, the icons stay. Each button keeps an automation name
+        // and a tooltip, so the rail is still announceable and still
+        // explains itself on hover.
+        var labelVisibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var label in new[]
+                 {
+                     NavLabelOverview, NavLabelApps, NavLabelScreenTime,
+                     NavLabelWeb, NavLabelSecurity, NavLabelProfile
+                 })
+        {
+            label.Visibility = labelVisibility;
+        }
+
+        // Centre the glyph with symmetric padding rather than by changing the
+        // content alignment.
+        //
+        // HorizontalContentAlignment="Center" was the obvious lever and the
+        // wrong one: it makes the content presenter size to its content and
+        // centre it, so the button's own row - icon plus the collapsed label's
+        // spacing - ended up wider than the rail and was clipped, taking the
+        // icons with it.
+        //
+        // Stretch keeps the row anchored at the left edge, and the padding
+        // does the centring: 72 wide, less the panel's 24 of padding, leaves
+        // 48 for a 26-wide glyph, so 11 either side.
+        const double railPadding = (RailNavigationInnerWidth - NavigationGlyphWidth) / 2;
+
+        var padding = expanded
+            ? new Thickness(16, 10, 16, 10)
+            : new Thickness(railPadding, 10, railPadding, 10);
+
+        foreach (var button in new[]
+                 {
+                     NavOverview, NavApps, NavScreenTime,
+                     NavWeb, NavSecurity, NavProfile
+                 })
+        {
+            button.Padding = padding;
+        }
+    }
+
+    /// <summary>The rail's width less the panel's own padding.</summary>
+    private const double RailNavigationInnerWidth = ResponsiveLayout.RailNavigationWidth - 24;
+
+    /// <summary>Matches NavigationGlyphStyle's Width.</summary>
+    private const double NavigationGlyphWidth = 26;
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => Render();
 

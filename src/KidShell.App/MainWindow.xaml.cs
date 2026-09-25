@@ -85,9 +85,18 @@ public sealed partial class MainWindow : Window
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            // Below this the 4x2 grid stops being a comfortable read.
-            presenter.PreferredMinimumWidth = 1000;
-            presenter.PreferredMinimumHeight = 680;
+            // The minimum the layout genuinely supports, not the size the
+            // design was drawn at.
+            //
+            // This was 1000x680, which was really a workaround: below it the
+            // fixed sidebar and aside column squeezed the content to nothing,
+            // so the window simply refused to get there. Now the aside drops
+            // and the navigation collapses to an icon rail, so a narrower
+            // window is a supported layout rather than a broken one - and a
+            // 1024x768 display at 125% scaling, which is 819 effective pixels,
+            // could not have shown KidShell at all before.
+            presenter.PreferredMinimumWidth = 780;
+            presenter.PreferredMinimumHeight = 560;
         }
 
         AppWindow.SetIcon("Assets/KidShell.ico");

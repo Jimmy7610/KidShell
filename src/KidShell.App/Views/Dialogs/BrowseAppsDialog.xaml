@@ -12,11 +12,14 @@
     mc:Ignorable="d">
 
     <!--
-        480, matching the other dialogs. 560 overflowed the ContentDialog's own
-        width on a 1366-wide window and clipped the Add buttons off the right
-        edge - invisible on a large monitor, broken on the size KidShell targets.
+        No fixed width or height.
+
+        Both were fixed once: 560 wide clipped the Add buttons at 1366, and
+        the list was a fixed 340 tall, which wasted space on a large monitor
+        and clipped on a short one. Code-behind now sizes both from the window
+        through ResponsiveLayout, which is tested across the supported matrix.
     -->
-    <Grid Width="480" RowSpacing="12">
+    <Grid x:Name="DialogRoot" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -52,7 +55,7 @@
                 Style="{StaticResource SecondaryButtonStyle}" />
         </Grid>
 
-        <Grid Grid.Row="2" Height="340">
+        <Grid x:Name="ResultArea" Grid.Row="2">
 
             <ScrollViewer x:Name="ResultScroller" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater x:Name="ResultList">

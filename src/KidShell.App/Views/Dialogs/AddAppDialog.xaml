@@ -12,8 +12,13 @@
     PrimaryButtonText="{loc:Str Key=AddApp.Save}"
     mc:Ignorable="d">
 
-    <ScrollViewer MaxHeight="420" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Width="440" Padding="0,0,6,0" Spacing="12">
+    <!--
+        The width and the scroll height come from the window, not from
+        constants: 440 wide and 420 tall are comfortable on a large monitor and
+        overflow a small one at 200% scaling.
+    -->
+    <ScrollViewer x:Name="FormScroller" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="FormPanel" Padding="0,0,6,0" Spacing="12">
 
             <StackPanel>
                 <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.NameLabel}" />

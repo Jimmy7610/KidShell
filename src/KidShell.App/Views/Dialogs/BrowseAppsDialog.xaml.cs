@@ -1,5 +1,6 @@
 using KidShell.App.ViewModels;
 using KidShell.Core.Apps;
+using KidShell.Core.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -27,9 +28,38 @@ public sealed partial class BrowseAppsDialog : ContentDialog
         viewModel.PropertyChanged += (_, _) => Render();
         viewModel.Results.CollectionChanged += (_, _) => Render();
 
-        Opened += async (_, _) => await viewModel.LoadAsync();
+        Opened += async (_, _) =>
+        {
+            ApplySize();
+            await viewModel.LoadAsync();
+        };
 
         Render();
+    }
+
+    /// <summary>
+    /// Sizes the dialog from the window rather than from a constant.
+    ///
+    /// A fixed width clips its own buttons on a narrow window; a fixed list
+    /// height hides rows on a short one with no visible scrollbar to suggest
+    /// anything is missing. Both have happened here.
+    /// </summary>
+    private void ApplySize()
+    {
+        var bounds = XamlRoot?.Size ?? default;
+
+        if (bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            // No XamlRoot yet: leave it to size to content rather than guess.
+            return;
+        }
+
+        DialogRoot.Width = ResponsiveLayout.DialogWidth(bounds.Width, preferred: 520);
+
+        // Chrome: the dialog's title, the search row, the summary and the
+        // command bar, plus the dimmed margin the dialog sits in.
+        ResultArea.Height = ResponsiveLayout.ScrollableHeight(
+            bounds.Height, reservedForChrome: 320, minimum: 180, maximum: 520);
     }
 
     /// <summary>

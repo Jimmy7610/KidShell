@@ -350,16 +350,20 @@
                             Text="{loc:Str Key=Setup.RulesBody}" />
 
                         <!--
-                            460, not 300. At 300 the web options below the
-                            screen-time card were scrolled out of sight with no
-                            visible scrollbar, so the step looked like it had one
-                            radio button and no way to reach the others. There is
-                            ample room at 1366x768 for the taller card.
+                            No inner ScrollViewer, and no MaxHeight.
+
+                            This was a ScrollViewer with MaxHeight 300, which
+                            scrolled two web options out of sight with no
+                            visible scrollbar - the step looked like it had one
+                            radio button. Raising it to 460 moved the cliff
+                            rather than removing it: 460 still overflows a
+                            768-tall window at 150% scaling.
+
+                            The setup card already sits in a page-level
+                            ScrollViewer, so the inner one was never buying
+                            anything except a height at which content silently
+                            disappeared. The page scrolls instead.
                         -->
-                        <ScrollViewer
-                            HorizontalScrollMode="Disabled"
-                            MaxHeight="460"
-                            VerticalScrollBarVisibility="Auto">
                             <StackPanel MaxWidth="460" Spacing="14">
 
                                 <Border Background="{StaticResource PanelBrush}" CornerRadius="14" Padding="16,13">
@@ -442,7 +446,6 @@
                                 </Border>
 
                             </StackPanel>
-                        </ScrollViewer>
                     </StackPanel>
 
                     <!-- ===================== 8. Done ===================== -->

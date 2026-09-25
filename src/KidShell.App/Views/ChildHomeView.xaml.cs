@@ -1,3 +1,4 @@
+using KidShell.Core.Runtime;
 using System.ComponentModel;
 using KidShell.App.Localization;
 using KidShell.App.ViewModels;
@@ -21,6 +22,9 @@ public sealed partial class ChildHomeView : UserControl
         Action onSettingsRequested,
         Action onParentAccessRequested)
     {
+        // The footer follows the width; see ApplyLayout.
+        SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
+
         _viewModel = viewModel;
         _onSettingsRequested = onSettingsRequested;
         _onParentAccessRequested = onParentAccessRequested;
@@ -116,4 +120,25 @@ public sealed partial class ChildHomeView : UserControl
 
     /// <summary>Title used by assistive technology for the whole screen.</summary>
     public string ScreenName => Strings.Get("Child.Wordmark");
+
+    /// <summary>
+    /// Adapts the child's chrome to the width available.
+    ///
+    /// The app grid needs no help - UniformGridLayout drops from four columns
+    /// to three, two and one on its own as the window narrows, which is
+    /// exactly the behaviour wanted and is why it was chosen over a fixed
+    /// grid. Only the footer decoration needs a decision, because at 800 it
+    /// collided with the development badge.
+    /// </summary>
+    private void ApplyLayout(double width)
+    {
+        if (width <= 0 || double.IsNaN(width))
+        {
+            return;
+        }
+
+        FooterBrand.Visibility = ResponsiveLayout.Classify(width) == LayoutSize.Compact
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+    }
 }

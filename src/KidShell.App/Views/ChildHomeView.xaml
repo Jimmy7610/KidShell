@@ -72,6 +72,8 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock
                         x:Name="GreetingText"
+                        MaxLines="1"
+                        TextTrimming="CharacterEllipsis"
                         FontFamily="{StaticResource DisplayFontFamily}"
                         FontSize="23"
                         FontWeight="SemiBold"
@@ -259,7 +261,13 @@
 
         <!-- ============================= Footer ============================= -->
         <Grid Grid.Row="2" VerticalAlignment="Bottom">
+            <!--
+                Hidden on a narrow window: at 800 it collided with the
+                development badge in the middle of the footer. It is decoration,
+                so it is the thing that gives way.
+            -->
             <StackPanel
+                x:Name="FooterBrand"
                 Orientation="Horizontal"
                 Spacing="10"
                 VerticalAlignment="Center"
