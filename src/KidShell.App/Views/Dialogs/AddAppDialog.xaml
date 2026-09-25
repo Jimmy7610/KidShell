@@ -18,7 +18,7 @@
         overflow a small one at 200% scaling.
     -->
     <ScrollViewer x:Name="FormScroller" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel x:Name="FormPanel" Padding="0,0,6,0" Spacing="12">
+        <StackPanel x:Name="FormPanel" HorizontalAlignment="Stretch" Padding="0,0,6,0" Spacing="12">
 
             <StackPanel>
                 <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.NameLabel}" />

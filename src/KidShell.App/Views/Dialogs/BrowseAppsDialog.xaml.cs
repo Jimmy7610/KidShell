@@ -44,6 +44,12 @@ public sealed partial class BrowseAppsDialog : ContentDialog
     /// height hides rows on a short one with no visible scrollbar to suggest
     /// anything is missing. Both have happened here.
     /// </summary>
+    /// <summary>
+    /// ContentDialogMaxWidth (548) less the dialog's own horizontal padding.
+    /// Content wider than this is clipped rather than widening the dialog.
+    /// </summary>
+    private const double DialogContentWidth = 500;
+
     private void ApplySize()
     {
         var bounds = XamlRoot?.Size ?? default;
@@ -54,7 +60,20 @@ public sealed partial class BrowseAppsDialog : ContentDialog
             return;
         }
 
-        DialogRoot.Width = ResponsiveLayout.DialogWidth(bounds.Width, preferred: 520);
+        // Size the content to fit inside the dialog's own cap.
+        //
+        // Two wrong answers came first. A fixed 560 clipped the Add buttons at
+        // 1366. Sizing the inner Grid to 520 clipped them again, because
+        // ContentDialog caps itself at ContentDialogMaxWidth - a theme
+        // resource of 548 - and 520 plus the dialog's 24-epx padding either
+        // side exceeds it. Setting MinWidth and MaxWidth on the dialog itself
+        // fixed the clipping and broke the centring, because that is what the
+        // dialog's own layout uses to centre.
+        //
+        // So: leave the dialog alone and ask for content that fits within its
+        // cap. DialogContentWidth is that cap less the padding.
+        DialogRoot.Width = ResponsiveLayout.DialogWidth(
+            bounds.Width, preferred: DialogContentWidth);
 
         // Chrome: the dialog's title, the search row, the summary and the
         // command bar, plus the dimmed margin the dialog sits in.

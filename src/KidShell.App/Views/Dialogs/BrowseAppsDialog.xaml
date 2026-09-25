@@ -19,7 +19,7 @@
         and clipped on a short one. Code-behind now sizes both from the window
         through ResponsiveLayout, which is tested across the supported matrix.
     -->
-    <Grid x:Name="DialogRoot" RowSpacing="12">
+    <Grid x:Name="DialogRoot" HorizontalAlignment="Stretch" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />

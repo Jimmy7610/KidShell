@@ -20,11 +20,20 @@
                     Text="{loc:Str Key=Profile.Subtitle}" />
             </StackPanel>
 
-            <Grid ColumnSpacing="18">
+            <!--
+                The form and its live preview sit side by side while both are
+                readable, and stack below that. Code-behind moves the preview
+                between column 1 and row 1; see ApplyLayout.
+            -->
+            <Grid x:Name="ProfileGrid" ColumnSpacing="18" RowSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition x:Name="PreviewColumn" Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
                 <StackPanel Grid.Column="0" Spacing="16">
                     <StackPanel>
@@ -73,8 +82,10 @@
 
                 <!-- Live preview of what the child will see -->
                 <Border
+                    x:Name="PreviewPanel"
                     Grid.Column="1"
-                    Width="248"
+                    MinWidth="248"
+                    MaxWidth="360"
                     Background="{StaticResource TintBlueBrush}"
                     Style="{StaticResource InfoPanelStyle}"
                     VerticalAlignment="Top">

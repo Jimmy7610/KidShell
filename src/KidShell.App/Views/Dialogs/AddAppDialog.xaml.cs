@@ -110,6 +110,8 @@ public sealed partial class AddAppDialog : ContentDialog
             return;
         }
 
+        // Fits inside ContentDialog's own 548-epx cap, less its padding.
+        // Sizing the dialog instead of the content breaks its centring.
         FormPanel.Width = ResponsiveLayout.DialogWidth(bounds.Width, preferred: 460);
 
         FormScroller.MaxHeight = ResponsiveLayout.ScrollableHeight(

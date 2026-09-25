@@ -52,15 +52,24 @@
         </Storyboard>
     </UserControl.Resources>
 
+    <!--
+        The card is bounded by the window and the STEP scrolls inside it, rather
+        than the whole card scrolling inside the page.
+
+        The difference matters at 800x620: the avatar grid made the card taller
+        than the window, and with the page scrolling, Tillbaka and Fortsätt went
+        below the fold. They were still reachable by scrolling, but a parent who
+        does not realise the page scrolls is a parent who cannot finish setup.
+        Now the buttons are pinned and only the step content moves.
+    -->
     <Grid Padding="40,28,40,28">
-        <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
-            <Border
-                x:Name="SetupPanel"
-                MaxWidth="960"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Style="{StaticResource SetupPanelStyle}"
-                Translation="0,0,48">
+        <Border
+            x:Name="SetupPanel"
+            MaxWidth="960"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Style="{StaticResource SetupPanelStyle}"
+            Translation="0,0,48">
 
                 <Grid x:Name="StepHost" RowSpacing="22">
                     <Grid.RenderTransform>
@@ -68,7 +77,7 @@
                     </Grid.RenderTransform>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
@@ -80,7 +89,22 @@
                         Style="{StaticResource SetupStepTextStyle}" />
 
                     <!-- ===================== 1. Welcome ===================== -->
-                    <StackPanel x:Name="StepWelcome" Grid.Row="1" Spacing="18">
+                    <!--
+                        One ScrollViewer for whichever step is showing.
+
+                        Only the step content moves; the indicator above and
+                        the Tillbaka/Fortsätt row below stay put. At 800x620
+                        the avatar grid is taller than the window, and with
+                        the whole card scrolling the buttons went below the
+                        fold - reachable, but only by a parent who realised
+                        the page scrolled.
+                    -->
+                    <ScrollViewer
+                        Grid.Row="1"
+                        HorizontalScrollMode="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                    <StackPanel x:Name="StepWelcome" Spacing="18">
                         <Grid HorizontalAlignment="Center">
                             <TextBlock
                                 Style="{StaticResource WordmarkTextStyle}"
@@ -112,7 +136,7 @@
 
                     <!-- ===================== 2. Name ===================== -->
                     <!-- ===================== 2. Parent PIN ===================== -->
-                    <StackPanel x:Name="StepParentPin" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepParentPin" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource SetupHeadlineTextStyle}"
                             Text="{loc:Str Key=Setup.PinTitle}" />
@@ -147,7 +171,7 @@
                     </StackPanel>
 
                     <!-- ===================== 3. Name ===================== -->
-                    <StackPanel x:Name="StepName" Grid.Row="1" Spacing="16" Visibility="Collapsed">
+                    <StackPanel x:Name="StepName" Spacing="16" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource SetupHeadlineTextStyle}"
                             Text="{loc:Str Key=Setup.NameTitle}" />
@@ -166,7 +190,7 @@
                     </StackPanel>
 
                     <!-- ===================== 3. Avatar ===================== -->
-                    <StackPanel x:Name="StepAvatar" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepAvatar" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             x:Name="AvatarTitleText"
                             Style="{StaticResource SetupHeadlineTextStyle}" />
@@ -224,7 +248,7 @@
                     </StackPanel>
 
                     <!-- ===================== 4. Age ===================== -->
-                    <StackPanel x:Name="StepAge" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepAge" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             x:Name="AgeTitleText"
                             Style="{StaticResource SetupHeadlineTextStyle}" />
@@ -268,7 +292,7 @@
                     </StackPanel>
 
                     <!-- ===================== 5. Theme ===================== -->
-                    <StackPanel x:Name="StepTheme" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepTheme" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource SetupHeadlineTextStyle}"
                             Text="{loc:Str Key=Setup.ThemeTitle}" />
@@ -341,7 +365,7 @@
 
                     <!-- ===================== 6. Finish ===================== -->
                     <!-- ===================== 7. Rules ===================== -->
-                    <StackPanel x:Name="StepRules" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepRules" Spacing="14" Visibility="Collapsed">
                         <TextBlock
                             Style="{StaticResource SetupHeadlineTextStyle}"
                             Text="{loc:Str Key=Setup.RulesTitle}" />
@@ -449,7 +473,7 @@
                     </StackPanel>
 
                     <!-- ===================== 8. Done ===================== -->
-                    <StackPanel x:Name="StepDone" Grid.Row="1" Spacing="14" Visibility="Collapsed">
+                    <StackPanel x:Name="StepDone" Spacing="14" Visibility="Collapsed">
                         <Border
                             Width="148" Height="148"
                             HorizontalAlignment="Center"
@@ -510,6 +534,9 @@
                         </Border>
                     </StackPanel>
 
+                        </Grid>
+                    </ScrollViewer>
+
                     <!-- ===== Validation ===== -->
                     <StackPanel
                         x:Name="ValidationPanel"
@@ -556,7 +583,6 @@
                             Style="{StaticResource SetupPrimaryButtonStyle}" />
                     </StackPanel>
                 </Grid>
-            </Border>
-        </ScrollViewer>
+        </Border>
     </Grid>
 </UserControl>
