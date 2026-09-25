@@ -271,7 +271,20 @@ jobs:
           # A lint, not a substitute for using the product with a screen reader.
           # It catches the one failure that is both common and mechanically
           # detectable.
-          & .	ools\check-accessibility.ps1
+          & ./tools/check-accessibility.ps1
+
+      - name: Check responsive layout
+        shell: pwsh
+        run: |
+          # Every responsiveness bug this project has had was the same shape: a
+          # constant that was right on the monitor it was written on. A
+          # ScrollViewer capped at 300 hid two of the setup options, and a
+          # dialog fixed at 560 clipped its own buttons at 1366.
+          #
+          # None of them were visible in review, and all of them are
+          # mechanically detectable. The check accepts a fixed dimension that
+          # has a stated reason, so icons and artwork are not the target.
+          & ./tools/check-responsive-layout.ps1
 
       - name: Check documentation links
         shell: pwsh

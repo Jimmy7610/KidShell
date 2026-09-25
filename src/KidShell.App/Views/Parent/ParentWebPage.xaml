@@ -172,10 +172,18 @@
                         Background="{StaticResource PanelBrush}"
                         CornerRadius="10"
                         Padding="12,10">
+                        <!--
+                            Horizontal scrolling is deliberate here, and the
+                            only place in KidShell where it is. This is a code
+                            area: a policy value is a single long line, and
+                            wrapping it would make it unreadable as the literal
+                            text that gets written. The height comes from the
+                            window rather than a constant; see ApplySize.
+                        -->
                         <ScrollViewer
+                            x:Name="PolicyScroller"
                             HorizontalScrollBarVisibility="Auto"
                             HorizontalScrollMode="Enabled"
-                            MaxHeight="220"
                             VerticalScrollBarVisibility="Auto">
                             <TextBlock
                                 x:Name="PolicyPreviewText"
