@@ -198,6 +198,31 @@ public static class ResponsiveLayout
     }
 
     /// <summary>
+    /// The width a dialog's own content may take.
+    ///
+    /// A ContentDialog caps itself at the ContentDialogMaxWidth theme
+    /// resource, and its padding is inside that cap - so content sized to the
+    /// cap is wider than the room it has, by exactly the padding. That was
+    /// hard-coded as "548 less 48", the padding is 26 either side, and the
+    /// note at the bottom of the browse dialog was clipped by the 4 epx of
+    /// difference at every window size.
+    ///
+    /// Both numbers come from the resources at run time now, so a theme change
+    /// cannot put them out of step again.
+    /// </summary>
+    public static double DialogContentWidth(double availableWidth, double dialogCap, double horizontalPadding)
+    {
+        var inside = dialogCap - horizontalPadding;
+
+        if (double.IsNaN(inside) || inside <= 0)
+        {
+            return DialogWidth(availableWidth);
+        }
+
+        return DialogWidth(availableWidth, preferred: inside);
+    }
+
+    /// <summary>
     /// Whether panels that sit side by side should stack instead.
     ///
     /// Two columns are worth having only while each is wide enough to read. A

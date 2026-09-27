@@ -45,10 +45,28 @@ public sealed partial class BrowseAppsDialog : ContentDialog
     /// anything is missing. Both have happened here.
     /// </summary>
     /// <summary>
-    /// ContentDialogMaxWidth (548) less the dialog's own horizontal padding.
-    /// Content wider than this is clipped rather than widening the dialog.
+    /// The dialog's own cap and padding, read from the theme rather than
+    /// copied into a constant. See ResponsiveLayout.DialogContentWidth.
     /// </summary>
-    private const double DialogContentWidth = 500;
+    private static (double Cap, double Padding) DialogMetrics()
+    {
+        var cap = 548d;
+        var padding = 52d;
+
+        if (Application.Current?.Resources.TryGetValue("ContentDialogMaxWidth", out var capValue) is true &&
+            capValue is double themeCap)
+        {
+            cap = themeCap;
+        }
+
+        if (Application.Current?.Resources.TryGetValue("ContentDialogPadding", out var padValue) is true &&
+            padValue is Thickness themePadding)
+        {
+            padding = themePadding.Left + themePadding.Right;
+        }
+
+        return (cap, padding);
+    }
 
     private void ApplySize()
     {
@@ -72,13 +90,23 @@ public sealed partial class BrowseAppsDialog : ContentDialog
         //
         // So: leave the dialog alone and ask for content that fits within its
         // cap. DialogContentWidth is that cap less the padding.
-        DialogRoot.Width = ResponsiveLayout.DialogWidth(
-            bounds.Width, preferred: DialogContentWidth);
+        var (cap, padding) = DialogMetrics();
+
+        DialogRoot.Width = ResponsiveLayout.DialogContentWidth(bounds.Width, cap, padding);
 
         // Chrome: the dialog's title, the search row, the summary and the
         // command bar, plus the dimmed margin the dialog sits in.
         ResultArea.Height = ResponsiveLayout.ScrollableHeight(
             bounds.Height, reservedForChrome: 320, minimum: 180, maximum: 520);
+
+        // The floor above is a floor, and at 640x480 with 200% text the chrome
+        // it is measured against is far larger than 320 - so the content came
+        // to 59 epx more than the dialog could draw, and the summary and the
+        // note underneath the list were simply not there. The whole content
+        // scrolls when that happens, which is the one answer that does not
+        // involve hiding something.
+        DialogScroller.MaxHeight = ResponsiveLayout.ScrollableHeight(
+            bounds.Height, reservedForChrome: 150, minimum: 160, maximum: 900);
     }
 
     /// <summary>

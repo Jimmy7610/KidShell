@@ -59,6 +59,20 @@
                         Content="{loc:Str Key=AddApp.Browse}"
                         Style="{StaticResource SecondaryButtonStyle}" />
                 </Grid>
+
+                <!--
+                    The example, under the field rather than inside it.
+
+                    A PlaceholderText is drawn by the TextBox template and
+                    cannot wrap: at 200% this one needed 426 epx, was given
+                    201, and showed about a third of a path. Here it wraps,
+                    and it is still readable once the parent starts typing.
+                -->
+                <TextBlock
+                    Margin="2,6,0,0"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{loc:Str Key=AddApp.PathHint}"
+                    TextWrapping="Wrap" />
             </StackPanel>
 
             <StackPanel>

@@ -145,7 +145,11 @@ public static class Strings
         ["AddApp.ProgramLabel"] = "Programmets namn",
         ["AddApp.ProgramPlaceholder"] = "Till exempel Paint",
         ["AddApp.PathLabel"] = "Sökväg till program",
-        ["AddApp.PathPlaceholder"] = "C:\\Program Files\\...\\program.exe",
+        // Short enough to survive a narrow field at 200% text scaling; a
+        // PlaceholderText is drawn by the TextBox template and cannot wrap,
+        // so the full example is a caption under the field instead.
+        ["AddApp.PathPlaceholder"] = "program.exe",
+        ["AddApp.PathHint"] = "C:\\Program Files\\...\\program.exe",
         ["AddApp.Browse"] = "Välj program...",
         ["AddApp.ArgumentsLabel"] = "Argument (valfritt)",
         ["AddApp.CategoryLabel"] = "Kategori",

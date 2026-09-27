@@ -435,6 +435,25 @@ public class ResponsiveLayoutTests
     }
 
     [Fact]
+    public void Dialog_content_stays_inside_the_dialogs_own_padding()
+    {
+        // A ContentDialog caps itself at ContentDialogMaxWidth and its padding
+        // is INSIDE that cap, so content sized to the cap overflows by exactly
+        // the padding. This was hard-coded as "548 less 48" while the padding
+        // is 26 either side, and the note at the bottom of the browse dialog
+        // was clipped by the 4 epx of difference at every window size.
+        Assert.Equal(496, ResponsiveLayout.DialogContentWidth(1366, 548, 52));
+
+        // On a window too narrow for the cap, the window wins.
+        Assert.Equal(496, ResponsiveLayout.DialogContentWidth(640, 548, 52));
+        Assert.True(ResponsiveLayout.DialogContentWidth(360, 548, 52) <= 360);
+
+        // A theme that gives no usable room falls back rather than returning
+        // a negative width.
+        Assert.True(ResponsiveLayout.DialogContentWidth(1366, 40, 52) > 0);
+    }
+
+    [Fact]
     public void A_card_widens_for_a_line_that_cannot_wrap()
     {
         const double design = 104;
