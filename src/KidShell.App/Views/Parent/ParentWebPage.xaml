@@ -65,7 +65,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBox
                             x:Name="DomainBox"
-                            AutomationProperties.Name="{loc:Str Key=Web.AddDomainPlaceholder}"
+                            AutomationProperties.Name="{loc:Str Key=Web.AddDomainHint}"
                             KeyDown="OnDomainKeyDown"
                             PlaceholderText="{loc:Str Key=Web.AddDomainPlaceholder}"
                             Style="{StaticResource FormTextBoxStyle}" />
@@ -76,6 +76,20 @@
                             Content="{loc:Str Key=Web.AddDomain}"
                             Style="{StaticResource SecondaryButtonStyle}" />
                     </Grid>
+
+                    <!--
+                        The example, underneath rather than inside the field.
+
+                        A PlaceholderText cannot wrap and is drawn by the
+                        TextBox template, so at 200% it needed 233 epx, was
+                        given 155, and read "till exempel svt" with no way to
+                        tell. Here it wraps, and it is still on screen once
+                        the parent starts typing.
+                    -->
+                    <TextBlock
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="{loc:Str Key=Web.AddDomainHint}"
+                        TextWrapping="Wrap" />
 
                     <ItemsRepeater x:Name="DomainList">
                         <ItemsRepeater.Layout>

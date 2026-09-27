@@ -278,7 +278,10 @@ public static class Strings
         ["Web.ModeOpen"] = "Friare webb",
         ["Web.ModeOpenHint"] = "Barnet kan surfa fritt. Rekommenderas inte för sexåringar.",
         ["Web.AllowlistTitle"] = "Godkända sidor",
-        ["Web.AddDomainPlaceholder"] = "till exempel svt.se",
+        // Short enough to survive a narrow field at 200% text scaling; the
+        // full example is a caption under the field, where it can wrap.
+        ["Web.AddDomainPlaceholder"] = "svt.se",
+        ["Web.AddDomainHint"] = "till exempel svt.se",
         ["Web.AddDomain"] = "Lägg till",
         ["Web.RemoveDomainAutomation"] = "Ta bort {0}",
         ["Web.PreviewTitle"] = "Det här skrivs vid säker installation",

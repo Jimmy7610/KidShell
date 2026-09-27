@@ -50,6 +50,7 @@
                             Text="{loc:Str Key=Security.StatusTitle}" />
                         <TextBlock
                             x:Name="StatusHeadlineText"
+                            TextWrapping="Wrap"
                             FontFamily="{StaticResource DisplayFontFamily}"
                             FontSize="24"
                             FontWeight="Bold"
@@ -186,6 +187,7 @@
                             FontFamily="{StaticResource DisplayFontFamily}"
                             FontSize="20"
                             FontWeight="SemiBold"
+                            TextWrapping="Wrap"
                             Foreground="{StaticResource TextPrimaryBrush}" />
                         <TextBlock
                             x:Name="RecommendedModeBodyText"
