@@ -3,6 +3,8 @@ using KidShell.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using KidShell.App.Controls;
+using KidShell.App.Localization;
 
 namespace KidShell.App.Views;
 
@@ -13,11 +15,86 @@ public sealed partial class OnboardingView : UserControl
     private OnboardingStep _lastStep = OnboardingStep.Welcome;
     private bool _loading;
 
-    public OnboardingView() => InitializeComponent();
+    /// <summary>
+    /// The heights the choice cards are drawn at when the text is its ordinary
+    /// size, and how much of each is artwork and padding rather than words.
+    /// Floors, not answers - see AdaptiveTileGrid.
+    /// </summary>
+    /// <summary>
+    /// The age card as drawn: 104 square.
+    ///
+    /// SetupTileStyle has no padding, so the only thing either side of the
+    /// figure is the tile's border - 2 normally and 4 once it is selected.
+    /// </summary>
+    private static readonly CardShape AgeCard = new(
+        DesignWidth: 104,
+        DesignHeight: 104,
+        SideDecoration: 8,
+        StackDecoration: 36);
+
+    /// <summary>
+    /// The theme card: artwork above a label and a hint that both wrap.
+    ///
+    /// 32 either side, not 24. The inner grid's 12-epx margin is the obvious
+    /// part; the rest is the tile border, which is 4 while the card is
+    /// selected. Measuring the hint 8 epx wider than the card really gives it
+    /// was enough to lose a line of wrapping and leave the block hanging 20
+    /// epx below the card at 1440x900.
+    ///
+    /// 92 above and below: the 24-epx margin, the swatch's 48-epx minimum and
+    /// the two 10-epx row gaps.
+    /// </summary>
+    private static readonly CardShape ThemeCard = new(
+        DesignWidth: 160,
+        DesignHeight: 198,
+        SideDecoration: 32,
+        StackDecoration: 92);
+
+    public OnboardingView()
+    {
+        InitializeComponent();
+
+        // On resize, not on LayoutUpdated. That event fires after every
+        // layout pass anywhere in the app, so adjusting a card height from it
+        // invites exactly the cycle WinUI refuses to tolerate. The avatar
+        // cards hold no text and are left alone.
+        SizeChanged += (_, _) => FitChoiceCards();
+        Loaded += (_, _) => FitChoiceCards();
+    }
+
+    private void FitChoiceCards()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        // Measured against the cards the grid is actually showing, rather than
+        // against a sample chosen when this was written. A hard-coded "Skogen"
+        // is six characters while the same grid also holds "Dinosaurier" at
+        // eleven, and at 200% only one of those fits its label on one line -
+        // so the theme cards hung 20 epx below the panel at every size where
+        // the page did not scroll.
+        //
+        // None of the ages can wrap, so they are what decide how wide an age
+        // card has to be.
+        AdaptiveTileGrid.Fit(
+            AgeGrid, AgeCard,
+            new CardText("SetupAgeTextStyle", [.. _viewModel.Ages.Select(a => a.Label)], Wraps: false));
+
+        AdaptiveTileGrid.Fit(
+            ThemeGrid, ThemeCard,
+            new CardText("SetupTileLabelTextStyle", [.. _viewModel.Themes.Select(t => t.Label)]),
+            new CardText("CaptionTextStyle", [.. _viewModel.Themes.Select(t => t.Hint)]));
+    }
 
     public void Initialize(OnboardingViewModel viewModel)
     {
         _viewModel = viewModel;
+
+        // The card sizes are measured from the view model's own text, so they
+        // cannot be worked out before this point.
+        FitChoiceCards();
 
         AvatarGrid.ItemsSource = viewModel.Avatars;
         AgeGrid.ItemsSource = viewModel.Ages;
