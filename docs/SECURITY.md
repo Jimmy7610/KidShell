@@ -116,6 +116,70 @@ The program is still on the computer and still startable by other means.
 **Permitted by Windows.** An application-control rule. Only this one actually
 prevents anything, and only once applied *and* verified.
 
+## What the generated AppLocker policy allows
+
+A default-deny allowlist: what is listed may run, everything else may not.
+
+It deliberately does **not** use the default rules from Microsoft's AppLocker
+wizard. Their own guidance calls those "a starter policy when you are first
+testing AppLocker" and names the reason — `%WINDIR%` contains a `Temp`
+subfolder the Users group can create files in, so `%WINDIR%\*` allows anything
+a child chooses to put there. KidShell generated exactly those rules until the
+external audit pointed at them.
+
+What it generates instead:
+
+| Group | How it is identified | Notes |
+|---|---|---|
+| Windows components | Nine named executables under `%SYSTEM32%` | One rule each, with the reason a child session breaks without it |
+| Windows packaged shell | Named publisher | Not a `*` publisher, which allows every packaged app on the machine |
+| KidShell | Its own path | Flagged as weak if it sits somewhere the child can write |
+| The parent's apps | Their own paths | Flagged as weak on the same rule |
+
+Only processes that run **as the child** need entries. AppLocker evaluates
+against the identity running the process, and the policy is scoped to the
+child's SID, so services running as SYSTEM are unaffected.
+
+Command prompts, PowerShell, the registry editor, Task Manager, the scripting
+hosts and the usual living-off-the-land binaries are absent. A default-deny
+policy needs no block rules for them — but `EscapeSurfaces` lists thirty of
+them with a reason each, and a test fails if a future change readmits any.
+
+A policy carrying a blanket rule, a wildcard publisher or an allowed
+interpreter **blocks activation**, and the writer refuses to emit it in
+enforcing mode. It will still write it in audit mode, which blocks nothing and
+is how somebody investigates a policy they were told not to turn on.
+`PolicyAuditReport` renders the whole thing in Swedish for the adult who has to
+consent to it.
+
+---
+
+## Where security-critical state lives
+
+Today: one JSON file in the signed-in user's own profile. On a dedicated device
+that user is the child, and a standard user has full control of their own
+profile — so the child can edit the file that says which apps they may use, how
+long, and what the parent's PIN hashes to.
+
+Integrity checking does not fix that. An HMAC whose key sits beside the data,
+readable by the same account, is recomputable by whoever can edit the data.
+
+The designed boundary is ACLs and an account that is not an administrator:
+`%ProgramData%\KidShell\policy`, inheritance removed, Administrators and
+SYSTEM in full control, the child **read only**. Read rather than nothing,
+because KidShell runs as the child and has to load the policy it enforces.
+
+The child's own name, avatar and theme stay where the child can change them.
+A UAC prompt to change a picture is how a product teaches a family to click
+through UAC prompts.
+
+**The plan is written and tested. No ACL has been applied to any machine.**
+Production never silently falls back to child-writable storage; a development
+build may, and says so in the log. See
+[EXTERNAL-AUDIT-REMEDIATION.md](EXTERNAL-AUDIT-REMEDIATION.md).
+
+---
+
 The same distinction applies to AppLocker itself:
 
 **Can enforce** ≠ **can deploy** ≠ **verified enforcing.**

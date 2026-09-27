@@ -388,7 +388,7 @@ dotnet test KidShell.sln -c Release
 
 Nuvarande verifierade nivå:
 
-**915 automatiska tester passerar** i två projekt — `KidShell.Core.Tests`
+**1316 automatiska tester passerar** i två projekt — `KidShell.Core.Tests`
 och `KidShell.WindowsIntegration.Tests`.
 
 Inget test ändrar den här datorn. Varje Windows-operation körs mot en falsk
@@ -855,7 +855,7 @@ dotnet test KidShell.sln -c Release
 
 Current verified level:
 
-**915 automated tests passing** across two projects — `KidShell.Core.Tests`
+**1316 automated tests passing** across two projects — `KidShell.Core.Tests`
 and `KidShell.WindowsIntegration.Tests`.
 
 No test changes this machine. Every Windows operation runs against a fake

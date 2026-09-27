@@ -11,6 +11,30 @@ required. That is a design constraint, not a coincidence: the security tests in
 particular assert that KidShell *cannot* change a machine, and a test that
 needed a real machine to prove that would be proving the wrong thing.
 
+
+## External audit regression suites
+
+Added when an independent audit's findings were re-tested against a much newer
+tree. Each suite exists because a specific bug was reproduced, or because a
+finding no longer reproduced and something had to keep it that way.
+
+| Suite | What it holds | Findings |
+|---|---|---|
+| `SecurityPartialApplyTests` | An operation whose Apply began is rolled back however it ended | 07 |
+| `ScreenTimeClockRollbackTests` | Winding the clock back never returns the allowance; a real new day does | 05 |
+| `ConfigurationMalformedInputTests` | No exception from Load, and nothing downstream sees a null | 04 |
+| `ScreenTimeLaunchGateTests` | When screen time says no, nothing starts — counted, not assumed | 02 |
+| `OnboardingPinContractTests` | A failed save leaves setup unfinished, and no PIN reaches a log or a file | 01 |
+| `AppLockerLeastPrivilegeTests` | No blanket rules, no wildcard publisher, no interpreter allowed | 06 |
+| `IntegrationGapTests` | Only programs KidShell can start; one spelling per website | 08 |
+| `ProtectedStorageTests` | The child cannot write policy, the parent can still fix it, production never falls back | 03 |
+| `WindowsPathPortabilityTests` | Windows path semantics are the same on any host | portability |
+
+Several of these were **mutation-tested**: the fix was temporarily reverted and
+the suite had to fail. A test that passes against the bug it was written for is
+not a test.
+
+
 ## How the suite is organised
 
 `KidShell.Core.Tests` covers everything in `KidShell.Core`, which targets plain
@@ -112,7 +136,7 @@ Run before any release-shaped commit:
 | `KidShell.Core.Tests` | `net10.0` | Rules, plans, transactions, configuration, screen time, the escape matrix. Runs anywhere. |
 | `KidShell.WindowsIntegration.Tests` | `net10.0-windows` | Every operation that can change Windows, run against fakes. |
 
-**915 tests. None of them changes the machine they run on.**
+**1316 tests. None of them changes the machine they run on.**
 
 ### How the Windows suite stays safe
 

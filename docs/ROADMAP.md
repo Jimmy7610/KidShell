@@ -36,6 +36,27 @@ Four rules that decide arguments, in priority order.
 
 ---
 
+
+## After the external audit
+
+An independent audit of an older commit produced eight findings. All eight were
+re-tested against current HEAD, and the result is recorded in
+[EXTERNAL-AUDIT-REMEDIATION.md](EXTERNAL-AUDIT-REMEDIATION.md).
+
+Five were still present and are fixed. Three had already been fixed by later
+work and now have regression tests so they stay that way. Testing the three
+turned up two bugs the audit had not found, which are also fixed.
+
+What this leaves for a dedicated device, and only for a dedicated device:
+
+* applying the protected policy store's ACLs — the plan and its validation are
+  written, nothing has been applied;
+* enforcing the AppLocker policy — the policy, its audit report and its
+  activation gate are written, nothing has been deployed.
+
+Neither is waiting on more code.
+
+
 ## Completed
 
 ### 0.1 — Application shell ✅
