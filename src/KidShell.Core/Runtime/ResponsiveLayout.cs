@@ -263,6 +263,115 @@ public static class ResponsiveLayout
     public const double MinimumTileHeight = 138;
 
     /// <summary>
+    /// How much of a row a decorative wordmark may take before it has to give
+    /// way to the things that do something.
+    ///
+    /// A share rather than a width, because the thing it must not crowd out -
+    /// a row of buttons whose labels grow with the text size - has no fixed
+    /// width either.
+    /// </summary>
+    public const double BrandShare = 0.35;
+
+    /// <summary>How much of the header row the status readout may take.</summary>
+    public const double StatusShare = 0.32;
+
+    /// <summary>
+    /// The width to cap a decorative or secondary block at.
+    ///
+    /// This exists because of how the two containers involved measure. Both
+    /// the wordmark and the status strip sit in Auto grid columns, and an Auto
+    /// column measures its child with unlimited width: a WrapPanel asked to
+    /// measure against infinity reports a single row, caches it, and then
+    /// never wraps however narrow the window gets. That is how the clock and
+    /// the battery ran off the right edge at a larger text size.
+    ///
+    /// A share of the window gives them a finite limit to wrap inside without
+    /// pinning the layout to any particular screen.
+    /// </summary>
+    public static double ShareOfRow(double availableWidth, double share)
+    {
+        if (double.IsNaN(availableWidth) || availableWidth <= 0 || share <= 0)
+        {
+            return double.PositiveInfinity;
+        }
+
+        return availableWidth * share;
+    }
+
+    /// <summary>
+    /// Whether the footer wordmark is drawn.
+    ///
+    /// It is decoration sharing a row with the buttons that leave Föräldraläge.
+    /// On a compact window the buttons need the whole row, so the wordmark
+    /// goes. Decoration gives way; function does not.
+    /// </summary>
+    public static bool ShowFooterBrand(double width) =>
+        !double.IsNaN(width) && width > 0 && Classify(width) != LayoutSize.Compact;
+
+    /// <summary>
+    /// Whether the header keeps its wordmark and the child's avatar.
+    ///
+    /// Below the narrowest supported window the wordmark loses the width it
+    /// needs and wraps to three lines, which at a large text size is most of
+    /// the window, and the avatar is drawn as a vertical sliver. Neither says
+    /// anything the header does not already say in words.
+    /// </summary>
+    public static bool ShowHeaderDecoration(double width) =>
+        !double.IsNaN(width) && width >= MinimumSupportedWidth;
+
+    /// <summary>
+    /// The width a card's text actually gets: the card, less everything in it
+    /// that is not text.
+    ///
+    /// Floored, because a card narrower than its own padding would otherwise
+    /// ask for a negative width and measure as a single character per line.
+    /// </summary>
+    public static double CardTextWidth(double itemWidth, double decoration) =>
+        Math.Max(MinimumCardTextWidth, itemWidth - decoration);
+
+    /// <summary>The narrowest a card's text column may be measured at.</summary>
+    public const double MinimumCardTextWidth = 40;
+
+    /// <summary>
+    /// How wide a card has to be to hold a line that cannot wrap.
+    ///
+    /// Only for text that has no useful break: an age of "10+" split across
+    /// two lines is not an improvement on one that is cut in half. At 200% it
+    /// needed 137 epx inside a 104-epx card and lost the "+", so the card
+    /// grows and the grid fits fewer of them per row.
+    ///
+    /// Text that CAN wrap must never be passed here, or a one-line hint would
+    /// drag every card in the grid out to the width of its longest sentence.
+    /// </summary>
+    public static double CardWidth(double designWidth, double decoration, double widestUnwrappable)
+    {
+        if (double.IsNaN(widestUnwrappable) || widestUnwrappable < 0 || !double.IsFinite(widestUnwrappable))
+        {
+            return designWidth;
+        }
+
+        return Math.Max(designWidth, decoration + widestUnwrappable);
+    }
+
+    /// <summary>
+    /// How tall a card has to be to hold its decoration and its text.
+    ///
+    /// The design height is a floor, not a target: at ordinary text sizes the
+    /// cards look exactly as they were drawn, and only text that genuinely
+    /// needs more room makes the card grow. Shrinking the words instead is
+    /// what this exists to avoid.
+    /// </summary>
+    public static double CardHeight(double designHeight, double decoration, double textHeight)
+    {
+        if (double.IsNaN(textHeight) || textHeight < 0 || !double.IsFinite(textHeight))
+        {
+            return designHeight;
+        }
+
+        return Math.Max(designHeight, decoration + textHeight);
+    }
+
+    /// <summary>
     /// How tall each app card should be so that a given number of rows fits.
     ///
     /// On a short window the cards kept their full height, two rows came to

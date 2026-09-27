@@ -347,6 +347,123 @@ public class ResponsiveLayoutTests
             $"{physical}px @ {scale}% got {card:F0}-epx cards in {available:F0} epx");
     }
 
+    // ------------------------------------------------------------------
+    // Text scaling: the decisions the chrome makes when the words grow.
+    // ------------------------------------------------------------------
+
+    [Theory]
+    [MemberData(nameof(SupportedSizes))]
+    public void Decoration_never_takes_more_than_its_share_of_a_row(
+        int physical, int scale, double effective)
+    {
+        var brand = ResponsiveLayout.ShareOfRow(effective, ResponsiveLayout.BrandShare);
+        var status = ResponsiveLayout.ShareOfRow(effective, ResponsiveLayout.StatusShare);
+
+        // The point of the cap: whatever the window, the two decorative blocks
+        // together leave the majority of the row to the things that do
+        // something. A wordmark that wraps is fine; one that pushes the exit
+        // buttons off the window is not.
+        Assert.True(brand + status < effective * 0.7,
+            $"{physical}px @ {scale}%: decoration wanted {brand + status:F0} of {effective:F0} epx");
+
+        Assert.True(double.IsFinite(brand),
+            "a cap of infinity is what stopped the header wrapping in the first place");
+    }
+
+    [Fact]
+    public void A_row_with_no_width_yet_caps_nothing()
+    {
+        // Before the first layout pass the width is NaN or zero. Returning a
+        // real number there would pin MaxWidth to it and never let go.
+        Assert.True(double.IsPositiveInfinity(ResponsiveLayout.ShareOfRow(double.NaN, 0.35)));
+        Assert.True(double.IsPositiveInfinity(ResponsiveLayout.ShareOfRow(0, 0.35)));
+    }
+
+    [Theory]
+    [InlineData(640, false)]
+    [InlineData(779, false)]
+    [InlineData(780, true)]
+    [InlineData(1366, true)]
+    public void Header_decoration_goes_below_the_narrowest_supported_window(
+        double width, bool shown) =>
+        Assert.Equal(shown, ResponsiveLayout.ShowHeaderDecoration(width));
+
+    [Theory]
+    [InlineData(640, false)]
+    [InlineData(899, false)]
+    [InlineData(900, true)]
+    [InlineData(1920, true)]
+    public void The_footer_wordmark_gives_the_row_to_the_buttons_when_compact(
+        double width, bool shown) =>
+        Assert.Equal(shown, ResponsiveLayout.ShowFooterBrand(width));
+
+    [Fact]
+    public void Decoration_is_dropped_before_the_navigation_loses_its_labels()
+    {
+        // The order matters and is easy to get backwards. Anything that is
+        // still showing its wordmark must also still be showing its labels.
+        foreach (var width in new double[] { 640, 700, 780, 800, 819, 960, 1024, 1280, 1920, 3840 })
+        {
+            if (ResponsiveLayout.ShowFooterBrand(width))
+            {
+                Assert.Equal(NavigationMode.Expanded, ResponsiveLayout.DecideNavigation(width));
+            }
+        }
+    }
+
+    [Fact]
+    public void A_card_grows_for_text_that_needs_it_and_never_shrinks_below_the_design()
+    {
+        const double design = 198;
+        const double decoration = 92;
+
+        // Ordinary text sizes: the card looks exactly as it was drawn.
+        Assert.Equal(design, ResponsiveLayout.CardHeight(design, decoration, 60));
+
+        // Text that has outgrown the card: the card grows rather than the
+        // words shrinking or the label being sliced through.
+        Assert.Equal(decoration + 140, ResponsiveLayout.CardHeight(design, decoration, 140));
+    }
+
+    [Fact]
+    public void A_card_that_has_not_been_measured_keeps_its_design_height()
+    {
+        // A probe that has not laid out yet reports NaN. Treating that as a
+        // height collapses every card in the grid at once.
+        Assert.Equal(198, ResponsiveLayout.CardHeight(198, 92, double.NaN));
+        Assert.Equal(198, ResponsiveLayout.CardHeight(198, 92, double.PositiveInfinity));
+    }
+
+    [Fact]
+    public void A_card_widens_for_a_line_that_cannot_wrap()
+    {
+        const double design = 104;
+
+        // Ordinary text sizes: the card stays the square it was drawn as.
+        Assert.Equal(design, ResponsiveLayout.CardWidth(design, 0, 60));
+
+        // "10+" at 200% needs 137 and has nowhere to break, so the card grows
+        // and the grid fits fewer per row. The alternative was losing the "+".
+        Assert.Equal(137, ResponsiveLayout.CardWidth(design, 0, 137));
+
+        // Side padding counts against the text, not for it.
+        Assert.Equal(161, ResponsiveLayout.CardWidth(design, 24, 137));
+    }
+
+    [Fact]
+    public void A_card_that_has_not_been_measured_keeps_its_design_width()
+    {
+        Assert.Equal(104, ResponsiveLayout.CardWidth(104, 0, double.NaN));
+        Assert.Equal(104, ResponsiveLayout.CardWidth(104, 0, double.PositiveInfinity));
+    }
+
+    [Theory]
+    [InlineData(232, 36, 196)]
+    [InlineData(232, 300, ResponsiveLayout.MinimumCardTextWidth)]
+    public void Card_text_is_measured_against_the_room_it_actually_has(
+        double item, double decoration, double expected) =>
+        Assert.Equal(expected, ResponsiveLayout.CardTextWidth(item, decoration));
+
     /// <summary>
     /// The height that goes with a width in the supported matrix.
     ///
