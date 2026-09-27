@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using KidShell.Core.Diagnostics;
 
 namespace KidShell.App.Services;
 
@@ -183,6 +184,7 @@ internal sealed class LayoutAudit
         new(700, 500, "below the minimum; reachable at high DPI"),
 
         new(780, 560, "minimum supported window"),
+        new(800, 600, "the smallest effective resolution Windows will offer"),
         new(819, 614, "1024x768 @125%"),
         new(960, 600, "1440x900 @150%"),
         new(1024, 640, "1280x800 @125%"),
@@ -209,12 +211,14 @@ internal sealed class LayoutAudit
 
     private readonly MainWindow _window;
     private readonly ShellViewModel _shell;
+    private readonly IKidShellLogger _logger;
     private readonly List<Finding> _findings = [];
 
-    internal LayoutAudit(MainWindow window, ShellViewModel shell)
+    internal LayoutAudit(MainWindow window, ShellViewModel shell, IKidShellLogger logger)
     {
         _window = window;
         _shell = shell;
+        _logger = logger;
     }
 
     internal sealed record Finding(
@@ -256,6 +260,7 @@ internal sealed class LayoutAudit
 
             foreach (var (name, show) in Screens())
             {
+                _logger.Info("LayoutAudit", $"{actual.Width}x{actual.Height} {name}");
                 show();
                 await SettleAsync();
                 await InspectThroughlyAsync(actual, name);
@@ -273,6 +278,7 @@ internal sealed class LayoutAudit
 
             foreach (var (name, show) in StressStates())
             {
+                _logger.Info("LayoutAudit", $"{actual.Width}x{actual.Height} {name}");
                 show();
                 await SettleAsync();
                 await InspectThroughlyAsync(actual, name);
@@ -513,6 +519,17 @@ internal sealed class LayoutAudit
     /// the previous size, which produces an audit full of findings that are
     /// really just the harness racing the layout engine.
     /// </summary>
+    /// <summary>
+    /// How long a single settle may wait for a frame.
+    ///
+    /// CompositionTarget.Rendering only fires when there is something to draw,
+    /// and once the pages had their own scrollers a ChangeView that changed
+    /// nothing drew nothing - so the await never resumed and the whole sweep
+    /// stopped, idle, with the window still open. It looked exactly like a
+    /// layout loop and was the opposite: nothing was happening at all.
+    /// </summary>
+    private static readonly TimeSpan FrameTimeout = TimeSpan.FromMilliseconds(250);
+
     private async Task SettleAsync()
     {
         for (var i = 0; i < 4; i++)
@@ -522,15 +539,34 @@ internal sealed class LayoutAudit
                 root.UpdateLayout();
             }
 
-            var frame = new TaskCompletionSource();
-            void OnRendering(object? sender, object e)
-            {
-                CompositionTarget.Rendering -= OnRendering;
-                frame.SetResult();
-            }
+            await NextFrameAsync().ConfigureAwait(true);
+        }
+    }
 
-            CompositionTarget.Rendering += OnRendering;
-            await frame.Task;
+    /// <summary>
+    /// Waits for the next rendered frame, or gives up and carries on.
+    /// </summary>
+    private async Task NextFrameAsync()
+    {
+        var frame = new TaskCompletionSource();
+
+        void OnRendering(object? sender, object e)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            frame.TrySetResult();
+        }
+
+        CompositionTarget.Rendering += OnRendering;
+
+        // A timeout rather than a promise. UpdateLayout above has already done
+        // the work this is waiting to see; the frame is confirmation, and a
+        // still screen is confirmation enough.
+        var timeout = Task.Delay(FrameTimeout);
+
+        if (await Task.WhenAny(frame.Task, timeout).ConfigureAwait(true) == timeout)
+        {
+            CompositionTarget.Rendering -= OnRendering;
+            frame.TrySetResult();
         }
     }
 
@@ -615,7 +651,7 @@ internal sealed class LayoutAudit
 
         var window = new Rect(0, 0, root.ActualWidth, root.ActualHeight);
 
-        Walk(root, root, window, viewport, screen, scrollable: false, clip: window);
+        Walk(root, root, window, viewport, screen, scrollsDown: false, scrollsAcross: false, clip: window);
     }
 
     /// <summary>
@@ -775,7 +811,8 @@ internal sealed class LayoutAudit
         Rect window,
         Viewport viewport,
         string screen,
-        bool scrollable,
+        bool scrollsDown,
+        bool scrollsAcross,
         Rect clip)
     {
         if (node is FrameworkElement element)
@@ -789,9 +826,8 @@ internal sealed class LayoutAudit
             // reachable, which is the documented answer to not fitting.
             if (node is ScrollViewer scroller)
             {
-                scrollable = scrollable ||
-                             scroller.ScrollableHeight > Tolerance ||
-                             scroller.ScrollableWidth > Tolerance;
+                scrollsDown = scrollsDown || scroller.ScrollableHeight > Tolerance;
+                scrollsAcross = scrollsAcross || scroller.ScrollableWidth > Tolerance;
 
                 // A ScrollViewer clips to its viewport, so everything below it
                 // is only visible inside these bounds. Without this, content
@@ -824,13 +860,13 @@ internal sealed class LayoutAudit
                 ReportSiblingOverlaps(panel, root, clip, viewport, screen);
             }
 
-            Check(element, root, window, clip, viewport, screen, scrollable);
+            Check(element, root, window, clip, viewport, screen, scrollsDown, scrollsAcross);
         }
 
         var count = VisualTreeHelper.GetChildrenCount(node);
         for (var i = 0; i < count; i++)
         {
-            Walk(VisualTreeHelper.GetChild(node, i), root, window, viewport, screen, scrollable, clip);
+            Walk(VisualTreeHelper.GetChild(node, i), root, window, viewport, screen, scrollsDown, scrollsAcross, clip);
         }
     }
 
@@ -841,8 +877,13 @@ internal sealed class LayoutAudit
         Rect clip,
         Viewport viewport,
         string screen,
-        bool scrollable)
+        bool scrollsDown,
+        bool scrollsAcross)
     {
+        // Either axis scrolling makes content beyond the window reachable;
+        // the checks below ask about the right one.
+        var scrollable = scrollsDown || scrollsAcross;
+
         if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
         {
             return;
@@ -886,13 +927,6 @@ internal sealed class LayoutAudit
             }
         }
 
-        // Laid out beyond the window. Only a defect when nothing scrolls,
-        // because otherwise the user can simply reach it.
-        if (scrollable)
-        {
-            return;
-        }
-
         Rect bounds;
         try
         {
@@ -904,6 +938,108 @@ internal sealed class LayoutAudit
         {
             // An element mid-transition has no path to the root yet. It will
             // be measured on the next screen.
+            return;
+        }
+
+        // Text that was given less room than its words need, and neither
+        // wraps nor ends in an ellipsis - so Windows simply stops drawing it.
+        //
+        // This is the quietest failure of the lot. The ELEMENT fits its box
+        // perfectly; it is the glyphs inside that are cut, and nothing in the
+        // layout tree says so. IsTextTrimmed only answers for text that was
+        // told to trim. At 200% the navigation read "Skärmtic" and the side
+        // panel said "Aktiv (standard", and every other rule here called that
+        // a clean sweep.
+        //
+        // The comparison is against a DETACHED copy: same text, same style,
+        // measured with no constraint. It is in nobody's visual tree, so
+        // measuring it cannot disturb the layout being audited.
+        // Words only. A FontIcon draws its glyph through a TextBlock holding
+        // one private-use character, and the navigation deliberately gives
+        // that TextBlock a fixed 26-epx width - so the glyph "needs 38, was
+        // given 26" at 200% while being drawn exactly as designed. That is
+        // 8,490 of the findings on the first run of this rule, and every one
+        // of them an icon behaving itself.
+        if (element is TextBlock { Text.Length: > 0 } silent &&
+            !string.IsNullOrWhiteSpace(silent.Text) &&
+            !IsGlyph(silent.Text) &&
+            silent.TextWrapping == TextWrapping.NoWrap &&
+            silent.TextTrimming == TextTrimming.None &&
+            !scrollsAcross)
+        {
+            var natural = NaturalWidth(silent);
+            var given = SlotWidth(silent);
+
+            if (natural - given > SqueezeTolerance)
+            {
+                _findings.Add(Record(
+                    "clipped-text",
+                    $"needs {natural:F0} epx, given {given:F0}, and neither wraps nor ellipsises: " +
+                    $"\"{Shorten(silent.Text)}\""));
+            }
+        }
+
+        // Text cut off by whatever it is drawn inside.
+        //
+        // Checked in BOTH directions and for text specifically, which the
+        // panel rule above does not cover. A TextBlock's bounds are the extent
+        // of its words, so any part outside the clip is a word the reader
+        // cannot see - there is no equivalent of a control's oversized
+        // background to explain it away.
+        //
+        // This is the rule that was missing. At 200% the navigation read
+        // "Skärmtic" and the side panel said "Aktiv (standard", and the audit
+        // reported a clean sweep: nothing was off-window, nothing was trimmed
+        // with an ellipsis, and the panel rule only looked downwards. A
+        // screenshot found in seconds what the audit had been blind to.
+        // Words only, and only where the element's bounds mean what they
+        // appear to. A FontIcon draws its glyph through a TextBlock holding one
+        // private-use character, and a right-aligned label reports the extent
+        // of its text rather than the slot it was arranged in - both produce
+        // bounds that sit outside a clip while rendering perfectly.
+        if (element is TextBlock { Text.Length: > 0 } clippedText &&
+            !string.IsNullOrWhiteSpace(clippedText.Text) &&
+            !IsGlyph(clippedText.Text) &&
+            clippedText.TextAlignment is TextAlignment.Left or TextAlignment.DetectFromContent)
+        {
+            // Inside a ScrollViewer the clip can be unbounded in the
+            // scrolling direction, and subtracting infinity answers nothing.
+            // A comparison that cannot be made is not a finding.
+            if (!double.IsFinite(clip.Right) || !double.IsFinite(clip.Bottom) ||
+                !double.IsFinite(bounds.Right) || !double.IsFinite(bounds.Bottom))
+            {
+                return;
+            }
+
+            var right = bounds.Right - clip.Right;
+            var bottom = bounds.Bottom - clip.Bottom;
+            var left = clip.Left - bounds.Left;
+
+            if (right > SqueezeTolerance && !scrollsAcross)
+            {
+                _findings.Add(Record("clipped-text", $"{right:F0} epx cut off the right: \"{Shorten(clippedText.Text)}\""));
+            }
+            else if (bottom > SqueezeTolerance && !scrollsDown)
+            {
+                _findings.Add(Record("clipped-text", $"{bottom:F0} epx cut off the bottom: \"{Shorten(clippedText.Text)}\""));
+            }
+            else if (left > SqueezeTolerance && !scrollsAcross)
+            {
+                _findings.Add(Record("clipped-text", $"{left:F0} epx cut off the left: \"{Shorten(clippedText.Text)}\""));
+            }
+        }
+
+        // Laid out beyond the window. Only a defect when nothing scrolls,
+        // because otherwise the user can simply reach it.
+        //
+        // The text checks above deliberately come FIRST. They used to sit
+        // after this return, which made them dead code for every element
+        // inside a scrolling region - which is nearly all of them - and is why
+        // the audit called a screen clean while the navigation read
+        // "Skärmtic". Being able to scroll a panel up and down does not make a
+        // word cut off its right-hand edge readable.
+        if (scrollable)
+        {
             return;
         }
 
@@ -1007,6 +1143,59 @@ internal sealed class LayoutAudit
         }
     }
 
+    /// <summary>
+    /// How wide this text would like to be, measured on a copy that belongs to
+    /// nobody.
+    /// </summary>
+    /// <summary>
+    /// The width the text was actually arranged into.
+    ///
+    /// NOT ActualWidth. A TextBlock with NoWrap reports the extent of its
+    /// glyphs there even when the slot it was given is narrower - it then
+    /// clips its own text to the arrange rectangle and says nothing. The
+    /// navigation label read "Skärmtic" with ActualWidth 130.4, natural width
+    /// 131.0 and a slot of 122.0: comparing against ActualWidth found a
+    /// difference of 0.6 epx and called it clean, while a whole letter was
+    /// missing on screen.
+    ///
+    /// DesiredSize is the honest one, because Measure clamps it to whatever
+    /// constraint the parent imposed. Its margin is removed, since the text
+    /// does not get to draw in it.
+    /// </summary>
+    private static double SlotWidth(TextBlock text)
+    {
+        var desired = text.DesiredSize.Width - text.Margin.Left - text.Margin.Right;
+
+        // An element that has never been measured reports zero, which would
+        // make every string look clipped. ActualWidth is the fallback, and the
+        // smaller of the two is the room the glyphs really had.
+        if (desired <= 0 || !double.IsFinite(desired))
+        {
+            return text.ActualWidth;
+        }
+
+        return Math.Min(desired, text.ActualWidth);
+    }
+
+    private static double NaturalWidth(TextBlock original)
+    {
+        var probe = new TextBlock
+        {
+            Text = original.Text,
+            FontFamily = original.FontFamily,
+            FontSize = original.FontSize,
+            FontWeight = original.FontWeight,
+            FontStyle = original.FontStyle,
+            FontStretch = original.FontStretch,
+            CharacterSpacing = original.CharacterSpacing,
+            TextWrapping = TextWrapping.NoWrap
+        };
+
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        return probe.DesiredSize.Width;
+    }
+
     private static string Describe(FrameworkElement element)
     {
         var type = element.GetType().Name;
@@ -1021,7 +1210,35 @@ internal sealed class LayoutAudit
             return $"{type}(\"{Shorten(text.Text)}\")";
         }
 
+        // An unnamed container, placed by whatever encloses it.
+        //
+        // Fifty-three findings once said only "Grid", which named a defect
+        // without saying where it was - and the layout has a great many
+        // unnamed Grids. The nearest named ancestor is enough to find it.
+        if (NearestNamed(element) is { } parent)
+        {
+            return $"{type} in {parent}";
+        }
+
         return type;
+    }
+
+    /// <summary>The name of the closest ancestor that has one.</summary>
+    private static string? NearestNamed(FrameworkElement element)
+    {
+        var node = VisualTreeHelper.GetParent(element);
+
+        while (node is not null)
+        {
+            if (node is FrameworkElement { Name.Length: > 0 } named)
+            {
+                return named.Name;
+            }
+
+            node = VisualTreeHelper.GetParent(node);
+        }
+
+        return null;
     }
 
     private static string Shorten(string value)
@@ -1048,7 +1265,8 @@ internal sealed class LayoutAudit
         // Except compares by value and would quietly drop the repeats - which
         // turned forty-five shortened labels into "3" the first time.
         static bool IsDefect(Finding f) =>
-            f.Kind is "clipped" or "off-window" or "unreachable-control" or "squeezed" or "overlapping";
+            f.Kind is "clipped" or "clipped-text" or "off-window" or "unreachable-control"
+                   or "squeezed" or "overlapping";
 
         var defects = findings.Where(IsDefect).ToList();
         var notes = findings.Where(f => !IsDefect(f)).ToList();

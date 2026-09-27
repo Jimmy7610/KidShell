@@ -186,7 +186,7 @@ public sealed partial class MainWindow : Window
         // measured rather than reasoned about.
         if (LayoutAudit.TakeRequest() is { } auditPath)
         {
-            var findings = await new LayoutAudit(this, _viewModel).RunAsync();
+            var findings = await new LayoutAudit(this, _viewModel, _logger).RunAsync();
             await LayoutAudit.WriteAsync(auditPath, findings);
             Close();
             return;
@@ -197,7 +197,7 @@ public sealed partial class MainWindow : Window
         // be looked at by a person.
         if (LayoutAudit.TakePose() is { } pose)
         {
-            await new LayoutAudit(this, _viewModel).PoseAsync(pose);
+            await new LayoutAudit(this, _viewModel, _logger).PoseAsync(pose);
             return;
         }
 
