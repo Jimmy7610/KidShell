@@ -72,7 +72,18 @@ public partial class App : Application
 
         services.AddSingleton<IExecutableResolver>(new WindowsExecutableResolver());
         services.AddSingleton<IProcessRunner, ProcessRunner>();
-        services.AddSingleton<IAppLauncher, AppLauncher>();
+
+        // The launcher everything resolves is the GUARDED one.
+        //
+        // AppLauncher itself is registered only as a concrete type, so asking
+        // for IAppLauncher cannot get you the unguarded one by accident. The
+        // screen-time check therefore sits on the single path every launch
+        // takes, rather than in each caller that remembered to write it.
+        services.AddSingleton<AppLauncher>();
+        services.AddSingleton<IAppLauncher>(sp => new ScreenTimeGuardedLauncher(
+            sp.GetRequiredService<AppLauncher>(),
+            sp.GetRequiredService<IScreenTimeCoordinator>(),
+            sp.GetRequiredService<IKidShellLogger>()));
 
         // Installed-application discovery. Every scanner is read-only; the
         // catalogue merges and de-duplicates what they find.
