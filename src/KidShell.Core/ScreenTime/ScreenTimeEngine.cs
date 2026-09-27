@@ -91,8 +91,13 @@ public sealed class ScreenTimeEngine
     {
         var previous = Evaluate();
 
-        RollOverIfNewDay();
+        // Detection first, rollover second. It used to be the other way round,
+        // and the order was the bug: rolling over writes a fresh
+        // LastUpdatedUtc, and that field is the only thing the tamper check
+        // has to compare against. A clock wound back over midnight therefore
+        // reset the counter and then erased the evidence that it had.
         DetectClockTampering();
+        RollOverIfNewDay();
 
         var now = _time.GetTimestamp();
         var elapsed = _time.GetElapsedTime(_lastTickStamp, now);
@@ -286,11 +291,24 @@ public sealed class ScreenTimeEngine
     }
 
     /// <summary>
-    /// Starts a new day when the local date has changed.
+    /// Starts a new day when the local date has moved FORWARD.
     ///
     /// Compares date strings rather than doing 24-hour arithmetic: on the
     /// night the clocks change a day is 23 or 25 hours, and anything computing
-    /// "midnight plus 24 hours" is wrong twice a year.
+    /// "midnight plus 24 hours" is wrong twice a year. The keys are
+    /// yyyy-MM-dd, so an ordinal comparison orders them exactly as dates.
+    ///
+    /// The direction is the point. This used to ask only whether the date had
+    /// CHANGED, and a clock wound back over midnight changes it - so winding
+    /// the clock back into yesterday read as an ordinary new morning and
+    /// handed back the whole allowance. Which is, of course, precisely what
+    /// somebody moving the clock was hoping for.
+    ///
+    /// A backward date therefore keeps the counter and is recorded instead.
+    /// The trade is deliberate: a parent correcting a clock that was wrongly
+    /// set into the future will find today's usage already spent, and can give
+    /// time back with the extension button. A child who discovers that moving
+    /// the clock earns another hour has found a hole in the product.
     /// </summary>
     private void RollOverIfNewDay()
     {
@@ -298,6 +316,17 @@ public sealed class ScreenTimeEngine
 
         if (string.Equals(_current.LocalDate, today, StringComparison.Ordinal))
         {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(_current.LocalDate) &&
+            string.CompareOrdinal(today, _current.LocalDate) < 0)
+        {
+            _logger.Warning("ScreenTime",
+                $"The local date moved backwards from {_current.LocalDate} to {today}; " +
+                "today's usage is kept and the clock change is recorded.");
+
+            RecordSuspiciousClock();
             return;
         }
 
@@ -335,12 +364,29 @@ public sealed class ScreenTimeEngine
         var now = _time.GetUtcNow();
 
         // A minute of tolerance absorbs NTP corrections, which are normal.
+        //
+        // UTC, not local time, which is what makes daylight saving a non-event
+        // here: the clocks going back in the autumn move local time, never
+        // UTC, so an honest October morning is not mistaken for tampering.
         if (now < last - TimeSpan.FromMinutes(1))
         {
-            _current.SuspiciousClockEvents++;
             _logger.Warning("ScreenTime",
                 $"The clock moved backwards by {(last - now).TotalMinutes:F0} minutes since the last session.");
-            _store.Save(_current);
+            RecordSuspiciousClock();
         }
+    }
+
+    /// <summary>
+    /// Notes a clock change and keeps the record.
+    ///
+    /// Deliberately does not touch LastUpdatedUtc: that field is the evidence
+    /// the next check compares against, and overwriting it here would hide the
+    /// second half of a clock change the same way the old rollover hid the
+    /// first.
+    /// </summary>
+    private void RecordSuspiciousClock()
+    {
+        _current.SuspiciousClockEvents++;
+        _store.Save(_current);
     }
 }
