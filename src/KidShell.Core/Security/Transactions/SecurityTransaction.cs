@@ -94,7 +94,7 @@ public sealed record TransactionResult
 ///     Preflight all -> Snapshot all -> Apply each -> Verify each
 ///     any failure -> Rollback everything already applied, newest first
 ///
-/// Three rules make this safe rather than merely orderly:
+/// Four rules make this safe rather than merely orderly:
 ///
 ///  1. **Everything is preflighted before anything is applied.** A transaction
 ///     that would fail on step 7 must not have performed steps 1-6.
@@ -103,6 +103,22 @@ public sealed record TransactionResult
 ///     nothing to restore.
 ///  3. **An operation that cannot roll back cannot take part.** Admitting one
 ///     would make the whole transaction irreversible, which defeats the point.
+///  4. **Once Apply begins, the operation is a rollback candidate.** It stays
+///     one however Apply ends - success, failure, exception, cancellation, or
+///     a verification that disagrees with it - until the transaction commits.
+///
+/// Rule 4 is the one that was missing. An operation used to join the rollback
+/// list only after Apply had SUCCEEDED, so a plain failure result took neither
+/// path and the operation most likely to have left half of its work on the
+/// machine was the one operation never undone. An operation is several writes;
+/// a failure on the third says nothing about the first two, and an operation's
+/// own account of how far it got is exactly what must not be trusted.
+///
+/// It follows that operations which changed nothing are rolled back too.
+/// That is intended and cheap: rollback restores a value captured beforehand,
+/// so undoing something that never happened writes back what was already
+/// there. The opposite mistake leaves a family's computer in a state nobody
+/// chose, which is the whole thing this type exists to prevent.
 ///
 /// Cancellation obeys the same principle, with a hinge at the first Apply:
 ///
@@ -226,6 +242,20 @@ public sealed class SecurityTransaction
     {
         var startedAt = _time.GetUtcNow();
         var snapshots = new List<OperationSnapshot>();
+
+        // Two lists, because they answer different questions.
+        //
+        //   candidates - every operation whose Apply BEGAN, and therefore
+        //                every operation that might have changed something.
+        //                This is what rollback works from.
+        //   applied    - operations whose Apply reported success. This is what
+        //                the result reports, so a parent is never told that a
+        //                step succeeded when it did not.
+        //
+        // They used to be the same list, which is what made a failed Apply
+        // unrecoverable: the operation most likely to have left half its work
+        // behind was the one operation never rolled back.
+        var candidates = new List<ISecurityOperation>();
         var applied = new List<ISecurityOperation>();
 
         // ---------------------------------------------------------- refuse
@@ -359,14 +389,25 @@ public sealed class SecurityTransaction
             // whether the applied list is empty.
             if (cancellationToken.IsCancellationRequested)
             {
-                return applied.Count == 0
+                return candidates.Count == 0
                     ? CleanAbort(context.Mode, startedAt, snapshots, applied)
                     : await RollbackAsync(
-                        context, startedAt, snapshots, applied,
+                        context, startedAt, snapshots, candidates, applied,
                         operation.Id, CancellationMessage, wasCancelled: true).ConfigureAwait(false);
             }
 
             State = TransactionState.Applying;
+
+            // BEFORE the call, not after it.
+            //
+            // The moment Apply begins, this operation may have changed
+            // something, and nothing it reports afterwards can be trusted to
+            // mean otherwise - an operation is several writes, and a failure
+            // on the third says nothing about the first two. Undoing an
+            // operation that turned out to change nothing writes back a value
+            // that was already there; the opposite mistake leaves a family's
+            // computer in a state nobody chose.
+            candidates.Add(operation);
 
             var applyStage = await Safely(
                 () => operation.ApplyAsync(context, cancellationToken),
@@ -374,21 +415,15 @@ public sealed class SecurityTransaction
 
             if (applyStage.Cancelled)
             {
-                // A cancelled Apply may or may not have taken effect before it
-                // noticed, so it counts as applied and gets rolled back.
-                // Undoing something that never happened is harmless; leaving
-                // something applied is not.
-                applied.Add(operation);
-
                 return await RollbackAsync(
-                    context, startedAt, snapshots, applied,
+                    context, startedAt, snapshots, candidates, applied,
                     operation.Id, CancellationMessage, wasCancelled: true).ConfigureAwait(false);
             }
 
             if (!applyStage.Success)
             {
                 return await RollbackAsync(
-                    context, startedAt, snapshots, applied,
+                    context, startedAt, snapshots, candidates, applied,
                     operation.Id, applyStage.Message, wasCancelled: false).ConfigureAwait(false);
             }
 
@@ -405,14 +440,14 @@ public sealed class SecurityTransaction
             if (verifyStage.Cancelled)
             {
                 return await RollbackAsync(
-                    context, startedAt, snapshots, applied,
+                    context, startedAt, snapshots, candidates, applied,
                     operation.Id, CancellationMessage, wasCancelled: true).ConfigureAwait(false);
             }
 
             if (!verifyStage.Success)
             {
                 return await RollbackAsync(
-                    context, startedAt, snapshots, applied,
+                    context, startedAt, snapshots, candidates, applied,
                     operation.Id, verifyStage.Message, wasCancelled: false).ConfigureAwait(false);
             }
         }
@@ -505,6 +540,7 @@ public sealed class SecurityTransaction
         SecurityExecutionContext context,
         DateTimeOffset startedAt,
         List<OperationSnapshot> snapshots,
+        List<ISecurityOperation> candidates,
         List<ISecurityOperation> applied,
         string failedOperationId,
         string failureMessage,
@@ -512,8 +548,8 @@ public sealed class SecurityTransaction
     {
         _logger.Warning(SecurityAuditEvents.Category,
             wasCancelled
-                ? $"Transaction {TransactionId} cancelled at {failedOperationId} after applying {applied.Count} operation(s); rolling back."
-                : $"Transaction {TransactionId} failed at {failedOperationId}; rolling back {applied.Count} operation(s).");
+                ? $"Transaction {TransactionId} cancelled at {failedOperationId} after starting {candidates.Count} operation(s); rolling back."
+                : $"Transaction {TransactionId} failed at {failedOperationId}; rolling back {candidates.Count} operation(s).");
 
         // Deliberately not linked to the caller's token.
         using var rollbackCts = new CancellationTokenSource(RollbackBudget);
@@ -522,9 +558,11 @@ public sealed class SecurityTransaction
         var rolledBack = new List<string>();
         var rollbackFailed = false;
 
-        for (var i = applied.Count - 1; i >= 0; i--)
+        // Newest first, so the operation that just failed is undone before the
+        // ones it was layered on top of.
+        for (var i = candidates.Count - 1; i >= 0; i--)
         {
-            var operation = applied[i];
+            var operation = candidates[i];
             var snapshot = snapshots.FirstOrDefault(s => s.OperationId == operation.Id);
 
             if (snapshot is null)
