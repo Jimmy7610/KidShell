@@ -66,6 +66,8 @@ public static class AppControlPolicyBuilder
                 "så den hindrar inte att andra program startas därifrån."));
         }
 
+        AddSafetyWarnings(deduplicated, warnings);
+
         return new AppControlPolicy
         {
             Rules = deduplicated,
@@ -81,27 +83,31 @@ public static class AppControlPolicyBuilder
     /// </summary>
     private static void AddSystemRules(List<AppControlRule> rules, string kidShellPath, List<PolicyWarning> warnings)
     {
-        rules.Add(new AppControlRule
+        // One rule per Windows component, each with the reason it is here.
+        //
+        // This used to be %WINDIR%\* and %PROGRAMFILES%\*, which is the
+        // starter policy from Microsoft's own wizard - and their guidance says
+        // in terms that it is a starting point for testing, not a security
+        // boundary, because %WINDIR%\Temp is writable by the Users group. A
+        // child who can write a file into a folder the policy allows can run
+        // anything they like, which is the whole allowlist gone.
+        //
+        // %PROGRAMFILES%\* was not even a Windows requirement. It allowed
+        // every installed program on the machine: exactly the set the parent
+        // was choosing between.
+        foreach (var dependency in SystemDependencyManifest.Required)
         {
-            Id = "system-windows",
-            Name = "Windows",
-            Collection = RuleCollection.Exe,
-            Strategy = RuleStrategy.Path,
-            Value = @"%WINDIR%\*",
-            Reason = "Windows måste kunna starta.",
-            IsSystemRequirement = true
-        });
-
-        rules.Add(new AppControlRule
-        {
-            Id = "system-program-files",
-            Name = "Installerade program",
-            Collection = RuleCollection.Exe,
-            Strategy = RuleStrategy.Path,
-            Value = @"%PROGRAMFILES%\*",
-            Reason = "Program installerade av en administratör.",
-            IsSystemRequirement = true
-        });
+            rules.Add(new AppControlRule
+            {
+                Id = $"system-{dependency.FileName.Replace(".exe", string.Empty).ToLowerInvariant()}",
+                Name = dependency.FileName,
+                Collection = RuleCollection.Exe,
+                Strategy = RuleStrategy.Path,
+                Value = SystemDependencyManifest.PathFor(dependency),
+                Reason = dependency.Reason,
+                IsSystemRequirement = true
+            });
+        }
 
         if (!string.IsNullOrWhiteSpace(kidShellPath))
         {
@@ -127,19 +133,51 @@ public static class AppControlPolicyBuilder
                 "KidShells egen sökväg är okänd, så policyn kan inte garantera att KidShell startar."));
         }
 
-        // Packaged apps are a separate collection; without this, no Store app
-        // runs at all, including Calculator and Paint.
+        // Packaged apps: the Windows shell components, by publisher, and
+        // nothing else.
+        //
+        // This was a publisher rule of "*", which allows every packaged
+        // application on the machine, signed by anybody. A parent choosing
+        // four apps would have been handing over the Store, the browser and
+        // every other packaged program installed - and packaged apps are
+        // exactly where a modern Windows install keeps its browser.
+        //
+        // Microsoft's own shell pieces still have to run, so they are named by
+        // their publisher. Approved packaged apps the parent picked are added
+        // beside them by AddApplicationRules, individually.
         rules.Add(new AppControlRule
         {
-            Id = "system-signed-packaged",
-            Name = "Signerade Microsoft Store-appar",
+            Id = "system-windows-packaged-shell",
+            Name = "Windows-komponenter",
             Collection = RuleCollection.Appx,
             Strategy = RuleStrategy.Publisher,
-            Value = "*",
-            Reason = "Paketerade appar måste kunna starta.",
+            Value = WindowsComponentPublisher,
+            ProductName = "Microsoft.Windows.ShellExperienceHost",
+            Reason = "Startmenyn och Windows egna skal-delar måste kunna köras.",
+            IsSystemRequirement = true
+        });
+
+        rules.Add(new AppControlRule
+        {
+            Id = "system-windows-packaged-start",
+            Name = "Startmenyn",
+            Collection = RuleCollection.Appx,
+            Strategy = RuleStrategy.Publisher,
+            Value = WindowsComponentPublisher,
+            ProductName = "Microsoft.Windows.StartMenuExperienceHost",
+            Reason = "Utan detta finns ingen startmeny i Standardläge.",
             IsSystemRequirement = true
         });
     }
+
+    /// <summary>
+    /// The signing identity Windows' own packaged components carry.
+    ///
+    /// Named rather than wildcarded: a publisher rule of "*" is not a
+    /// publisher rule, it is an allow-everything rule wearing one.
+    /// </summary>
+    public const string WindowsComponentPublisher =
+        "O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US";
 
     private static void AddApplicationRules(
         List<AppControlRule> rules,
@@ -161,7 +199,12 @@ public static class AppControlPolicyBuilder
             // A bare command name is resolved by Windows, not by us. Writing a
             // rule for "calc.exe" would be a rule for a path that does not
             // exist.
-            if (!Path.IsPathRooted(path))
+            //
+            // Asked of WindowsPath rather than System.IO.Path: the latter
+            // answers about the host, and on Linux a backslash is an ordinary
+            // character, so the same configuration produced a different policy
+            // depending on where the build ran.
+            if (!WindowsPath.IsFullyQualified(path))
             {
                 warnings.Add(new PolicyWarning(
                     "unresolved-path",
@@ -184,7 +227,8 @@ public static class AppControlPolicyBuilder
             // The profile knows what else the program needs. A launcher whose
             // game process is missing starts and then fails.
             var profile = profiles.Profiles.FirstOrDefault(p =>
-                p.ExecutableNames.Any(n => string.Equals(n, SafeFileName(path), StringComparison.OrdinalIgnoreCase)));
+                p.ExecutableNames.Any(n => string.Equals(
+                    n, WindowsPath.FileName(path), StringComparison.OrdinalIgnoreCase)));
 
             if (profile is null)
             {
@@ -208,12 +252,79 @@ public static class AppControlPolicyBuilder
     }
 
     /// <summary>
+    /// The last look over a finished policy, asking whether it is worth
+    /// applying at all.
+    ///
+    /// These are blocking rather than advisory. A policy that does not
+    /// constrain the child is worse than no policy: a parent reading "Säkert
+    /// läge är på" would believe something untrue, and act on it.
+    /// </summary>
+    private static void AddSafetyWarnings(
+        IReadOnlyList<AppControlRule> rules, List<PolicyWarning> warnings)
+    {
+        foreach (var rule in rules)
+        {
+            // A rule ending in \* allows every file in that folder, now and
+            // in future. Acceptable for a single application's own directory
+            // under Program Files; never acceptable for a Windows folder.
+            if (IsBlanketRule(rule.Value))
+            {
+                warnings.Add(new PolicyWarning(
+                    "blanket-path-rule",
+                    $"Regeln \"{rule.Value}\" släpper igenom allt i en hel systemmapp. " +
+                    "En sådan regel gör listan över tillåtna appar meningslös.",
+                    PolicySeverity.Blocking));
+            }
+
+            if (rule.Strategy == RuleStrategy.Publisher && rule.Value.Trim() == "*")
+            {
+                warnings.Add(new PolicyWarning(
+                    "blanket-publisher-rule",
+                    "En utgivarregel som matchar alla utgivare tillåter varje paketerad app på datorn.",
+                    PolicySeverity.Blocking));
+            }
+
+            if (EscapeSurfaces.Matching(rule.Value) is { } surface)
+            {
+                warnings.Add(new PolicyWarning(
+                    "escape-surface-allowed",
+                    $"Policyn skulle tillåta {surface.FileName}. {surface.Reason}",
+                    PolicySeverity.Blocking));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a value allows a whole system folder.
+    ///
+    /// A trailing wildcard on an application's own folder is ordinary and
+    /// fine - that is how a program and its helpers are allowed together. The
+    /// dangerous shape is a wildcard directly under a Windows or Program Files
+    /// root, which is the shape Microsoft's own guidance warns about.
+    /// </summary>
+    internal static bool IsBlanketRule(string value)
+    {
+        var normalized = (value ?? string.Empty).Trim().Trim('"').ToUpperInvariant().Replace('/', '\\');
+
+        if (!normalized.EndsWith('*'))
+        {
+            return false;
+        }
+
+        var withoutWildcard = normalized.TrimEnd('*').TrimEnd('\\');
+
+        return withoutWildcard.Length == 0 ||
+               withoutWildcard is "%WINDIR%" or "%SYSTEM32%" or "%PROGRAMFILES%" or "%OSDRIVE%" ||
+               withoutWildcard is "C:" or "D:";
+    }
+
+    /// <summary>
     /// Whether a path lives somewhere a standard user can write, which makes a
     /// path rule there decorative.
     /// </summary>
     public static bool IsUserWritable(string path)
     {
-        var upper = (path ?? string.Empty).Trim().Trim('"').ToUpperInvariant();
+        var upper = WindowsPath.Canonical(path);
 
         return UserWritablePrefixes.Any(prefix => upper.StartsWith(prefix, StringComparison.Ordinal));
     }
@@ -229,7 +340,7 @@ public static class AppControlPolicyBuilder
 
         foreach (var rule in rules)
         {
-            var key = $"{rule.Collection}|{rule.Strategy}|{rule.Value.Trim().ToUpperInvariant()}";
+            var key = $"{rule.Collection}|{rule.Strategy}|{WindowsPath.Canonical(rule.Value)}|{rule.ProductName}";
 
             if (!seen.ContainsKey(key))
             {
@@ -240,15 +351,4 @@ public static class AppControlPolicyBuilder
         return [.. seen.Values];
     }
 
-    private static string SafeFileName(string path)
-    {
-        try
-        {
-            return Path.GetFileName(path.Trim().Trim('"'));
-        }
-        catch
-        {
-            return string.Empty;
-        }
-    }
 }

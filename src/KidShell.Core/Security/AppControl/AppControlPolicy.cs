@@ -64,8 +64,24 @@ public sealed record AppControlRule
     public bool IsWeak { get; init; }
 }
 
+/// <summary>How seriously a warning should be taken.</summary>
+public enum PolicySeverity
+{
+    /// <summary>Worth telling a parent. Does not stop anything.</summary>
+    Advisory = 0,
+
+    /// <summary>
+    /// The policy must not be activated.
+    ///
+    /// A policy that would not actually constrain the child is worse than no
+    /// policy, because a parent reading "Säkert läge är på" would believe
+    /// something that is not true. Refusing is the honest outcome.
+    /// </summary>
+    Blocking = 1
+}
+
 /// <summary>Why a policy could not be generated, or is not trustworthy.</summary>
-public sealed record PolicyWarning(string Code, string Message);
+public sealed record PolicyWarning(string Code, string Message, PolicySeverity Severity = PolicySeverity.Advisory);
 
 /// <summary>
 /// A complete application-control policy, independent of how it would be
@@ -99,4 +115,17 @@ public sealed record AppControlPolicy
     /// which is valid but worth saying out loud.
     /// </summary>
     public bool HasApplicationRules => ApplicationRules.Any();
+
+    /// <summary>Warnings serious enough to stop this policy being applied.</summary>
+    public IEnumerable<PolicyWarning> BlockingWarnings =>
+        Warnings.Where(w => w.Severity == PolicySeverity.Blocking);
+
+    /// <summary>
+    /// Whether this policy is safe to put on a machine.
+    ///
+    /// The question is asked of the policy itself rather than of the caller,
+    /// so that "we generated something we do not trust" and "we deployed it
+    /// anyway" cannot be two separate decisions made in two different places.
+    /// </summary>
+    public bool CanActivate => !BlockingWarnings.Any();
 }

@@ -47,9 +47,13 @@ public class AppControlPolicyTests
     {
         // A policy that omits these is not strict, it is broken: the machine
         // has no desktop and the parent no way back in.
+        //
+        // Named files now rather than %WINDIR%\*, which allowed everything
+        // including the contents of a Temp folder the child can write to.
         var policy = Build(ConfigWith(("paint", "Paint", @"C:\Windows\System32\mspaint.exe")));
 
-        Assert.Contains(policy.SystemRules, r => r.Value.Contains("%WINDIR%", StringComparison.Ordinal));
+        Assert.Contains(policy.SystemRules, r =>
+            WindowsPath.FileName(r.Value).Equals("userinit.exe", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(policy.SystemRules, r => r.Name == "KidShell");
     }
 
