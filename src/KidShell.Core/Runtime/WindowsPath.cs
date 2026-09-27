@@ -1,4 +1,4 @@
-namespace KidShell.Core.Security.AppControl;
+namespace KidShell.Core.Runtime;
 
 /// <summary>
 /// Windows path semantics, decided by KidShell rather than by whatever host

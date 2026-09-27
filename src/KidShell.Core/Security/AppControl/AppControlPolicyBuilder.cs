@@ -1,5 +1,6 @@
 using KidShell.Core.Apps;
 using KidShell.Core.Configuration;
+using KidShell.Core.Runtime;
 
 namespace KidShell.Core.Security.AppControl;
 

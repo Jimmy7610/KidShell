@@ -2,6 +2,7 @@ using KidShell.Core.Apps;
 using KidShell.Core.Configuration;
 using KidShell.Core.Security.AppControl;
 using Xunit;
+using KidShell.Core.Runtime;
 
 namespace KidShell.Core.Tests;
 

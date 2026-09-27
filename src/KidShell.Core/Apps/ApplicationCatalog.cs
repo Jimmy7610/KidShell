@@ -1,3 +1,5 @@
+using KidShell.Core.Runtime;
+
 namespace KidShell.Core.Apps;
 
 /// <summary>
@@ -244,17 +246,12 @@ public sealed class ApplicationCatalog : IApplicationCatalog
 
         trimmed = trimmed.Replace('/', '\\').TrimEnd('\\');
 
-        try
-        {
-            trimmed = Path.GetFullPath(trimmed);
-        }
-        catch
-        {
-            // Not a well-formed path; compare what we were given rather than
-            // throwing out an otherwise usable entry.
-        }
-
-        return trimmed.ToLowerInvariant();
+        // Deliberately NOT Path.GetFullPath: that resolves against the HOST's
+        // current directory and separator rules, so the same two discovered
+        // programs could compare equal on one machine and differ on another.
+        // De-duplication only needs a canonical spelling, which is what this
+        // returns, and it returns the same one everywhere.
+        return WindowsPath.Canonical(trimmed).ToLowerInvariant();
     }
 
     /// <summary>
