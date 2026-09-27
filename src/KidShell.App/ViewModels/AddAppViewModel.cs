@@ -203,6 +203,17 @@ public sealed class AddAppViewModel : ObservableObject
 
         if (!string.IsNullOrWhiteSpace(ExecutablePath))
         {
+            // What was typed or picked, before asking whether it exists. A
+            // batch file that exists is still a batch file, and running one
+            // runs an interpreter KidShell's own policy refuses.
+            var check = ManualProgramPolicy.Check(ExecutablePath);
+
+            if (!check.IsAllowed)
+            {
+                ValidationMessage = Strings.Get(check.ResourceKey);
+                return false;
+            }
+
             var resolution = _resolver.Resolve(ExecutablePath);
             if (resolution.Kind == ExecutableResolutionKind.NotFound)
             {

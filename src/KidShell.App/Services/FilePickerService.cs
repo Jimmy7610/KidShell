@@ -1,4 +1,5 @@
 using KidShell.Core.Diagnostics;
+using KidShell.Core.Launching;
 using Windows.Storage.Pickers;
 
 namespace KidShell.App.Services;
@@ -39,10 +40,23 @@ public sealed class FilePickerService : IFilePickerService
                 ViewMode = PickerViewMode.List
             };
 
-            picker.FileTypeFilter.Add(".exe");
-            picker.FileTypeFilter.Add(".lnk");
-            picker.FileTypeFilter.Add(".bat");
-            picker.FileTypeFilter.Add(".cmd");
+            // Programs only.
+            //
+            // This used to offer .lnk, .bat and .cmd as well. A batch file is
+            // not a program: running one runs cmd.exe, which is an interpreter
+            // that runs anything - and which KidShell's own AppLocker policy
+            // refuses by name, so a parent adding one would have got a tile
+            // that Secure Mode then blocked. A shortcut is not a program
+            // either: what was approved and what would run are two different
+            // files, and the target can be repointed afterwards.
+            //
+            // The filter is a convenience, not the rule. A parent can type a
+            // path, and the type list can be defeated by typing *.* into the
+            // name box, so ManualProgramPolicy checks the answer as well.
+            foreach (var extension in ManualProgramPolicy.PickerFilter)
+            {
+                picker.FileTypeFilter.Add(extension);
+            }
 
             WinRT.Interop.InitializeWithWindow.Initialize(picker, WindowHandle);
 

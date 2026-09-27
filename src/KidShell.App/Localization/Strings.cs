@@ -155,6 +155,11 @@ public static class Strings
         ["AddApp.Cancel"] = "Avbryt",
         ["AddApp.NameRequired"] = "Ge appen ett namn först.",
         ["AddApp.PathMissing"] = "Programmet hittades inte på den här datorn.",
+        ["AddApp.PathRequired"] = "Välj ett program.",
+        ["AddApp.PathScript"] = "Skriptfiler går inte att lägga till. Ett skript körs av kommandotolken, och den får barnet inte använda. Välj programmets .exe-fil i stället.",
+        ["AddApp.PathShortcut"] = "Genvägar går inte att lägga till, eftersom en genväg kan ändras till att peka på något annat. Välj programmets .exe-fil i stället.",
+        ["AddApp.PathUnsupported"] = "Välj en programfil som slutar på .exe. Appar från Microsoft Store lägger du till via \"Bläddra bland appar\".",
+        ["AddApp.PathNotSafe"] = "Det här är ett systemverktyg som barnet inte bör kunna starta.",
         ["AddApp.PickerFailed"] = "Filväljaren kunde inte öppnas.",
 
         // ---------- Screen time ----------
