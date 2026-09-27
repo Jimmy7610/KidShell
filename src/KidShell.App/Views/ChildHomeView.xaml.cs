@@ -4,6 +4,7 @@ using KidShell.App.Localization;
 using KidShell.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using KidShell.App.Controls;
 
 namespace KidShell.App.Views;
 
@@ -22,8 +23,21 @@ public sealed partial class ChildHomeView : UserControl
         Action onSettingsRequested,
         Action onParentAccessRequested)
     {
-        // The footer follows the width; see ApplyLayout.
-        SizeChanged += (_, e) => ApplyLayout(e.NewSize.Width);
+        // The footer follows the width; see ApplyLayout. The stage follows
+        // the height, so the page fills the viewport at ordinary text sizes
+        // and scrolls only when the content genuinely needs more room.
+        //
+        // Taken from THIS control's height, which the window decides, and
+        // never from the ScrollViewer's ViewportHeight: that property moves
+        // during layout, and feeding it back into the content's MinHeight is
+        // a cycle WinUI refuses - it throws LayoutCycleException and the app
+        // dies, which is what happened on Säkerhet at 780x560 with enlarged
+        // text.
+        SizeChanged += (_, e) =>
+        {
+            Stage.MinHeight = e.NewSize.Height;
+            ApplyLayout(e.NewSize.Width);
+        };
 
         // The cards follow the height of the grid area rather than of the
         // window, because the header and the footer take a share of it first.
@@ -141,48 +155,36 @@ public sealed partial class ChildHomeView : UserControl
             return;
         }
 
-        // Asked of the measurement, not of the width. See FitFooterBrand.
-        var roomy = ResponsiveLayout.Classify(width) != LayoutSize.Compact;
+        // The decorative wordmark gives the footer row to the buttons on a
+        // compact window. Decided by ResponsiveLayout, not here, because the
+        // parent shell's footer answers the same question and two copies of a
+        // rule drift apart.
+        //
+        // Deliberately NOT by measuring the buttons. Measuring a live element
+        // against a different constraint than its parent will use overwrites
+        // its DesiredSize, and the buttons live in a WrapPanel - measured
+        // against unlimited width it reports a single row, caches that, and
+        // then never wraps. An earlier version of this method did exactly
+        // that and stopped the wrapping it was written to enable.
+        FooterBrand.Visibility = ResponsiveLayout.ShowFooterBrand(width)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
-        FitFooterBrand(FooterBrand, FooterActions, roomy ? width : 0);
-    }
+        FooterBrand.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
 
-    /// <summary>
-    /// Hides the footer wordmark when it would not fit beside the buttons.
-    ///
-    /// Measured rather than decided from the window width. Width was a good
-    /// enough proxy while the text was a known size, and stopped being one as
-    /// soon as Windows text scaling could make the same words half as wide
-    /// again. What matters is whether this tagline fits next to these buttons
-    /// in this language, and the only way to know that is to ask both of them.
-    /// </summary>
-    private static void FitFooterBrand(FrameworkElement brand, FrameworkElement actions, double available)
-    {
-        if (double.IsNaN(available))
-        {
-            return;
-        }
+        // A finite width, so the header's readouts can wrap.
+        //
+        // Both sit in Auto columns, which measure with unlimited width - and a
+        // WrapPanel measured against infinity reports one row and never wraps,
+        // which is how the clock and the battery ran off the edge at a larger
+        // text size. A share of the window gives them a real limit without
+        // pinning them to any particular screen.
+        Status.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.StatusShare);
 
-        if (available <= 0)
-        {
-            brand.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        // Shown first, or it could never come back once it had been hidden:
-        // a collapsed element measures as nothing.
-        brand.Visibility = Visibility.Visible;
-
-        var unbounded = new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity);
-        brand.Measure(unbounded);
-        actions.Measure(unbounded);
-
-        const double gap = 32;
-
-        if (brand.DesiredSize.Width + actions.DesiredSize.Width + gap > available)
-        {
-            brand.Visibility = Visibility.Collapsed;
-        }
+        // The wordmark is the widest thing in the header and it is a name, not
+        // a control. Bounded so it wraps instead of pushing the child block and
+        // the status readout off the right of the window.
+        HeaderBrandBlock.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
     }
 
     /// <summary>
@@ -202,7 +204,13 @@ public sealed partial class ChildHomeView : UserControl
             return;
         }
 
-        layout.MinItemHeight = ResponsiveLayout.TileHeight(height - GridScroller.Padding.Top - GridScroller.Padding.Bottom);
+        // The space available decides how tall a card MAY be; the text inside
+        // decides how tall it MUST be. A card shrunk to fit the window but not
+        // its own label is a label cut in half.
+        var available = ResponsiveLayout.TileHeight(
+            height - GridScroller.Padding.Top - GridScroller.Padding.Bottom);
+
+        layout.MinItemHeight = available;
 
         // Centred while it fits, top-aligned once it does not: a centred grid
         // taller than its viewport loses its first row as well as its last,

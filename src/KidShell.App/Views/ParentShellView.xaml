@@ -18,13 +18,19 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ============================= Header ============================= -->
-        <Grid Grid.Row="0" ColumnSpacing="24">
+        <!--
+            ============================= Header =============================
+
+            The columns are set from code: across while the three blocks fit,
+            down a single column when they do not. See AdaptiveHeader.
+        -->
+        <Grid x:Name="HeaderGrid" Grid.Row="0" ColumnSpacing="24" RowSpacing="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+
 
             <StackPanel x:Name="HeaderBrand" Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
@@ -36,6 +42,7 @@
                     <TextBlock
                         Grid.Column="0"
                         Style="{StaticResource WordmarkTextStyle}"
+                        TextWrapping="Wrap"
                         Text="{loc:Str Key=Parent.Title}" />
                     <Canvas
                         Grid.Column="1"
@@ -158,10 +165,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.Overview}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.Overview}"
                             Tag="Overview">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelOverview" Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE80F;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelOverview" Text="{loc:Str Key=Nav.Overview}" VerticalAlignment="Center"  TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton
@@ -172,10 +184,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.Apps}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.Apps}"
                             Tag="Apps">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelApps" Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE8A9;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelApps" Text="{loc:Str Key=Nav.Apps}" VerticalAlignment="Center"  TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton
@@ -186,10 +203,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.ScreenTime}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.ScreenTime}"
                             Tag="ScreenTime">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelScreenTime" Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE823;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelScreenTime" Text="{loc:Str Key=Nav.ScreenTime}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton
@@ -200,10 +222,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.Web}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.Web}"
                             Tag="Web">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelWeb" Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE774;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelWeb" Text="{loc:Str Key=Nav.Web}" VerticalAlignment="Center"  TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton
@@ -214,10 +241,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.Security}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.Security}"
                             Tag="Security">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelSecurity" Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xEA18;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelSecurity" Text="{loc:Str Key=Nav.Security}" VerticalAlignment="Center"  TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
 
                         <RadioButton
@@ -228,10 +260,15 @@
                             AutomationProperties.Name="{loc:Str Key=Nav.Profile}"
                             ToolTipService.ToolTip="{loc:Str Key=Nav.Profile}"
                             Tag="Profile">
-                            <StackPanel Orientation="Horizontal" Spacing="12">
-                                <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" />
-                                <TextBlock x:Name="NavLabelProfile" Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center" />
-                            </StackPanel>
+                            <!-- A Grid, so the label learns how wide its column is and wraps. -->
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon Glyph="&#xE77B;" Style="{StaticResource NavigationGlyphStyle}" Grid.Column="0" />
+                                <TextBlock Grid.Column="1" x:Name="NavLabelProfile" Text="{loc:Str Key=Nav.Profile}" VerticalAlignment="Center"  TextWrapping="Wrap" />
+                            </Grid>
                         </RadioButton>
                     </StackPanel>
                 </ScrollViewer>
@@ -259,27 +296,55 @@
 
                     <Border Background="{StaticResource TintGreenBrush}" Style="{StaticResource InfoPanelStyle}">
                         <StackPanel Spacing="10">
-                            <StackPanel Orientation="Horizontal" Spacing="14">
-                                <Border Background="#FFD7F0E0" Style="{StaticResource PanelBadgeStyle}">
+                            <!--
+                                A Grid, so everything inside learns how much
+                                width the card has. A horizontal StackPanel
+                                measures its children against infinity, which
+                                is why the status text below was cut off by the
+                                card however carefully it was told to wrap.
+                            -->
+                            <Grid ColumnSpacing="14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Background="#FFD7F0E0" Style="{StaticResource PanelBadgeStyle}">
                                     <FontIcon
                                         FontFamily="{StaticResource SymbolFontFamily}"
                                         FontSize="22"
                                         Foreground="{StaticResource StatusOkBrush}"
                                         Glyph="&#xE72E;" />
                                 </Border>
-                                <StackPanel VerticalAlignment="Center">
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Security.ParentPin}" />
-                                    <StackPanel Orientation="Horizontal" Spacing="7" Margin="0,3,0,0">
+                                    <!--
+                                        A Grid, not a horizontal StackPanel.
+                                        The status text has to know how wide
+                                        its column is, or it is measured
+                                        against unlimited width and cut off by
+                                        the card instead of wrapping - at 200%
+                                        this read "Aktiv (standard".
+                                    -->
+                                    <Grid ColumnSpacing="7" Margin="0,3,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
                                         <FontIcon
+                                            Grid.Column="0"
                                             Foreground="{StaticResource StatusOkBrush}"
                                             Glyph="&#xE73E;"
                                             Style="{StaticResource StatusGlyphStyle}" />
                                         <TextBlock
+                                            Grid.Column="1"
                                             x:Name="PinStatusText"
-                                            Style="{StaticResource StatusChipTextStyle}" />
-                                    </StackPanel>
+                                            Style="{StaticResource StatusChipTextStyle}"
+                                            TextWrapping="Wrap" />
+                                    </Grid>
                                 </StackPanel>
-                            </StackPanel>
+                            </Grid>
                             <TextBlock Style="{StaticResource CaptionTextStyle}" Text="Krävs för att ändra inställningar." />
                             <Button
                                 x:Name="ChangePinButton"
@@ -394,16 +459,25 @@
                                     Style="{StaticResource SoftButtonStyle}"
                                     VerticalAlignment="Top" />
                             </Grid>
-                            <StackPanel Orientation="Horizontal" Spacing="7">
+                            <!-- Same reason as the PIN status above. -->
+                            <Grid ColumnSpacing="7">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
                                 <FontIcon
+                                    Grid.Column="0"
                                     x:Name="AsideWebGlyph"
                                     Foreground="{StaticResource BrandBlueBrush}"
                                     Glyph="&#xE73E;"
                                     Style="{StaticResource StatusGlyphStyle}" />
                                 <TextBlock
+                                    Grid.Column="1"
                                     x:Name="AsideWebText"
-                                    Style="{StaticResource StatusChipTextStyle}" />
-                            </StackPanel>
+                                    Style="{StaticResource StatusChipTextStyle}"
+                                    TextWrapping="Wrap" />
+                            </Grid>
                             <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.WebHint}" />
                         </StackPanel>
                     </Border>
@@ -428,9 +502,23 @@
         -->
         <Grid Grid.Row="2" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
+            <!--
+                The ACTIONS take the starred column, not the brand.
+
+                A WrapPanel in an Auto column is never told how much width it
+                has - Auto measures with infinity - so it laid everything on
+                one row and ran off the edge however wide the buttons got.
+                Starred, it is handed a real limit and wraps inside it, which
+                is the entire reason it is a WrapPanel.
+
+                The brand is Auto because it is decoration that disappears
+                when it does not fit; FitFooterBrand decides that by
+                measurement before this column is ever used.
+            -->
 
             <StackPanel
                 x:Name="FooterBrand"

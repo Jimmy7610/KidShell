@@ -11,23 +11,44 @@
     x:Name="RootControl"
     mc:Ignorable="d">
 
-    <Grid Padding="{StaticResource StagePadding}">
+    <!--
+        The page scrolls only when it has to.
+
+        MinHeight ties the stage to the viewport, so at ordinary text sizes it
+        fills exactly and nothing scrolls - the greeting stays at the top, the
+        footer at the bottom, and the tile grid takes the middle, which is the
+        approved design. At a much larger text size the greeting and the
+        buttons genuinely need more than 560 effective pixels between them, and
+        then the page scrolls rather than pushing the footer off the screen.
+    -->
+    <ScrollViewer
+        x:Name="PageScroller"
+        HorizontalScrollMode="Disabled"
+        VerticalScrollBarVisibility="Auto"
+        ZoomMode="Disabled">
+    <Grid x:Name="Stage" Padding="{StaticResource StagePadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ============================= Header ============================= -->
-        <Grid Grid.Row="0" ColumnSpacing="24">
+        <!--
+            ============================= Header =============================
+
+            The columns are set from code: across while the three blocks fit,
+            down a single column when they do not. See AdaptiveHeader.
+        -->
+        <Grid x:Name="HeaderGrid" Grid.Row="0" ColumnSpacing="24" RowSpacing="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
+
             <!-- Wordmark -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Top">
+            <StackPanel x:Name="HeaderBrandBlock" Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -37,6 +58,7 @@
                     <TextBlock
                         Grid.Column="0"
                         Style="{StaticResource WordmarkTextStyle}"
+                        TextWrapping="Wrap"
                         Text="{loc:Str Key=Child.Wordmark}" />
                     <Canvas
                         Grid.Column="1"
@@ -57,6 +79,7 @@
 
             <!-- Child identity -->
             <StackPanel
+                x:Name="HeaderChildBlock"
                 Grid.Column="1"
                 Orientation="Horizontal"
                 Spacing="16"
@@ -273,9 +296,23 @@
         -->
         <Grid Grid.Row="2" ColumnSpacing="16" VerticalAlignment="Bottom">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
+
+            <!--
+                The ACTIONS take the starred column, not the brand.
+
+                A WrapPanel in an Auto column is never told how much width it
+                has - Auto measures with infinity - so it laid everything on
+                one row and ran off the edge however wide the buttons got.
+                Starred, it is handed a real limit and wraps inside it, which
+                is the entire reason it is a WrapPanel.
+
+                The brand is Auto because it is decoration that disappears
+                when it does not fit; FitFooterBrand decides that by
+                measurement before this column is ever used.
+            -->
 
             <!--
                 Hidden on a narrow window: at 800 it collided with the
@@ -400,4 +437,5 @@
             </controls:WrapPanel>
         </Grid>
     </Grid>
+    </ScrollViewer>
 </UserControl>

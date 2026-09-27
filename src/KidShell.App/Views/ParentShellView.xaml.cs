@@ -7,6 +7,7 @@ using KidShell.Core.Configuration;
 using KidShell.Core.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using KidShell.App.Controls;
 
 namespace KidShell.App.Views;
 
@@ -44,6 +45,18 @@ public sealed partial class ParentShellView : UserControl
         // window happened to open at.
         SizeChanged += (_, e) =>
         {
+            // The stage fills the viewport, so at ordinary sizes nothing
+            // scrolls and the design is unchanged; when the content genuinely
+            // needs more room, the page scrolls instead of losing its bottom.
+            //
+            // Taken from THIS control's height, which the window decides, and
+            // never from the ScrollViewer's ViewportHeight. That property
+            // moves during layout, and feeding it back into the content's
+            // MinHeight is a cycle: WinUI detects it and throws
+            // LayoutCycleException, which killed the app outright on the
+            // Säkerhet page at 780x560 with enlarged text.
+            Stage.MinHeight = e.NewSize.Height;
+
             ApplyLayout(e.NewSize.Width);
             ApplyHeight(e.NewSize.Height);
         };
@@ -110,54 +123,66 @@ public sealed partial class ParentShellView : UserControl
         var roomy = ResponsiveLayout.Classify(width) != LayoutSize.Compact;
 
         // Asked of the measurement, not of the width. See FitFooterBrand.
-        FitFooterBrand(FooterBrand, FooterActions, roomy ? width : 0);
+        FitFooterBrand(FooterBrand, width);
+        // A finite width, so the header's readouts can wrap.
+        //
+        // Both sit in Auto columns, which measure with unlimited width - and a
+        // WrapPanel measured against infinity reports one row and never wraps,
+        // which is how the clock and the battery ran off the edge at a larger
+        // text size. A share of the window gives them a real limit without
+        // pinning them to any particular screen.
+        Status.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.StatusShare);
+        // The wordmark is the widest thing in the header and it is a name, not
+        // a control. Bounded so it wraps instead of pushing the child block and
+        // the status readout off the right of the window.
+        HeaderBrand.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
+
+        // Across or down, decided by whether the three blocks actually fit.
+        // An Auto column never shrinks below its content, so at a larger text
+        // size the header ran off the edge of the window.
         HeaderTagline.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
         HeaderChildText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+
+        // Narrower than the design allows for, so the wordmark loses the
+        // width it needs and wraps to three lines, which at a large text size
+        // is most of the window. It is a name, and the page it sits above
+        // already says what page it is; the buttons underneath are the way out
+        // of Föräldraläge. Decoration gives way, function does not.
+        HeaderBrand.Visibility = ResponsiveLayout.ShowHeaderDecoration(width)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         // Narrower than the design allows for, so the avatar loses the width
         // it needs and is drawn as a sliver. It says nothing the header does
         // not, and a distorted picture of a child is worse than none.
-        HeaderChild.Visibility = width >= ResponsiveLayout.MinimumSupportedWidth
+        HeaderChild.Visibility = ResponsiveLayout.ShowHeaderDecoration(width)
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
 
     /// <summary>
-    /// Hides the footer wordmark when it would not fit beside the buttons.
+    /// Keeps the footer wordmark from crowding out the buttons.
     ///
-    /// Measured rather than decided from the window width. Width was a good
-    /// enough proxy while the text was a known size, and stopped being one as
-    /// soon as Windows text scaling could make the same words half as wide
-    /// again. What matters is whether this tagline fits next to these buttons
-    /// in this language, and the only way to know that is to ask both of them.
+    /// Deliberately NOT by measuring the buttons. Measuring a live element
+    /// with a different constraint than its parent will use overwrites its
+    /// DesiredSize, and the buttons live in a WrapPanel - measured against
+    /// unlimited width it reports a single row, caches that, and then never
+    /// wraps. An earlier version of this method did exactly that and stopped
+    /// the wrapping it was written to enable.
+    ///
+    /// A share of the row and the existing width rule are enough, and neither
+    /// touches the layout.
     /// </summary>
-    private static void FitFooterBrand(FrameworkElement brand, FrameworkElement actions, double available)
+    private static void FitFooterBrand(FrameworkElement brand, double available)
     {
-        if (double.IsNaN(available))
-        {
-            return;
-        }
-
-        if (available <= 0)
+        if (!ResponsiveLayout.ShowFooterBrand(available))
         {
             brand.Visibility = Visibility.Collapsed;
             return;
         }
 
-        // Shown first, or it could never come back once it had been hidden:
-        // a collapsed element measures as nothing.
         brand.Visibility = Visibility.Visible;
-
-        var unbounded = new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity);
-        brand.Measure(unbounded);
-        actions.Measure(unbounded);
-
-        const double gap = 32;
-
-        if (brand.DesiredSize.Width + actions.DesiredSize.Width + gap > available)
-        {
-            brand.Visibility = Visibility.Collapsed;
-        }
+        brand.MaxWidth = ResponsiveLayout.ShareOfRow(available, ResponsiveLayout.BrandShare);
     }
 
     /// <summary>
