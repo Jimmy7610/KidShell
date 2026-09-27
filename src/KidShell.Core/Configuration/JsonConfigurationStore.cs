@@ -182,6 +182,16 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         var config = JsonSerializer.Deserialize<KidShellConfiguration>(json, SerializerOptions)
                      ?? throw new InvalidDataException("Configuration document deserialized to null.");
 
+        // Sections before migration, not after.
+        //
+        // The migrator's job is to rewrite real fields, and it reads the child
+        // profile to decide whether a schema 1 document was ever set up. So it
+        // must not be the code that discovers the profile is missing - given
+        // {"schemaVersion": 1, "child": null} it walked straight into a null,
+        // which is the audit's own payload failing one stage earlier than they
+        // saw it.
+        EnsureSections(config);
+
         wasMigrated = ConfigurationMigrator.Migrate(config, _logger);
 
         return Normalize(config);
@@ -190,8 +200,28 @@ public sealed class JsonConfigurationStore : IConfigurationStore
     /// <summary>
     /// Repairs structurally-valid-but-incomplete documents so the rest of the
     /// app can assume non-null collections and sane values.
+    ///
+    /// The contract, relied on everywhere downstream: after this runs, no
+    /// object is null, no collection is null, no collection CONTAINS a null,
+    /// and every number is inside the range its own type implies.
+    ///
+    /// That middle clause is the one that had been missed. Null objects were
+    /// already handled, because a missing section is the obvious case. A list
+    /// that is present and holds a hole is not obvious at all - `"apps":
+    /// [null]` deserializes into a perfectly good List with one null in it,
+    /// and the tidy-up loop below used to walk straight into it. `"screenTime":
+    /// { "warningMinutes": null }` was worse: it loaded without complaint and
+    /// failed much later, in a clone or an evaluation, nowhere near the file
+    /// that caused it.
     /// </summary>
-    internal static KidShellConfiguration Normalize(KidShellConfiguration config)
+    /// <summary>
+    /// Gives the document every section it is supposed to have.
+    ///
+    /// Separate from the rest of normalization because it has to run earlier -
+    /// before migration, which reads these fields. Cheap and idempotent, so
+    /// <see cref="Normalize"/> calls it again rather than assuming.
+    /// </summary>
+    internal static void EnsureSections(KidShellConfiguration config)
     {
         config.Child ??= new ChildProfile();
         config.Apps ??= [];
@@ -199,6 +229,12 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         config.Web ??= new WebSettings();
         config.Web.AllowedDomains ??= [];
         config.ParentPin ??= new ParentPinSettings();
+        config.ScreenTime.WarningMinutes ??= [.. ScreenTimeSettings.DefaultWarningMinutes];
+    }
+
+    internal static KidShellConfiguration Normalize(KidShellConfiguration config)
+    {
+        EnsureSections(config);
 
         if (config.SchemaVersion <= 0)
         {
@@ -221,15 +257,89 @@ public sealed class JsonConfigurationStore : IConfigurationStore
         config.Child.AvatarId = (config.Child.AvatarId ?? string.Empty).Trim();
         config.Child.ThemeId = ThemeIds.Migrate(config.Child.ThemeId);
 
-        config.ScreenTime.WeekdayMinutes = Math.Clamp(config.ScreenTime.WeekdayMinutes, 0, 24 * 60);
-        config.ScreenTime.WeekendMinutes = Math.Clamp(config.ScreenTime.WeekendMinutes, 0, 24 * 60);
-
-        foreach (var app in config.Apps.Where(app => string.IsNullOrWhiteSpace(app.Id)))
-        {
-            app.Id = Guid.NewGuid().ToString("n");
-        }
+        NormalizeScreenTime(config.ScreenTime);
+        NormalizeWeb(config.Web);
+        NormalizeApps(config);
 
         return config;
+    }
+
+    private static void NormalizeScreenTime(ScreenTimeSettings screenTime)
+    {
+        screenTime.WeekdayMinutes = Math.Clamp(screenTime.WeekdayMinutes, 0, 24 * 60);
+        screenTime.WeekendMinutes = Math.Clamp(screenTime.WeekendMinutes, 0, 24 * 60);
+
+        // An hour outside a clock face is not a restriction anybody chose, and
+        // silently comparing against hour 99 would quietly allow everything.
+        screenTime.AllowedFromHour = Math.Clamp(screenTime.AllowedFromHour, 0, 23);
+        screenTime.AllowedUntilHour = Math.Clamp(screenTime.AllowedUntilHour, 0, 24);
+
+        // A warning at zero minutes is not a warning, a negative one cannot
+        // happen, and two identical ones would tell a child the same thing
+        // twice. Largest first, which is the order they fire in.
+        screenTime.WarningMinutes = screenTime.WarningMinutes is { } warnings
+            ? [.. warnings.Where(m => m is > 0 and <= 24 * 60).Distinct().OrderByDescending(m => m)]
+            : [.. ScreenTimeSettings.DefaultWarningMinutes];
+
+        if (screenTime.WarningMinutes.Count == 0)
+        {
+            screenTime.WarningMinutes = [.. ScreenTimeSettings.DefaultWarningMinutes];
+        }
+    }
+
+    private static void NormalizeWeb(WebSettings web)
+    {
+        if (web.AllowedDomains is not { } domains)
+        {
+            web.AllowedDomains = [];
+            return;
+        }
+
+        // Case and surrounding space are not part of a hostname, so two
+        // entries differing only by those are one entry. Comparing them as
+        // written would let "SVT.se" and "svt.se" both sit in a list a parent
+        // reads as a single decision.
+        web.AllowedDomains =
+        [
+            .. domains
+                .Where(d => !string.IsNullOrWhiteSpace(d))
+                .Select(d => d.Trim().ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal)
+        ];
+    }
+
+    private static void NormalizeApps(KidShellConfiguration config)
+    {
+        // Holes in the list first. Everything after this may assume an app.
+        config.Apps = config.Apps is { } apps
+            ? [.. apps.Where(app => app is not null)]
+            : [];
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var app in config.Apps)
+        {
+            app.DisplayName = (app.DisplayName ?? string.Empty).Trim();
+            app.ProgramName = (app.ProgramName ?? string.Empty).Trim();
+            app.Description = (app.Description ?? string.Empty).Trim();
+            app.Category = (app.Category ?? string.Empty).Trim();
+            app.ExecutablePath = (app.ExecutablePath ?? string.Empty).Trim();
+            app.Arguments = app.Arguments ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(app.Icon))
+            {
+                app.Icon = IconKeys.Generic;
+            }
+
+            // An id must exist and must be unique, because it is what a launch
+            // and a removal both resolve against. A duplicate would make
+            // "remove this app" ambiguous.
+            if (string.IsNullOrWhiteSpace(app.Id) || !seen.Add(app.Id))
+            {
+                app.Id = Guid.NewGuid().ToString("n");
+                seen.Add(app.Id);
+            }
+        }
     }
 
     private void QuarantineCorruptFile()
