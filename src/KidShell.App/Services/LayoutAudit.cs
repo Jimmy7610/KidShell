@@ -2,6 +2,11 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using KidShell.App.ViewModels;
+using KidShell.App.Localization;
+using KidShell.App.Views.Dialogs;
+using KidShell.Core.Apps;
+using KidShell.Core.Launching;
+using Microsoft.Extensions.DependencyInjection;
 using KidShell.App.ViewModels.Parent;
 using KidShell.Core.Configuration;
 using Microsoft.UI.Windowing;
@@ -266,6 +271,10 @@ internal sealed class LayoutAudit
                 await InspectThroughlyAsync(actual, name);
             }
 
+            // Before the content-stress guard below, which starts above the
+            // sizes a dialog is most likely to fail at.
+            await AuditDialogsAsync(actual);
+
             // The default configuration is a pleasant one: ten apps with short
             // names and no websites. Real ones are not, and a layout that only
             // holds for the demo data is not responsive. The awkward states go
@@ -345,6 +354,188 @@ internal sealed class LayoutAudit
     /// control.
     /// </summary>
     private static readonly int[] StressSizes = [780, 819, 960, 1024, 1067, 1093, 1366, 1920];
+
+    /// <summary>
+    /// Where the dialogs are rendered.
+    ///
+    /// Including the two sizes below the supported minimum, which the content
+    /// stress set deliberately starts above: a dialog is the one thing that
+    /// cannot be scrolled out of the way by the page behind it, so if anything
+    /// is going to be unreachable at 640x480 with enlarged text, it is a
+    /// dialog button.
+    /// </summary>
+    private static readonly int[] DialogSizes = [640, 700, 780, 819, 1024, 1366, 1920];
+
+    /// <summary>
+    /// Every modal a parent can be looking at, rendered and measured.
+    ///
+    /// A dialog is the one part of the app that cannot be reached by scrolling
+    /// the page behind it, and it is drawn in the XamlRoot's popup layer
+    /// rather than inside the window's content - so walking the window, which
+    /// is what every other screen here does, never reaches one. They were
+    /// simply not covered.
+    ///
+    /// The production paths are used rather than rebuilt: ShowMessageAsync
+    /// and ShowConfirmAsync decide their own wrapping and their own button
+    /// row, and a copy of them here would be a test of the copy.
+    /// </summary>
+    private async Task AuditDialogsAsync(Viewport viewport)
+    {
+        if (!DialogSizes.Contains(viewport.Width))
+        {
+            return;
+        }
+
+        foreach (var (name, open) in Dialogs())
+        {
+            _logger.Info("LayoutAudit", $"{viewport.Width}x{viewport.Height} {name}");
+
+            // Deliberately not awaited here: ShowAsync completes when the
+            // dialog is dismissed, so awaiting it now would wait for a person
+            // who is never going to arrive.
+            var pending = open();
+
+            await SettleAsync();
+            await InspectPopupsAsync(viewport, name);
+
+            CloseOpenDialogs();
+            await SettleAsync();
+            await pending;
+        }
+    }
+
+    private IEnumerable<(string Name, Func<Task> Open)> Dialogs()
+    {
+        var dialogs = App.Services.GetRequiredService<IDialogService>();
+
+        // The longest body in the app, at 216 characters, so that "does the
+        // text wrap" is a question actually being asked rather than one a
+        // short string answers by accident.
+        var body = Strings.Get("Overview.BannerBody");
+        var title = Strings.Get("Overview.BannerTitle");
+
+        yield return ("Dialog/Message", () => dialogs.ShowMessageAsync(title, body));
+
+        // Three buttons and the longest labels available, which is the row
+        // most likely to run past the edge of a 640-epx dialog.
+        yield return ("Dialog/Confirm", () =>
+            dialogs.ShowConfirmAsync(
+                title,
+                body,
+                Strings.Get("Dialog.Ok"),
+                Strings.Get("Setup.Back"),
+                Strings.Get("Dialog.Cancel")));
+
+        yield return ("Dialog/LaunchProblem", () =>
+            dialogs.ShowLaunchProblemAsync(
+                LaunchResult.NotConfigured(new KidAppDefinition
+                {
+                    Id = "audit",
+                    DisplayName = Strings.Get("Overview.BannerTitle")
+                })));
+
+        yield return ("Dialog/BrowseApps", () =>
+        {
+            var browser = new AppBrowserViewModel(
+                App.Services.GetRequiredService<IApplicationCatalog>());
+
+            browser.SetExisting([]);
+
+            return dialogs.ShowDialogAsync(new BrowseAppsDialog(browser));
+        }
+        );
+
+        yield return ("Dialog/AddApp", () =>
+        {
+            var viewModel = new AddAppViewModel(
+                App.Services.GetRequiredService<IFilePickerService>(),
+                App.Services.GetRequiredService<IExecutableResolver>());
+
+            return dialogs.ShowDialogAsync(new AddAppDialog(viewModel));
+        }
+        );
+    }
+
+    /// <summary>
+    /// Measures whatever is currently drawn in the popup layer.
+    ///
+    /// Rooted at the window's content so that "outside the window" means the
+    /// same thing for a dialog as for a page: the popup shares the XamlRoot,
+    /// so the two are in one coordinate space.
+    /// </summary>
+    private async Task InspectPopupsAsync(Viewport viewport, string screen)
+    {
+        if (_window.Content is not FrameworkElement content || content.XamlRoot is null)
+        {
+            return;
+        }
+
+        var window = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
+
+        foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(content.XamlRoot))
+        {
+            if (popup.Child is not FrameworkElement child)
+            {
+                continue;
+            }
+
+            Walk(child, content, window, viewport, screen,
+                scrollsDown: false, scrollsAcross: false, clip: window);
+
+            // A dialog that scrolls has the same problem a page does: what is
+            // wrong is as likely to be in the middle as at the top.
+            var scrollers = new List<ScrollViewer>();
+            CollectScrollers(child, scrollers);
+
+            foreach (var scroller in scrollers.Where(s => s.ScrollableHeight > Tolerance))
+            {
+                scroller.ChangeView(null, scroller.ScrollableHeight, null, disableAnimation: true);
+                await SettleAsync();
+
+                Walk(child, content, window, viewport, $"{screen} (scrolled)",
+                    scrollsDown: false, scrollsAcross: false, clip: window);
+
+                scroller.ChangeView(null, 0, null, disableAnimation: true);
+                await SettleAsync();
+            }
+        }
+    }
+
+    private void CloseOpenDialogs()
+    {
+        if (_window.Content is not FrameworkElement content || content.XamlRoot is null)
+        {
+            return;
+        }
+
+        foreach (var popup in VisualTreeHelper.GetOpenPopupsForXamlRoot(content.XamlRoot))
+        {
+            if (popup.Child is DependencyObject child && FindDialog(child) is { } dialog)
+            {
+                dialog.Hide();
+            }
+        }
+    }
+
+    private static ContentDialog? FindDialog(DependencyObject node)
+    {
+        if (node is ContentDialog dialog)
+        {
+            return dialog;
+        }
+
+        var count = VisualTreeHelper.GetChildrenCount(node);
+
+        for (var i = 0; i < count; i++)
+        {
+            if (FindDialog(VisualTreeHelper.GetChild(node, i)) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Content a family will produce and the sample configuration will not.
