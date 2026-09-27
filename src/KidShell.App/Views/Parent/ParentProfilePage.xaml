@@ -48,12 +48,17 @@
 
                     <StackPanel>
                         <Grid>
-                            <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AgeLabel}" />
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AgeLabel}" Grid.Column="0" />
                             <TextBlock
+                                Grid.Column="1"
                                 x:Name="AgeValueText"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource BrandBlueBrush}"
-                                HorizontalAlignment="Right"
                                 Style="{StaticResource BodyTextStyle}" />
                         </Grid>
                         <Slider
@@ -143,15 +148,20 @@
                                     BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThickness}}"
                                     CornerRadius="{StaticResource RadiusPill}">
                                     <Grid>
-                                        <Viewbox Margin="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Viewbox Margin="4" Grid.Column="0">
                                             <controls:AvatarPresenter AvatarId="{x:Bind Id}" Width="100" Height="100" />
                                         </Viewbox>
                                         <!-- Selection is shown by a badge as well as the ring. -->
                                         <Border
+                                            Grid.Column="1"
                                             Width="26" Height="26"
                                             Background="{StaticResource BrandBlueBrush}"
                                             CornerRadius="{StaticResource RadiusPill}"
-                                            HorizontalAlignment="Right"
                                             Margin="0,0,2,2"
                                             VerticalAlignment="Bottom"
                                             Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">

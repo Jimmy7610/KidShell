@@ -109,7 +109,8 @@ public sealed partial class ParentShellView : UserControl
         // status strip.
         var roomy = ResponsiveLayout.Classify(width) != LayoutSize.Compact;
 
-        FooterBrand.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+        // Asked of the measurement, not of the width. See FitFooterBrand.
+        FitFooterBrand(FooterBrand, FooterActions, roomy ? width : 0);
         HeaderTagline.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
         HeaderChildText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
 
@@ -119,6 +120,44 @@ public sealed partial class ParentShellView : UserControl
         HeaderChild.Visibility = width >= ResponsiveLayout.MinimumSupportedWidth
             ? Visibility.Visible
             : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Hides the footer wordmark when it would not fit beside the buttons.
+    ///
+    /// Measured rather than decided from the window width. Width was a good
+    /// enough proxy while the text was a known size, and stopped being one as
+    /// soon as Windows text scaling could make the same words half as wide
+    /// again. What matters is whether this tagline fits next to these buttons
+    /// in this language, and the only way to know that is to ask both of them.
+    /// </summary>
+    private static void FitFooterBrand(FrameworkElement brand, FrameworkElement actions, double available)
+    {
+        if (double.IsNaN(available))
+        {
+            return;
+        }
+
+        if (available <= 0)
+        {
+            brand.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // Shown first, or it could never come back once it had been hidden:
+        // a collapsed element measures as nothing.
+        brand.Visibility = Visibility.Visible;
+
+        var unbounded = new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity);
+        brand.Measure(unbounded);
+        actions.Measure(unbounded);
+
+        const double gap = 32;
+
+        if (brand.DesiredSize.Width + actions.DesiredSize.Width + gap > available)
+        {
+            brand.Visibility = Visibility.Collapsed;
+        }
     }
 
     /// <summary>

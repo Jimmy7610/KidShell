@@ -28,13 +28,19 @@
 
             <StackPanel x:Name="HeaderBrand" Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <TextBlock
+                        Grid.Column="0"
                         Style="{StaticResource WordmarkTextStyle}"
                         Text="{loc:Str Key=Parent.Title}" />
                     <Canvas
+                        Grid.Column="1"
                         Width="46" Height="34"
                         Margin="0,-6,-40,0"
-                        HorizontalAlignment="Right"
                         VerticalAlignment="Top">
                         <Path
                             Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
@@ -286,8 +292,18 @@
                     <Border Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
                         <StackPanel Spacing="10">
                             <Grid>
-                                <StackPanel Orientation="Horizontal" Spacing="14">
-                                    <Border Background="#FFFCEBC4" Style="{StaticResource PanelBadgeStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid ColumnSpacing="14" Grid.Column="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Background="#FFFCEBC4" Style="{StaticResource PanelBadgeStyle}" Grid.Column="0">
                                         <FontIcon
                                             FontFamily="{StaticResource SymbolFontFamily}"
                                             FontSize="22"
@@ -295,32 +311,44 @@
                                             Glyph="&#xE823;" />
                                     </Border>
                                     <TextBlock
+                                        Grid.Column="1"
+                                        TextWrapping="Wrap"
                                         Style="{StaticResource SectionTitleTextStyle}"
                                         Text="{loc:Str Key=ScreenTime.Title}"
                                         VerticalAlignment="Center" />
-                                </StackPanel>
+                                </Grid>
                                 <Button
+                                    Grid.Column="1"
                                     x:Name="GoToScreenTimeButton"
                                     Click="OnGoToScreenTime"
                                     Content="Ändra"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource SoftButtonStyle}"
                                     VerticalAlignment="Top" />
                             </Grid>
                             <Grid ColumnSpacing="10">
-                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" />
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" Grid.Column="0" />
                                 <TextBlock
+                                    Grid.Column="1"
                                     x:Name="AsideWeekdayText"
                                     FontWeight="SemiBold"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource BodyTextStyle}" />
                             </Grid>
                             <Grid ColumnSpacing="10">
-                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" />
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource SecondaryTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" Grid.Column="0" />
                                 <TextBlock
+                                    Grid.Column="1"
                                     x:Name="AsideWeekendText"
                                     FontWeight="SemiBold"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource BodyTextStyle}" />
                             </Grid>
                             <TextBlock
@@ -333,8 +361,18 @@
                     <Border Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
                         <StackPanel Spacing="10">
                             <Grid>
-                                <StackPanel Orientation="Horizontal" Spacing="14">
-                                    <Border Background="#FFD9EAFB" Style="{StaticResource PanelBadgeStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Grid ColumnSpacing="14" Grid.Column="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Background="#FFD9EAFB" Style="{StaticResource PanelBadgeStyle}" Grid.Column="0">
                                         <FontIcon
                                             FontFamily="{StaticResource SymbolFontFamily}"
                                             FontSize="22"
@@ -342,15 +380,17 @@
                                             Glyph="&#xE774;" />
                                     </Border>
                                     <TextBlock
+                                        Grid.Column="1"
+                                        TextWrapping="Wrap"
                                         Style="{StaticResource SectionTitleTextStyle}"
                                         Text="{loc:Str Key=Web.Title}"
                                         VerticalAlignment="Center" />
-                                </StackPanel>
+                                </Grid>
                                 <Button
+                                    Grid.Column="1"
                                     x:Name="GoToWebButton"
                                     Click="OnGoToWeb"
                                     Content="Ändra"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource SoftButtonStyle}"
                                     VerticalAlignment="Top" />
                             </Grid>
@@ -373,13 +413,28 @@
         </Grid>
 
         <!-- ============================= Footer ============================= -->
-        <Grid Grid.Row="2">
-            <!--
-                Hidden on a narrow window: it is decoration, and it was sitting
-                underneath the action buttons rather than beside them.
-            -->
+        <!--
+            Two columns, and the actions take what they need first.
+
+            These used to share one cell, the brand aligned left and the
+            buttons right, which works only while they do not meet. Enlarged
+            text makes them meet: at 150% the tagline ran 168 epx underneath
+            the Tillbaka button, and the buttons themselves ran off the left
+            edge of the window.
+
+            Now the buttons get their width and the brand gets what is left -
+            and gives way entirely when that is not enough, because it is
+            decoration and they are the way out of Föräldraläge.
+        -->
+        <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
             <StackPanel
                 x:Name="FooterBrand"
+                Grid.Column="0"
                 HorizontalAlignment="Left"
                 Orientation="Horizontal"
                 Spacing="10"
@@ -445,10 +500,21 @@
                 </Border>
             </StackPanel>
 
-            <StackPanel
+            <!--
+                A WrapPanel, not a StackPanel.
+
+                Three buttons in a row is fine until the words in them grow.
+                At 150% text they were wider than the window, and the first one
+                - the way back to Barnläge - was the one pushed off the edge.
+                Wrapping puts them on two lines instead, which is longer and
+                reachable rather than short and not.
+            -->
+            <controls:WrapPanel
+                x:Name="FooterActions"
+                Grid.Column="1"
                 HorizontalAlignment="Right"
-                Orientation="Horizontal"
-                Spacing="12"
+                HorizontalSpacing="12"
+                VerticalSpacing="10"
                 VerticalAlignment="Center">
                 <Button
                     x:Name="BackButton"
@@ -469,7 +535,7 @@
                     x:Name="SaveButton"
                     Content="{loc:Str Key=Parent.Save}"
                     Style="{StaticResource PrimaryButtonStyle}" />
-            </StackPanel>
+            </controls:WrapPanel>
         </Grid>
 
         <VisualStateManager.VisualStateGroups>

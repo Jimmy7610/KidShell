@@ -106,13 +106,19 @@
                         <Grid>
                     <StackPanel x:Name="StepWelcome" Spacing="18">
                         <Grid HorizontalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
                             <TextBlock
+                                Grid.Column="0"
                                 Style="{StaticResource WordmarkTextStyle}"
                                 Text="{loc:Str Key=Child.Wordmark}" />
                             <Canvas
+                                Grid.Column="1"
                                 Width="46" Height="34"
                                 Margin="0,-6,-40,0"
-                                HorizontalAlignment="Right"
                                 VerticalAlignment="Top">
                                 <Path
                                     Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
@@ -326,19 +332,47 @@
                                                 Style="{StaticResource SetupTileSelectedSurfaceStyle}"
                                                 Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibility}}" />
 
-                                            <StackPanel Margin="12" Spacing="10">
-                                                <Grid Height="92">
+                                            <!--
+                                                A Grid, not a StackPanel, so
+                                                the swatch absorbs the change
+                                                rather than the words.
+
+                                                The card is a fixed height, and
+                                                a StackPanel gives every child
+                                                the height it asks for and then
+                                                overflows. Larger text
+                                                therefore pushed the hint off
+                                                the bottom of the card, where
+                                                the rounded border clipped it.
+                                                Now the decoration takes the
+                                                starred row and the two labels
+                                                take what they need.
+                                            -->
+                                            <Grid Margin="12" RowSpacing="10">
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="*" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+
+                                                <Grid Grid.Row="0" MinHeight="48">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+
                                                     <Border
+                                                        Grid.Column="0"
                                                         Background="{x:Bind Swatch}"
                                                         CornerRadius="{StaticResource RadiusMd}" />
                                                     <Border
+                                                        Grid.Column="1"
                                                         Width="28" Height="28"
                                                         Margin="0,7,7,0"
                                                         Background="{StaticResource BrandBlueBrush}"
                                                         BorderBrush="White"
                                                         BorderThickness="2"
                                                         CornerRadius="{StaticResource RadiusPill}"
-                                                        HorizontalAlignment="Right"
                                                         VerticalAlignment="Top"
                                                         Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
                                                         <FontIcon
@@ -349,13 +383,17 @@
                                                     </Border>
                                                 </Grid>
                                                 <TextBlock
+                                                    Grid.Row="1"
                                                     Style="{StaticResource SetupTileLabelTextStyle}"
-                                                    Text="{x:Bind Label}" />
+                                                    Text="{x:Bind Label}"
+                                                    TextWrapping="Wrap" />
                                                 <TextBlock
+                                                    Grid.Row="2"
                                                     Style="{StaticResource CaptionTextStyle}"
                                                     Text="{x:Bind Hint}"
-                                                    TextAlignment="Center" />
-                                            </StackPanel>
+                                                    TextAlignment="Center"
+                                                    TextWrapping="Wrap" />
+                                            </Grid>
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
@@ -407,12 +445,17 @@
 
                                         <StackPanel x:Name="RulesTimeControls" Spacing="8">
                                             <Grid>
-                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" />
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekdays}" Grid.Column="0" />
                                                 <TextBlock
+                                                    Grid.Column="1"
                                                     x:Name="RulesWeekdayText"
                                                     FontWeight="SemiBold"
                                                     Foreground="{StaticResource BrandBlueBrush}"
-                                                    HorizontalAlignment="Right"
                                                     Style="{StaticResource CaptionTextStyle}" />
                                             </Grid>
                                             <Slider
@@ -423,12 +466,17 @@
                                                 ValueChanged="OnRulesWeekdayChanged" />
 
                                             <Grid>
-                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" />
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=ScreenTime.Weekends}" Grid.Column="0" />
                                                 <TextBlock
+                                                    Grid.Column="1"
                                                     x:Name="RulesWeekendText"
                                                     FontWeight="SemiBold"
                                                     Foreground="{StaticResource BrandBlueBrush}"
-                                                    HorizontalAlignment="Right"
                                                     Style="{StaticResource CaptionTextStyle}" />
                                             </Grid>
                                             <Slider

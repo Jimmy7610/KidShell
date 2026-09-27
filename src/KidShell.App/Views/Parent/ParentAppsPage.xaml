@@ -17,7 +17,12 @@
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
-            <StackPanel VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel VerticalAlignment="Center" Grid.Column="0">
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Apps.Title}" />
                 <TextBlock
                     x:Name="SubtitleText"
@@ -26,8 +31,8 @@
             </StackPanel>
 
             <Button
+                Grid.Column="1"
                 x:Name="AddAppButton"
-                HorizontalAlignment="Right"
                 Style="{StaticResource PrimaryButtonStyle}"
                 VerticalAlignment="Top">
                 <StackPanel Orientation="Horizontal" Spacing="8">

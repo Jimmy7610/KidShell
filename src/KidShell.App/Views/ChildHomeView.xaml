@@ -29,13 +29,19 @@
             <!-- Wordmark -->
             <StackPanel Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <TextBlock
+                        Grid.Column="0"
                         Style="{StaticResource WordmarkTextStyle}"
                         Text="{loc:Str Key=Child.Wordmark}" />
                     <Canvas
+                        Grid.Column="1"
                         Width="46" Height="34"
                         Margin="0,-6,-40,0"
-                        HorizontalAlignment="Right"
                         VerticalAlignment="Top">
                         <Path
                             Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
@@ -260,7 +266,17 @@
         </Grid>
 
         <!-- ============================= Footer ============================= -->
-        <Grid Grid.Row="2" VerticalAlignment="Bottom">
+        <!--
+            Two columns. The same lesson as the Föräldraläge footer: the brand
+            and the buttons shared one cell, aligned to opposite edges, which
+            works only until they meet. Enlarged text makes them meet.
+        -->
+        <Grid Grid.Row="2" ColumnSpacing="16" VerticalAlignment="Bottom">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
             <!--
                 Hidden on a narrow window: at 800 it collided with the
                 development badge in the middle of the footer. It is decoration,
@@ -268,6 +284,7 @@
             -->
             <StackPanel
                 x:Name="FooterBrand"
+                Grid.Column="0"
                 Orientation="Horizontal"
                 Spacing="10"
                 VerticalAlignment="Center"
@@ -326,10 +343,12 @@
                 </Border>
             </StackPanel>
 
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="14"
+            <controls:WrapPanel
+                x:Name="FooterActions"
+                Grid.Column="1"
                 HorizontalAlignment="Right"
+                HorizontalSpacing="14"
+                VerticalSpacing="10"
                 VerticalAlignment="Center">
                 <Button
                     x:Name="SettingsButton"
@@ -378,7 +397,7 @@
                             Text="{loc:Str Key=Child.ParentAccess}" />
                     </StackPanel>
                 </controls:HoldButton>
-            </StackPanel>
+            </controls:WrapPanel>
         </Grid>
     </Grid>
 </UserControl>

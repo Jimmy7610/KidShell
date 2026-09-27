@@ -12,7 +12,7 @@
         nothing about either. Every readout has a text or glyph fallback so
         that a machine without a battery simply shows less, never an error.
     -->
-    <StackPanel Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+    <StackPanel x:Name="Strip" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
 
         <FontIcon
             x:Name="NetworkGlyph"

@@ -68,10 +68,15 @@
                         Minimum="0" />
 
                     <Grid>
-                        <TextBlock x:Name="UsedText" Style="{StaticResource CaptionTextStyle}" />
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock x:Name="UsedText" Style="{StaticResource CaptionTextStyle}" Grid.Column="0" />
                         <TextBlock
+                            Grid.Column="1"
                             x:Name="RemainingText"
-                            HorizontalAlignment="Right"
                             Style="{StaticResource CaptionTextStyle}" />
                     </Grid>
 
@@ -139,15 +144,21 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
                             <TextBlock
+                                Grid.Column="0"
                                 FontWeight="SemiBold"
                                 Style="{StaticResource BodyTextStyle}"
                                 Text="{loc:Str Key=ScreenTime.Weekdays}" />
                             <TextBlock
+                                Grid.Column="1"
                                 x:Name="WeekdayValueText"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource BrandBlueBrush}"
-                                HorizontalAlignment="Right"
                                 Style="{StaticResource BodyTextStyle}" />
                         </Grid>
                         <Slider
@@ -165,15 +176,21 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
                             <TextBlock
+                                Grid.Column="0"
                                 FontWeight="SemiBold"
                                 Style="{StaticResource BodyTextStyle}"
                                 Text="{loc:Str Key=ScreenTime.Weekends}" />
                             <TextBlock
+                                Grid.Column="1"
                                 x:Name="WeekendValueText"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource BrandBlueBrush}"
-                                HorizontalAlignment="Right"
                                 Style="{StaticResource BodyTextStyle}" />
                         </Grid>
                         <Slider
@@ -215,12 +232,17 @@
                     <StackPanel x:Name="HoursControls" Spacing="12">
                         <StackPanel Spacing="4">
                             <Grid>
-                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.From}" />
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.From}" Grid.Column="0" />
                                 <TextBlock
+                                    Grid.Column="1"
                                     x:Name="FromValueText"
                                     FontWeight="SemiBold"
                                     Foreground="{StaticResource BrandBlueBrush}"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource BodyTextStyle}" />
                             </Grid>
                             <Slider
@@ -236,12 +258,17 @@
 
                         <StackPanel Spacing="4">
                             <Grid>
-                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.Until}" />
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource BodyTextStyle}" Text="{loc:Str Key=ScreenTime.Until}" Grid.Column="0" />
                                 <TextBlock
+                                    Grid.Column="1"
                                     x:Name="UntilValueText"
                                     FontWeight="SemiBold"
                                     Foreground="{StaticResource BrandBlueBrush}"
-                                    HorizontalAlignment="Right"
                                     Style="{StaticResource BodyTextStyle}" />
                             </Grid>
                             <Slider

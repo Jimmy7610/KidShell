@@ -427,7 +427,12 @@
                 <StackPanel Spacing="12">
 
                     <Grid>
-                        <StackPanel Spacing="3" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Spacing="3" VerticalAlignment="Center" Grid.Column="0">
                             <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Recovery.Title}" />
                             <TextBlock
                                 x:Name="RecoveryHeadline"
@@ -436,9 +441,9 @@
                                 TextWrapping="Wrap" />
                         </StackPanel>
                         <Button
+                            Grid.Column="1"
                             x:Name="RecoveryRefreshButton"
                             Content="{loc:Str Key=Recovery.Refresh}"
-                            HorizontalAlignment="Right"
                             Style="{StaticResource SecondaryButtonStyle}"
                             VerticalAlignment="Center" />
                     </Grid>

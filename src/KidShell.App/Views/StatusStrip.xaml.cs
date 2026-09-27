@@ -17,6 +17,50 @@ public sealed partial class StatusStrip : UserControl
     {
         InitializeComponent();
         Unloaded += (_, _) => Detach();
+        SizeChanged += (_, e) => Adapt(e.NewSize.Width);
+    }
+
+    /// <summary>
+    /// Whether the battery percentage has been dropped for want of room.
+    /// </summary>
+    internal bool IsShowingBatteryPercentage => BatteryText.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Drops the least useful reading when the strip is given less room than
+    /// it asked for.
+    ///
+    /// The strip is a row of readouts, and at a larger text size it is simply
+    /// wider - wide enough, at 150%, to run off the right of the window and
+    /// take the clock with it. Something has to give, and the percentage is
+    /// the right thing: the battery glyph already shows the level, and the
+    /// exact number stays available to a screen reader through the automation
+    /// name, which is set whether or not the text is shown.
+    ///
+    /// Measured rather than guessed from the window width, because what
+    /// matters is whether THIS strip fits, and that depends on the language as
+    /// much as on the monitor - "100 %" and "100 %" are not the same width in
+    /// every font size.
+    /// </summary>
+    private void Adapt(double available)
+    {
+        if (available <= 0 || double.IsNaN(available) || _status is null)
+        {
+            return;
+        }
+
+        // Ask for everything first, or the strip could never recover the
+        // percentage once it had been dropped.
+        if (_status.BatteryPercent is not null)
+        {
+            BatteryText.Visibility = Visibility.Visible;
+        }
+
+        Strip.Measure(new Windows.Foundation.Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        if (Strip.DesiredSize.Width > available)
+        {
+            BatteryText.Visibility = Visibility.Collapsed;
+        }
     }
 
     public void Initialize(ISystemStatusService status)
