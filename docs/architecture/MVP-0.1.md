@@ -428,15 +428,47 @@ profile change in Parent Mode is visibly real on the child's screen.
 
 The card grid is an `ItemsRepeater` with a `UniformGridLayout`
 (`MinItemWidth="232"`, `MinItemHeight="186"`, 22 px gaps) inside a
-`MaxWidth="1180"` container. That yields a 4×2 grid from roughly 980 px of
+`MaxWidth="1180"` container. That yields a 4×2 grid from roughly 980 epx of
 content width upward — so 1366×768, 1920×1080 and 2560×1440 all get the layout
 from the design — and degrades to three and then two columns rather than
-clipping. In Parent Mode an `AdaptiveTrigger` hides the right-hand summary
-column below 1320 px.
+clipping.
 
-Nothing is sized in absolute screen coordinates, the manifest declares
-PerMonitorV2 DPI awareness, and text uses no fixed line heights, so 125 % and
-150 % scaling grow the UI instead of cropping it.
+Every adaptive decision lives in `ResponsiveLayout` (in `KidShell.Core`) rather
+than in a XAML `AdaptiveTrigger`, and the views ask instead of deciding. The
+reason is testability: the only way to know what a trigger does at 1024×768 with
+150 % text scaling is to build it and look, and every responsiveness bug found
+in this codebase has been of exactly that shape. A wrong breakpoint is now a
+failing unit test.
+
+Three things give way, in the order in which they stop earning their space: the
+at-a-glance aside column (`ShowAside`), then the navigation labels, leaving an
+icon rail (`DecideNavigation`), then decoration — artwork, wordmarks, avatars.
+Text never gives way. When something genuinely does not fit, it wraps, stacks,
+reflows or scrolls; nothing is shrunk and nothing is hidden.
+
+#### Windows text scaling
+
+Text scaling is not display scaling. Windows multiplies the *rendered* font size
+and leaves every other dimension alone, so at 200 % a label needs roughly twice
+the width inside a container that did not grow. Two container behaviours caused
+nearly all of the failures:
+
+* **A horizontal `StackPanel` measures its children with unlimited width** in
+  the stacking direction. Text inside one never learns its column width, so it
+  clips instead of wrapping. These are now `Grid`s with `Auto | *` columns.
+* **An `Auto` grid column also measures with infinity**, so a `WrapPanel` in one
+  reports a single row and never wraps. Those columns are now `*`, or the
+  content is given an explicit share of the window.
+
+The supported matrix is rendered and measured rather than reasoned about.
+`LayoutAudit` (developer mode only) drives all 26 supported effective sizes
+across every screen and reports clipping, overlap, off-window controls and
+unreachable actions; it is run at 100 %, 125 %, 150 %, 175 % and 200 % with the
+app's font declarations scaled to match. The audit's own rules are
+mutation-tested: a known layout bug is reintroduced and the audit must catch it.
+
+The manifest declares PerMonitorV2 DPI awareness and text uses no fixed line
+heights.
 
 ### Accessibility
 

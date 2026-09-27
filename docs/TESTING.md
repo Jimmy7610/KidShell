@@ -97,8 +97,10 @@ from the wall clock, so those three are genuinely different scenarios.
 
 Stated so nobody assumes otherwise:
 
-* **The WinUI layer.** No UI automation; screens are verified by manual QA
-  against the approved design references.
+* **The WinUI layer, as behaviour.** There is no UI automation driving
+  controls. Layout is a different question and is covered - see *Layout and
+  text scaling* below - but whether a click does the right thing is verified by
+  manual QA against the approved design references.
 * **Real Windows mutation.** Nothing applies a policy, creates an account or
   signs anybody out, so nothing tests that those work. They are planning and
   artifact generation only.
@@ -107,6 +109,46 @@ Stated so nobody assumes otherwise:
   policy is a dedicated-device question.
 * **Escape testing.** See `docs/SECURITY.md`. The matrix is honest about which
   rows cannot be verified without a test machine.
+
+## Layout and text scaling
+
+`LayoutAudit` is a developer-mode-only harness inside the app. It drives all 26
+supported effective window sizes across every screen - onboarding, Child Mode
+with 0 to 16 apps, the PIN overlay, all six Parent Mode pages, the web and app
+editors at their extremes - and after each one walks the visual tree reporting
+clipping, overlap, controls outside the window, squeezed containers and text
+that has been cut.
+
+It is run at 100 %, 125 %, 150 %, 175 % and 200 % text scaling. Windows text
+scaling multiplies the rendered font size and leaves every other dimension
+alone, so a sweep scales every font declaration in the app's XAML by the same
+factor, builds, measures, and restores the tree afterwards.
+
+**The restore is verified, not assumed.** A sweep that fails to restore leaves
+scaled fonts in the tree and the next sweep scales them again; they reached
+400 % that way once, and every "regression" measured after that was measured
+against quadrupled text rather than against any code change. The guard checks
+two things afterwards: that every font size matches the committed one, and that
+no file contains double-encoded UTF-8 - a restore that read UTF-8 as ANSI and
+wrote it back turned every Swedish string in three files into the doubled form
+where each `ä` becomes two characters, and the font check passed cleanly
+throughout because it only ever compared numbers.
+
+### The audit is not automatically right
+
+It found nothing wrong at 200 % while the navigation on screen read
+**"Skärmtic"**. The rule for silently cut text compared a TextBlock's required
+width against its `ActualWidth`, and a `NoWrap` TextBlock reports the extent of
+its *glyphs* there, not the slot it was arranged into - 130.4 against a
+required 131.0, a difference of 0.6 epx, while a whole letter was missing. The
+slot is `DesiredSize.Width`, which `Measure` clamps to the parent's constraint;
+it was 122.0.
+
+So the audit is mutation-tested like the rest. `TextWrapping="Wrap"` was
+removed from one navigation label, the screen was rendered and photographed to
+confirm the bug was really back, and the sweep was re-run: the rule now reports
+`needs 131 epx, given 122` at every size where that label is shown. A rule that
+cannot be made to fail is not a rule that passes.
 
 ## Manual QA checklist
 
@@ -124,7 +166,11 @@ Run before any release-shaped commit:
 10. An unconfigured app shows a friendly message, never a crash
 11. Säkerhet reports this machine's real edition, build and capabilities
 12. "Kör introduktionen igen" clears the profile and keeps the app list
-13. 1366×768 has no clipping
+13. Windows text scaling at 200 % (Settings → Accessibility → Text size):
+    the navigation, the PIN keypad and the footer actions are all still
+    readable and reachable. The layout audit covers this mechanically; this
+    step is here because the audit measures a simulation of text scaling and
+    a person looking at the real thing is the check on that.
 
 
 ---
@@ -171,4 +217,6 @@ CI guards were confirmed by planting a P/Invoke outside the platform layer, a
 version mismatch and a broken documentation link, and watching the build fail
 each time.
 
-A test that passes before and after the fix is not testing the fix.
+A test that passes before and after the fix is not testing the fix. The same
+applies to the layout audit, which is why its text-clipping rule was confirmed
+by putting the bug back - see *Layout and text scaling* above.
