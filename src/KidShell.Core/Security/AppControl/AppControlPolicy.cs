@@ -62,6 +62,35 @@ public sealed record AppControlRule
     /// silently emitted.
     /// </summary>
     public bool IsWeak { get; init; }
+
+    /// <summary>
+    /// Who this rule is for. Empty means the policy's target account.
+    ///
+    /// Per-rule rather than per-policy, because the recovery rules are for a
+    /// different principal than everything else. One SID for the whole
+    /// document would mean the only way to give an administrator a way back in
+    /// was to give the child one too.
+    /// </summary>
+    public string UserOrGroupSid { get; init; } = string.Empty;
+
+    /// <summary>
+    /// True for the administrator recovery rules.
+    ///
+    /// Deliberately broad, and deliberately scoped away from the child. They
+    /// are exempt from the checks that judge the child's policy - judging them
+    /// by those would block every policy that has a recovery path, which is
+    /// every policy that should exist.
+    /// </summary>
+    public bool IsRecoveryRule { get; init; }
+
+    /// <summary>
+    /// Package family name for a packaged-app publisher rule.
+    ///
+    /// AppLocker identifies a packaged app by publisher name, package name and
+    /// package version, and supports only publisher rules for them - there is
+    /// no path or hash condition to fall back on.
+    /// </summary>
+    public string PackageName { get; init; } = string.Empty;
 }
 
 /// <summary>How seriously a warning should be taken.</summary>
@@ -104,7 +133,15 @@ public sealed record AppControlPolicy
 
     public IEnumerable<AppControlRule> SystemRules => Rules.Where(r => r.IsSystemRequirement);
 
-    public IEnumerable<AppControlRule> ApplicationRules => Rules.Where(r => !r.IsSystemRequirement);
+    /// <summary>
+    /// The rules that exist because a parent approved an app.
+    ///
+    /// Neither the Windows requirements nor the administrator recovery rules:
+    /// counting the latter would make an empty app list look like a policy
+    /// that permits something.
+    /// </summary>
+    public IEnumerable<AppControlRule> ApplicationRules =>
+        Rules.Where(r => !r.IsSystemRequirement && !r.IsRecoveryRule);
 
     /// <summary>Rules whose path a standard user could write to.</summary>
     public IEnumerable<AppControlRule> WeakRules => Rules.Where(r => r.IsWeak);
@@ -116,16 +153,25 @@ public sealed record AppControlPolicy
     /// </summary>
     public bool HasApplicationRules => ApplicationRules.Any();
 
-    /// <summary>Warnings serious enough to stop this policy being applied.</summary>
-    public IEnumerable<PolicyWarning> BlockingWarnings =>
-        Warnings.Where(w => w.Severity == PolicySeverity.Blocking);
+    /// <summary>Rules that exist so an administrator can repair the machine.</summary>
+    public IEnumerable<AppControlRule> RecoveryRules => Rules.Where(r => r.IsRecoveryRule);
 
     /// <summary>
-    /// Whether this policy is safe to put on a machine.
-    ///
-    /// The question is asked of the policy itself rather than of the caller,
-    /// so that "we generated something we do not trust" and "we deployed it
-    /// anyway" cannot be two separate decisions made in two different places.
+    /// The single validation result. Everything that asks whether this policy
+    /// is safe asks this.
     /// </summary>
-    public bool CanActivate => !BlockingWarnings.Any();
+    public AppControlValidation Validation => AppControlValidator.Validate(this);
+
+    /// <summary>Findings serious enough to stop this policy being applied.</summary>
+    public IEnumerable<PolicyWarning> BlockingWarnings => Validation.Blocking;
+
+    /// <summary>
+    /// Whether this policy is safe to ENFORCE on a machine.
+    ///
+    /// Delegates to the one validator. It used to be computed here from the
+    /// warnings the builder happened to record, while the deployment side
+    /// asked a different question - so a policy could report CanActivate and
+    /// then be refused. One question, one answer, one place.
+    /// </summary>
+    public bool CanActivate => Validation.CanEnforce;
 }

@@ -61,6 +61,25 @@ public sealed class KidAppDefinition
 
     public string Arguments { get; set; } = string.Empty;
 
+    /// <summary>
+    /// The publisher Windows reports for a packaged application, as the signing
+    /// identity string AppLocker matches on.
+    ///
+    /// Kept because AppLocker supports ONLY publisher rules for packaged apps -
+    /// there is no path or hash condition to fall back on - and a rule without
+    /// the real publisher would have to be a wildcard, which allows every
+    /// packaged app on the machine.
+    /// </summary>
+    public string Publisher { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The package family name, derived from the AUMID when the app was added.
+    ///
+    /// The second half of a packaged app's identity: AppLocker matches on
+    /// publisher name, package name and package version.
+    /// </summary>
+    public string PackageFamilyName { get; set; } = string.Empty;
+
     public int SortOrder { get; set; }
 
     public KidAppDefinition Clone() => new()
@@ -76,6 +95,8 @@ public sealed class KidAppDefinition
         LaunchKind = LaunchKind,
         ExecutablePath = ExecutablePath,
         Arguments = Arguments,
+        Publisher = Publisher,
+        PackageFamilyName = PackageFamilyName,
         SortOrder = SortOrder
     };
 }

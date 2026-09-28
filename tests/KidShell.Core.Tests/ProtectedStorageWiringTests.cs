@@ -211,7 +211,14 @@ public class ProtectedStorageWiringTests
 
         Assert.DoesNotContain("135790", policy);
         Assert.DoesNotContain("135790", File.ReadAllText(unprotected));
-        Assert.Contains(hash, policy);
+
+        // The hash IS there - what must never be written is the PIN. Compared
+        // after deserialising rather than as a substring, because base64 can
+        // contain characters the JSON encoder escapes.
+        var stored = JsonSerializer.Deserialize<ParentPolicyDocument>(
+            policy, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        Assert.Equal(hash, stored!.ParentPin.Hash);
     }
 
     // ----------------------------------------- the counter is protected too
