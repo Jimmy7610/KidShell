@@ -271,6 +271,79 @@ public class ScreenTimeCoordinatorTests
     }
 
     /// <summary>A configuration holder backed by an object rather than a file.</summary>
+    // ------------------------------------------------------------------
+    // OPSV FINDING 02 - the event's thread, and the boundary that fixes it.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void The_coordinator_raises_its_event_off_the_ui_thread()
+    {
+        // The reason the marshalling has to exist at all. The coordinator does
+        // not hop threads on its own: it publishes on whichever thread called
+        // it, and the caller in production is a System.Threading.Timer.
+        var (coordinator, time, engine, _) = Build(weekdayMinutes: 60);
+        using var _disposable = coordinator;
+
+        var raisedOn = -1;
+        coordinator.Changed += (_, _) => raisedOn = Environment.CurrentManagedThreadId;
+
+        var callerThread = Environment.CurrentManagedThreadId;
+
+        var done = new ManualResetEventSlim();
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            // Credited ticks, not one jump: the engine caps each tick so that
+            // a laptop asleep for three hours does not consume the day.
+            for (var i = 0; i < 20; i++)
+            {
+                time.Advance(TimeSpan.FromMinutes(2));
+                engine.Tick();
+            }
+
+            coordinator.Refresh();
+            done.Set();
+        });
+
+        Assert.True(done.Wait(TimeSpan.FromSeconds(5)), "the coordinator never published");
+        Assert.NotEqual(-1, raisedOn);
+        Assert.NotEqual(callerThread, raisedOn);
+    }
+
+    [Fact]
+    public void Unsubscribing_stops_callbacks_from_a_later_tick()
+    {
+        var (coordinator, time, engine, _) = Build(weekdayMinutes: 60);
+        using var _disposable = coordinator;
+
+        var count = 0;
+        void Handler(object? sender, ScreenTimeStatusView view) => count++;
+
+        coordinator.Changed += Handler;
+
+        for (var i = 0; i < 20; i++)
+        {
+            time.Advance(TimeSpan.FromMinutes(2));
+            engine.Tick();
+        }
+
+        coordinator.Refresh();
+
+        var afterFirst = count;
+        Assert.True(afterFirst > 0, "the coordinator never published a change");
+
+        coordinator.Changed -= Handler;
+
+        for (var i = 0; i < 5; i++)
+        {
+            time.Advance(TimeSpan.FromMinutes(2));
+            engine.Tick();
+        }
+
+        coordinator.Refresh();
+
+        Assert.Equal(afterFirst, count);
+    }
+
     private sealed class StubAppState : IAppStateService
     {
         public StubAppState(KidShellConfiguration configuration) => Current = configuration;
@@ -303,12 +376,16 @@ public class ScreenTimeCoordinatorTests
     private sealed class InMemoryScreenTimeStore : IScreenTimeStateStore
     {
         private ScreenTimeState _state = new();
+        private bool _written;
 
-        public ScreenTimeState Load() => _state.Clone();
+        public ScreenTimeStateLoad Load() => _written
+            ? new ScreenTimeStateLoad(_state.Clone(), ScreenTimeLoadOutcome.Primary)
+            : ScreenTimeStateLoad.FirstRun();
 
         public bool Save(ScreenTimeState state)
         {
             _state = state.Clone();
+            _written = true;
             return true;
         }
     }

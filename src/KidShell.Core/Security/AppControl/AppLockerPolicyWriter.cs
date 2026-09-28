@@ -38,7 +38,14 @@ public static class AppLockerPolicyWriter
         /// <summary>Actually block.</summary>
         Enabled,
 
-        /// <summary>Collection present but inactive.</summary>
+        /// <summary>
+        /// The collection carries no explicit enforcement setting.
+        ///
+        /// NOT a safe "off". Microsoft are explicit: "if enforcement isn't
+        /// configured and rules are present in a rule collection, those rules
+        /// are enforced." Emitting rules under this mode enforces them, so it
+        /// is guarded exactly as Enabled is.
+        /// </summary>
         NotConfigured
     }
 
@@ -59,13 +66,25 @@ public static class AppLockerPolicyWriter
         // blanket rule or an allowed command prompt, would turn on a
         // restriction that does not restrict - and tell a parent their child
         // was limited to four apps while leaving the machine open.
-        if (enforcement == EnforcementMode.Enabled && !policy.CanActivate)
+        // One validator, asked once. This used to recompute its own opinion
+        // from the policy's warnings while other callers asked a different
+        // question, which is how a policy could report that it was safe and
+        // then be refused.
+        var validation = policy.Validation;
+
+        // NotConfigured is guarded too. It reads like "off" and is not:
+        // Microsoft document that rules present in a collection with no
+        // enforcement setting ARE enforced, so writing a bad policy that way
+        // would enforce it while appearing not to.
+        var wouldEnforce = enforcement is EnforcementMode.Enabled or EnforcementMode.NotConfigured;
+
+        if (wouldEnforce && !validation.CanEnforce)
         {
-            var reasons = string.Join("; ", policy.BlockingWarnings.Select(w => w.Code));
+            var reasons = string.Join("; ", validation.Blocking.Select(w => w.Code));
 
             throw new InvalidOperationException(
                 $"Refusing to write an enforcing AppLocker policy that would not constrain the child ({reasons}). " +
-                "Generate it in audit mode, resolve the blocking warnings, and try again.");
+                "Generate it in audit mode, resolve the blocking findings, and try again.");
         }
 
         var sid = string.IsNullOrWhiteSpace(userOrGroupSid)
@@ -86,39 +105,89 @@ public static class AppLockerPolicyWriter
                 continue;
             }
 
-            root.Add(BuildCollection(collection, rules, enforcement, sid));
+            root.Add(BuildCollection(collection, rules, enforcement, sid, validation));
         }
 
         var document = new XDocument(new XDeclaration("1.0", "utf-8", null), root);
 
-        using var writer = new StringWriter();
-        using var xml = XmlWriter.Create(writer, new XmlWriterSettings
+        // OPSV FINDING 06C - the declaration said one thing and the bytes were
+        // another.
+        //
+        // This used to write through a StringWriter. A StringWriter IS UTF-16,
+        // and an XmlWriter takes the encoding from the TextWriter it was given
+        // rather than from XmlWriterSettings - so the document announced
+        // encoding="utf-16" while every byte that reached disk was UTF-8. Both
+        // the XDeclaration and the settings said utf-8 and neither was obeyed.
+        //
+        // A parser that believes the declaration over the bytes gets nonsense
+        // from the first non-ASCII character, and every rule name in this file
+        // is Swedish.
+        //
+        // Writing through a stream is what makes the setting mean something.
+        return System.Text.Encoding.UTF8.GetString(WriteUtf8(document));
+    }
+
+    /// <summary>
+    /// The policy as UTF-8 bytes, with a declaration that agrees with them.
+    ///
+    /// No byte-order mark: the declaration states the encoding, a BOM in front
+    /// of it is redundant, and some XML consumers treat one as leading
+    /// content.
+    /// </summary>
+    public static byte[] WriteUtf8(
+        AppControlPolicy policy,
+        EnforcementMode enforcement = EnforcementMode.AuditOnly,
+        string? userOrGroupSid = null) =>
+        System.Text.Encoding.UTF8.GetBytes(Write(policy, enforcement, userOrGroupSid));
+
+    private static byte[] WriteUtf8(XDocument document)
+    {
+        using var stream = new MemoryStream();
+
+        using (var xml = XmlWriter.Create(stream, new XmlWriterSettings
         {
             Indent = true,
             IndentChars = "  ",
-            Encoding = System.Text.Encoding.UTF8,
+            Encoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
             OmitXmlDeclaration = false
-        });
+        }))
+        {
+            document.Save(xml);
+            xml.Flush();
+        }
 
-        document.Save(xml);
-        xml.Flush();
-
-        return writer.ToString();
+        return stream.ToArray();
     }
 
     private static XElement BuildCollection(
         RuleCollection collection,
         IReadOnlyList<AppControlRule> rules,
         EnforcementMode enforcement,
-        string sid)
+        string sid,
+        AppControlValidation validation)
     {
         var element = new XElement("RuleCollection",
             new XAttribute("Type", collection.ToString()),
             new XAttribute("EnforcementMode", enforcement.ToString()));
 
+        // An audit artifact for a policy that must not be enforced says so on
+        // its face, so it cannot be mistaken for an approved one by anybody
+        // reading the file later.
+        if (!validation.CanEnforce)
+        {
+            element.Add(new XComment(
+                " NOT SAFE TO ENFORCE: " +
+                string.Join("; ", validation.Blocking.Select(w => w.Code)) +
+                ". Generated for diagnosis only. "));
+        }
+
         foreach (var rule in rules)
         {
-            element.Add(BuildRule(rule, sid));
+            // The rule's own audience where it has one. The recovery rules are
+            // for administrators and everything else is for the child, and one
+            // SID for the whole document would mean the only way to give an
+            // adult a way back in was to give the child one too.
+            element.Add(BuildRule(rule, string.IsNullOrWhiteSpace(rule.UserOrGroupSid) ? sid : rule.UserOrGroupSid));
         }
 
         return element;

@@ -4,6 +4,7 @@ using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
 using KidShell.Core.ScreenTime;
+using KidShell.Core.Runtime;
 using KidShell.Core.Security;
 
 namespace KidShell.App.ViewModels;
@@ -28,6 +29,8 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IParentPinService _pinService;
     private readonly IScreenTimeCoordinator _screenTime;
     private readonly IKidShellLogger _logger;
+    private readonly IParentSession _parentSession;
+    private readonly IUiDispatcher _ui;
 
     private ShellMode _mode = ShellMode.Child;
     private bool _isPinOpen;
@@ -37,7 +40,9 @@ public sealed class ShellViewModel : ObservableObject
         IDialogService dialogs,
         IDeveloperOptions developerOptions,
         IParentPinService pinService,
+        IParentSession parentSession,
         IScreenTimeCoordinator screenTime,
+        IUiDispatcher ui,
         IKidShellLogger logger,
         OnboardingViewModel onboarding,
         ChildHomeViewModel child,
@@ -48,7 +53,9 @@ public sealed class ShellViewModel : ObservableObject
         _dialogs = dialogs;
         _developerOptions = developerOptions;
         _pinService = pinService;
+        _parentSession = parentSession;
         _screenTime = screenTime;
+        _ui = ui;
         _logger = logger;
 
         Onboarding = onboarding;
@@ -57,10 +64,37 @@ public sealed class ShellViewModel : ObservableObject
         Parent = parent;
 
         Pin.Accepted += (_, _) => OpenParentMode();
+
+        // Parent Mode used to stay open until somebody closed it, which on a
+        // machine the child also uses means it stayed open. The session
+        // latches the door behind the PIN.
+        _parentSession.Ended += (_, reason) =>
+        {
+            if (IsParentMode)
+            {
+                _logger.Info("Shell", $"Parent Mode re-locked ({reason}).");
+                ReturnToChild();
+            }
+        };
+
+        // Evaluated on the screen-time tick rather than on a timer of its own.
+        // Something is already waking up every thirty seconds, and a second
+        // timer for the same job is a second thing to get wrong.
+        //
+        // Marshalled, because that tick is a thread-pool callback and
+        // expiring the session leaves Parent Mode - which is a UI change. See
+        // IUiDispatcher; this is the same boundary, reached from a different
+        // direction.
+        _screenTime.Changed += (_, _) => _ui.Post(_parentSession.Evaluate);
         Pin.Cancelled += (_, _) => ClosePin();
         Parent.BackToChildRequested += (_, _) => ReturnToChild();
         Parent.ExitRequested += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);
         Parent.RestartOnboardingRequested += (_, _) => StartOnboarding();
+
+        // Anything the parent does in Parent Mode restarts the idle window.
+        // Measured from the last action rather than from when the session
+        // began, so a long setup pass is not interrupted mid-sentence.
+        Parent.PropertyChanged += (_, _) => _parentSession.Touch();
         Onboarding.Completed += (_, _) => FinishOnboarding();
 
         // The setup screens preview the chosen theme live, so a pick on the
@@ -176,12 +210,17 @@ public sealed class ShellViewModel : ObservableObject
     {
         IsPinOpen = false;
         Parent.Reset();
+        _parentSession.Begin();
         Mode = ShellMode.Parent;
         _logger.Info("Shell", "Parent Mode opened.");
     }
 
     private void ReturnToChild()
     {
+        // Ended before the mode changes, so a session cannot outlive the
+        // screen it belongs to whichever way the parent left.
+        _parentSession.End(ParentSessionEndReason.ReturnedToChild);
+
         Mode = ShellMode.Child;
         Child.Refresh();
         _logger.Info("Shell", "Returned to Child Mode.");

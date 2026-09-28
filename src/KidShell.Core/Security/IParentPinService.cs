@@ -9,7 +9,16 @@ public enum PinVerificationResult
     Incorrect = 1,
 
     /// <summary>The entry was empty or the wrong length.</summary>
-    Malformed = 2
+    Malformed = 2,
+
+    /// <summary>
+    /// Too many wrong answers too quickly; the next try has to wait.
+    ///
+    /// Distinct from Incorrect on purpose. The UI has to be able to say "wait
+    /// a moment" rather than "wrong PIN", or a parent who mistyped four times
+    /// is told their correct PIN is wrong.
+    /// </summary>
+    Throttled = 3
 }
 
 /// <summary>
@@ -33,6 +42,12 @@ public interface IParentPinService
     bool IsDevelopmentFallbackActive { get; }
 
     PinVerificationResult Verify(string pin);
+
+    /// <summary>
+    /// How long until another attempt is accepted. Zero when one may be made
+    /// now. Read by the UI so it can count down rather than simply refusing.
+    /// </summary>
+    TimeSpan RetryAfter { get; }
 
     /// <summary>Replaces the stored PIN. Returns false if the new PIN is not valid.</summary>
     bool TrySetPin(string pin);

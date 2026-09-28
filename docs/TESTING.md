@@ -110,6 +110,32 @@ Stated so nobody assumes otherwise:
 * **Escape testing.** See `docs/SECURITY.md`. The matrix is honest about which
   rows cannot be verified without a test machine.
 
+## Composition, not just classes
+
+The OPSV retest found the same shape of defect four times: a correct class, a
+thorough suite for it, and a production application that used a different path.
+Protected storage was designed, tested, and registered nowhere.
+
+Unit tests cannot catch that here. `KidShell.App` is a WinUI project and cannot
+be referenced from a test assembly, so nothing in the suite can ask the
+container what it would resolve.
+
+Two things cover it instead:
+
+* `tools/check-composition.ps1` reads the composition root and asserts both what
+  must be registered and what must **not** be — registering a concrete type is
+  fine and deliberate, because the decorators take it as a constructor argument;
+  registering it *as the interface* is the defect, and the two are
+  distinguished. Each rule carries its reason, because a guard nobody
+  understands gets deleted the first time it is inconvenient. Mutation-tested:
+  putting the old `JsonConfigurationStore` registration back fails it.
+* `OpsvIntegrationTests` assembles the real types the way production does and
+  asks what the composed product does — a parent saving settings writes policy
+  the child cannot reach, tampering with the child-writable file does not change
+  the rules, every launch passes the screen-time gate.
+
+Proving isolated classes is what let the original findings through.
+
 ## Layout and text scaling
 
 `LayoutAudit` is a developer-mode-only harness inside the app. It drives all 26

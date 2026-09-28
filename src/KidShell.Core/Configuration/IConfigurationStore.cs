@@ -20,7 +20,18 @@ public enum ConfigurationLoadStatus
     /// these means "we kept your configuration" and the other means "we lost
     /// it", and a parent deserves to be told which.
     /// </summary>
-    RecoveredFromBackup = 3
+    RecoveredFromBackup = 3,
+
+    /// <summary>
+    /// The configuration could not be loaded from a source KidShell is willing
+    /// to trust.
+    ///
+    /// Distinct from every recovery status above, because those all mean "we
+    /// carried on" and this one means "we refused". A production build with no
+    /// usable protected store lands here rather than quietly reading the
+    /// parent's decisions out of a file the child can edit.
+    /// </summary>
+    Failed = 4
 }
 
 public sealed record ConfigurationLoadResult(

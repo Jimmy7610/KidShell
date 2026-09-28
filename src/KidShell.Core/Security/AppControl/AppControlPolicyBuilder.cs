@@ -1,5 +1,6 @@
 using KidShell.Core.Apps;
 using KidShell.Core.Configuration;
+using KidShell.Core.Launching;
 using KidShell.Core.Runtime;
 
 namespace KidShell.Core.Security.AppControl;
@@ -50,24 +51,25 @@ public static class AppControlPolicyBuilder
         AddSystemRules(rules, kidShellExecutablePath, warnings);
         AddApplicationRules(rules, configuration, profiles, warnings);
 
+        // After the child's rules, so a recovery rule is emitted for every
+        // collection the policy actually uses and no others.
+        AddRecoveryRules(rules);
+
         var deduplicated = Deduplicate(rules);
 
-        if (!deduplicated.Any(r => !r.IsSystemRequirement))
+        // Neither the Windows requirements nor the administrator recovery
+        // rules count as "the child may run something".
+        if (!deduplicated.Any(r => !r.IsSystemRequirement && !r.IsRecoveryRule))
         {
             warnings.Add(new PolicyWarning(
                 "no-application-rules",
                 "Inga appar är påslagna, så barnet skulle bara kunna köra Windows och KidShell."));
         }
 
-        foreach (var weak in deduplicated.Where(r => r.IsWeak))
-        {
-            warnings.Add(new PolicyWarning(
-                "weak-path-rule",
-                $"Regeln för {weak.Name} pekar på en mapp som barnet kan skriva till, " +
-                "så den hindrar inte att andra program startas därifrån."));
-        }
-
-        AddSafetyWarnings(deduplicated, warnings);
+        // The rule-level judgements belong to AppControlValidator, which is
+        // the single place that decides whether a policy may be enforced.
+        // They used to be computed here AND asked again elsewhere, which is
+        // how a policy came to report CanActivate while being refused.
 
         return new AppControlPolicy
         {
@@ -172,6 +174,92 @@ public static class AppControlPolicyBuilder
     }
 
     /// <summary>
+    /// One least-privilege rule for one approved packaged application.
+    ///
+    /// AppLocker identifies a packaged app by publisher name, package name and
+    /// package version, and a single rule controls the whole app - every
+    /// component shares those attributes, which classic applications do not.
+    ///
+    /// The publisher is never wildcarded. A rule of "*" is not a publisher
+    /// rule, it is an allow-every-Store-app rule wearing one, and the
+    /// validator refuses it. Without a real publisher recorded at the time the
+    /// parent approved the app, the honest outcome is no rule and a warning
+    /// saying why.
+    ///
+    /// The version is wildcarded on purpose: that is what lets an approval
+    /// survive the app updating, which is one of the stated reasons to prefer
+    /// packaged rules.
+    /// </summary>
+    private static void AddPackagedRule(
+        List<AppControlRule> rules, KidAppDefinition app, List<PolicyWarning> warnings)
+    {
+        var publisher = (app.Publisher ?? string.Empty).Trim();
+        var family = (app.PackageFamilyName ?? string.Empty).Trim();
+
+        if (family.Length == 0)
+        {
+            // Derivable from the AUMID: PackageFamilyName!ApplicationId.
+            var aumid = (app.ExecutablePath ?? string.Empty).Trim();
+            var bang = aumid.IndexOf('!', StringComparison.Ordinal);
+            family = bang > 0 ? aumid[..bang] : string.Empty;
+        }
+
+        if (publisher.Length == 0 || publisher == "*" || family.Length == 0)
+        {
+            warnings.Add(new PolicyWarning(
+                "packaged-app-without-identity",
+                $"{app.EffectiveProgramName} saknar utgivare eller paketnamn, " +
+                "så ingen regel kunde skapas utan att släppa igenom alla appar från Microsoft Store."));
+            return;
+        }
+
+        rules.Add(new AppControlRule
+        {
+            Id = $"app-{app.Id}-packaged",
+            Name = app.EffectiveProgramName,
+            Collection = RuleCollection.Appx,
+            Strategy = RuleStrategy.Publisher,
+            Value = publisher,
+            ProductName = family,
+            PackageName = family,
+            Reason = $"Barnet får använda {app.DisplayName}.",
+            IsWeak = false
+        });
+    }
+
+    /// <summary>
+    /// The way back in for an adult.
+    ///
+    /// OPSV FINDING 06B. Microsoft's own default rule set includes an "All
+    /// files" rule scoped to BUILTIN\Administrators in every collection, and
+    /// it is not a convenience. An application-control policy is the one
+    /// change that can leave a machine unable to run the tool that would undo
+    /// it; without a recovery path, a wrong rule set means reinstalling
+    /// Windows.
+    ///
+    /// Scoped to a different principal than everything else, so the child's
+    /// restriction is completely unchanged by their presence. Broadening the
+    /// CHILD's policy to achieve the same thing would be the opposite of this.
+    /// </summary>
+    private static void AddRecoveryRules(List<AppControlRule> rules)
+    {
+        foreach (var collection in rules.Select(r => r.Collection).Distinct().ToList())
+        {
+            rules.Add(new AppControlRule
+            {
+                Id = $"recovery-administrators-{collection}".ToLowerInvariant(),
+                Name = "Administratörer",
+                Collection = collection,
+                Strategy = collection == RuleCollection.Appx ? RuleStrategy.Publisher : RuleStrategy.Path,
+                Value = collection == RuleCollection.Appx ? "*" : "*",
+                Reason = "En vuxen med administratörsrättigheter måste kunna laga datorn.",
+                IsRecoveryRule = true,
+                UserOrGroupSid = WellKnownSids.Administrators
+            });
+        }
+    }
+
+    /// <summary>
     /// The signing identity Windows' own packaged components carry.
     ///
     /// Named rather than wildcarded: a publisher rule of "*" is not a
@@ -194,6 +282,18 @@ public static class AppControlPolicyBuilder
             {
                 // An app with no program is a placeholder card, not something
                 // to write a rule for.
+                continue;
+            }
+
+            // OPSV FINDING 06D. A packaged application is not a path, and
+            // AppLocker supports only publisher rules for one - there is no
+            // path or hash condition to fall back on. Approved Store apps used
+            // to fall through to the path check below, fail it, and produce no
+            // rule at all: the parent approved the app and the policy would
+            // have blocked it.
+            if (app.LaunchKind == ApplicationLaunchKind.PackagedApp)
+            {
+                AddPackagedRule(rules, app, warnings);
                 continue;
             }
 
@@ -248,49 +348,6 @@ public static class AppControlPolicyBuilder
                     Reason = $"{app.EffectiveProgramName} startar {child}.",
                     IsWeak = false
                 });
-            }
-        }
-    }
-
-    /// <summary>
-    /// The last look over a finished policy, asking whether it is worth
-    /// applying at all.
-    ///
-    /// These are blocking rather than advisory. A policy that does not
-    /// constrain the child is worse than no policy: a parent reading "Säkert
-    /// läge är på" would believe something untrue, and act on it.
-    /// </summary>
-    private static void AddSafetyWarnings(
-        IReadOnlyList<AppControlRule> rules, List<PolicyWarning> warnings)
-    {
-        foreach (var rule in rules)
-        {
-            // A rule ending in \* allows every file in that folder, now and
-            // in future. Acceptable for a single application's own directory
-            // under Program Files; never acceptable for a Windows folder.
-            if (IsBlanketRule(rule.Value))
-            {
-                warnings.Add(new PolicyWarning(
-                    "blanket-path-rule",
-                    $"Regeln \"{rule.Value}\" släpper igenom allt i en hel systemmapp. " +
-                    "En sådan regel gör listan över tillåtna appar meningslös.",
-                    PolicySeverity.Blocking));
-            }
-
-            if (rule.Strategy == RuleStrategy.Publisher && rule.Value.Trim() == "*")
-            {
-                warnings.Add(new PolicyWarning(
-                    "blanket-publisher-rule",
-                    "En utgivarregel som matchar alla utgivare tillåter varje paketerad app på datorn.",
-                    PolicySeverity.Blocking));
-            }
-
-            if (EscapeSurfaces.Matching(rule.Value) is { } surface)
-            {
-                warnings.Add(new PolicyWarning(
-                    "escape-surface-allowed",
-                    $"Policyn skulle tillåta {surface.FileName}. {surface.Reason}",
-                    PolicySeverity.Blocking));
             }
         }
     }

@@ -64,7 +64,14 @@ public sealed class ApplicationProfileLibrary : IApplicationProfileLibrary
     {
         try
         {
-            return string.IsNullOrWhiteSpace(path) ? string.Empty : Path.GetFileName(path.Trim().Trim('"'));
+            // WindowsPath, not System.IO.Path. The argument is a path on the
+            // Windows machine being described, so the answer must not depend on
+            // the host running the code: Path.GetFileName returns the WHOLE
+            // string for a Windows path on Linux, because a backslash is an
+            // ordinary character there.
+            return string.IsNullOrWhiteSpace(path)
+                ? string.Empty
+                : Runtime.WindowsPath.FileName(path.Trim().Trim('"'));
         }
         catch
         {

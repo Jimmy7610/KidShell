@@ -37,6 +37,7 @@ public sealed class AddAppViewModel : ObservableObject
     private string _displayName = string.Empty;
     private string _programName = string.Empty;
     private string _executablePath = string.Empty;
+    private ApplicationLaunchKind _launchKind = ApplicationLaunchKind.Win32Executable;
     private string _arguments = string.Empty;
     private string _category = string.Empty;
     private string? _validationMessage;
@@ -88,6 +89,18 @@ public sealed class AddAppViewModel : ObservableObject
         ProgramName = application.DisplayName;
         ExecutablePath = application.LaunchTarget;
         Arguments = application.Arguments;
+
+        // What the catalogue found it to BE, carried across rather than
+        // guessed back out of the string afterwards. Without this a Store app
+        // arrived here as a bare AUMID and was then judged by the rule for
+        // hand-typed paths, which requires .exe - so every packaged
+        // application in the browse list was refused on the next screen.
+        _launchKind = application.Kind switch
+        {
+            KidShell.Core.Apps.ApplicationKind.Packaged => ApplicationLaunchKind.PackagedApp,
+            KidShell.Core.Apps.ApplicationKind.Protocol => ApplicationLaunchKind.UriProtocol,
+            _ => ApplicationLaunchKind.Win32Executable
+        };
 
         // A guessed icon is better than the generic one, and the parent can
         // still change it before adding.
@@ -152,6 +165,14 @@ public sealed class AddAppViewModel : ObservableObject
             if (SetProperty(ref _executablePath, value))
             {
                 ValidationMessage = null;
+
+                // Editing the field makes this a hand-typed path again,
+                // whatever it was prefilled from. A parent who prefills from a
+                // Store app and then types over the identity has typed a path,
+                // and it must be judged as one - otherwise the packaged rules,
+                // which do not check for scripts or escape surfaces, would be
+                // applied to something arbitrary.
+                _launchKind = ApplicationLaunchKind.Win32Executable;
             }
         }
     }
@@ -203,10 +224,12 @@ public sealed class AddAppViewModel : ObservableObject
 
         if (!string.IsNullOrWhiteSpace(ExecutablePath))
         {
-            // What was typed or picked, before asking whether it exists. A
-            // batch file that exists is still a batch file, and running one
-            // runs an interpreter KidShell's own policy refuses.
-            var check = ManualProgramPolicy.Check(ExecutablePath);
+            // Judged by the rule that belongs to the KIND of thing this is.
+            // A batch file that exists is still a batch file, and running one
+            // runs an interpreter KidShell's own policy refuses - but a Store
+            // app has no extension at all, and demanding one refused every
+            // packaged application on the machine.
+            var check = LaunchTargetPolicy.Check(_launchKind, ExecutablePath);
 
             if (!check.IsAllowed)
             {
@@ -214,11 +237,17 @@ public sealed class AddAppViewModel : ObservableObject
                 return false;
             }
 
-            var resolution = _resolver.Resolve(ExecutablePath);
-            if (resolution.Kind == ExecutableResolutionKind.NotFound)
+            // Only an executable is a file the resolver can look for. An AUMID
+            // is an identity Windows holds, not a path on disk, so asking the
+            // file system about one always answers "not found".
+            if (_launchKind == ApplicationLaunchKind.Win32Executable)
             {
-                ValidationMessage = Strings.Get("AddApp.PathMissing");
-                return false;
+                var resolution = _resolver.Resolve(ExecutablePath);
+                if (resolution.Kind == ExecutableResolutionKind.NotFound)
+                {
+                    ValidationMessage = Strings.Get("AddApp.PathMissing");
+                    return false;
+                }
             }
         }
 
@@ -235,6 +264,7 @@ public sealed class AddAppViewModel : ObservableObject
             Icon = icon.Key,
             AccentStyle = accent.Style,
             IsEnabled = true,
+            LaunchKind = _launchKind,
             ExecutablePath = ExecutablePath.Trim(),
             Arguments = Arguments.Trim()
         };
@@ -251,6 +281,10 @@ public sealed class AddAppViewModel : ObservableObject
         }
 
         ExecutablePath = path;
+
+        // Picking a file replaces whatever kind was prefilled: a path from the
+        // file picker is an executable, and must be judged as one.
+        _launchKind = ApplicationLaunchKind.Win32Executable;
 
         if (string.IsNullOrWhiteSpace(ProgramName))
         {

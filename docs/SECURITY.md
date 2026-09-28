@@ -156,27 +156,71 @@ consent to it.
 
 ## Where security-critical state lives
 
-Today: one JSON file in the signed-in user's own profile. On a dedicated device
-that user is the child, and a standard user has full control of their own
-profile — so the child can edit the file that says which apps they may use, how
-long, and what the parent's PIN hashes to.
+It used to be one JSON file in the signed-in user's own profile. On a dedicated
+device that user is the child, and a standard user has full control of their own
+profile — so the child could edit the file that said which apps they may use,
+how long, and what the parent's PIN hashes to.
 
 Integrity checking does not fix that. An HMAC whose key sits beside the data,
 readable by the same account, is recomputable by whoever can edit the data.
 
-The designed boundary is ACLs and an account that is not an administrator:
+The boundary is ACLs and an account that is not an administrator:
 `%ProgramData%\KidShell\policy`, inheritance removed, Administrators and
 SYSTEM in full control, the child **read only**. Read rather than nothing,
 because KidShell runs as the child and has to load the policy it enforces.
 
-The child's own name, avatar and theme stay where the child can change them.
-A UAC prompt to change a picture is how a product teaches a family to click
-through UAC prompts.
+The application now **uses** that store. Each part of the configuration goes to
+the store its trust class requires:
 
-**The plan is written and tested. No ACL has been applied to any machine.**
-Production never silently falls back to child-writable storage; a development
-build may, and says so in the log. See
-[EXTERNAL-AUDIT-REMEDIATION.md](EXTERNAL-AUDIT-REMEDIATION.md).
+| Data | Where it lives |
+| --- | --- |
+| approved apps, web mode and allowlist, screen-time settings, PIN material | the protected store |
+| today's usage counter | the protected store |
+| the child's name, avatar, theme and age | the child's own profile, deliberately |
+
+The last row is not an oversight. A UAC prompt to change a picture is how a
+product teaches a family to click through UAC prompts.
+
+A production build that finds no usable protected store **refuses**: the
+configuration fails to load and nothing is saved, including to the
+child-writable file. A refusal that still wrote the policy would be the original
+defect with an error message attached. A development build falls back and says
+so in the log, every time.
+
+KidShell never creates the protected directory. One created by KidShell would be
+owned by whoever ran KidShell — on a locked-down machine, the child — and that is
+a store that looks like protection and is not.
+
+**The wiring is done and tested. No ACL has been applied to any machine.** Until
+a dedicated device applies the plan, the store reports `NotProvisioned` and a
+production build will not run on it. See
+[OPSV-RETEST-2026-09-28-REMEDIATION.md](OPSV-RETEST-2026-09-28-REMEDIATION.md)
+and [EXTERNAL-AUDIT-REMEDIATION.md](EXTERNAL-AUDIT-REMEDIATION.md).
+
+### The parent gate
+
+Two properties that were missing, and are not the same as the boundary above:
+
+* **Guessing costs time.** Three wrong PINs are free; after that the delay
+  doubles from five seconds to a two-minute cap. Bounded and always expiring —
+  a product that can permanently lock an adult out of their own computer has
+  invented a worse problem than the one it solved.
+* **Parent Mode re-locks.** After fifteen idle minutes, on returning to Child
+  Mode, or on leaving explicitly. It used to stay open until somebody closed
+  it, which on a shared machine means it stayed open.
+
+The stored PBKDF2 iteration count is untrusted input and is bounded in both
+directions before any derivation runs. The upper bound is not about hash
+strength: `int.MaxValue` iterations is a denial of service that the parent
+triggers by typing their own PIN.
+
+### The usage counter is security state
+
+A child who can reset it gets an unlimited day, so it is classed as enforcement
+state rather than personalisation. Beyond living in the protected store, a
+counter that cannot be read is treated as **spent** rather than fresh. The rule
+is one-directional: a failure may over-count and may cost a parent a reset, and
+may never hand back time that was spent.
 
 ---
 

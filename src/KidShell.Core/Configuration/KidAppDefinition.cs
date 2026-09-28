@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using KidShell.Core.Launching;
 
 namespace KidShell.Core.Configuration;
 
@@ -38,12 +39,46 @@ public sealed class KidAppDefinition
     public bool IsEnabled { get; set; } = true;
 
     /// <summary>
-    /// Executable, shell command or protocol activation string. May be empty,
-    /// which means "not configured yet" rather than "broken".
+    /// How this entry is started.
+    ///
+    /// Recorded rather than guessed from <see cref="ExecutablePath"/>. The
+    /// guess is what made every Store app unaddable: a packaged identity was
+    /// written into the same field a typed path goes in, and then validated by
+    /// the rule for typed paths, which demands .exe.
+    ///
+    /// Defaults to <see cref="ApplicationLaunchKind.Win32Executable"/>, so a
+    /// configuration written before this field existed deserialises to what it
+    /// actually held.
+    /// </summary>
+    public ApplicationLaunchKind LaunchKind { get; set; } = ApplicationLaunchKind.Win32Executable;
+
+    /// <summary>
+    /// Executable path, packaged application identity or protocol activation
+    /// string, according to <see cref="LaunchKind"/>. May be empty, which
+    /// means "not configured yet" rather than "broken".
     /// </summary>
     public string ExecutablePath { get; set; } = string.Empty;
 
     public string Arguments { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The publisher Windows reports for a packaged application, as the signing
+    /// identity string AppLocker matches on.
+    ///
+    /// Kept because AppLocker supports ONLY publisher rules for packaged apps -
+    /// there is no path or hash condition to fall back on - and a rule without
+    /// the real publisher would have to be a wildcard, which allows every
+    /// packaged app on the machine.
+    /// </summary>
+    public string Publisher { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The package family name, derived from the AUMID when the app was added.
+    ///
+    /// The second half of a packaged app's identity: AppLocker matches on
+    /// publisher name, package name and package version.
+    /// </summary>
+    public string PackageFamilyName { get; set; } = string.Empty;
 
     public int SortOrder { get; set; }
 
@@ -57,8 +92,11 @@ public sealed class KidAppDefinition
         Icon = Icon,
         AccentStyle = AccentStyle,
         IsEnabled = IsEnabled,
+        LaunchKind = LaunchKind,
         ExecutablePath = ExecutablePath,
         Arguments = Arguments,
+        Publisher = Publisher,
+        PackageFamilyName = PackageFamilyName,
         SortOrder = SortOrder
     };
 }

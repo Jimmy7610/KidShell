@@ -177,7 +177,12 @@ public class AppControlPolicyTests
 
         Assert.Contains(policy.ApplicationRules, r => r.Name == "Spel");
         Assert.Contains(policy.WeakRules, r => r.Name == "Spel");
-        Assert.Contains(policy.Warnings, w => w.Code == "weak-path-rule");
+
+        // Emitted, declared, and now BLOCKING rather than advisory. The rule
+        // still exists so a parent can see what their choice implies; what
+        // changed is that the policy will not be enforced while it does.
+        Assert.Contains(policy.Validation.Blocking, w => w.Code == "child-writable-allow-path");
+        Assert.False(policy.CanActivate);
     }
 
     // ------------------------------------------------ XML generation

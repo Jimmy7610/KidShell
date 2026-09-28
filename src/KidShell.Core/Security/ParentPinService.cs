@@ -19,13 +19,22 @@ public sealed class ParentPinService : IParentPinService
     private readonly IAppStateService _state;
     private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
+    private readonly PinAttemptThrottle _throttle;
 
-    public ParentPinService(IAppStateService state, IRuntimeEnvironment environment, IKidShellLogger logger)
+    public ParentPinService(
+        IAppStateService state,
+        IRuntimeEnvironment environment,
+        IKidShellLogger logger,
+        TimeProvider? time = null)
     {
         _state = state;
         _environment = environment;
         _logger = logger;
+        _throttle = new PinAttemptThrottle(time);
     }
+
+    /// <summary>How long until another attempt will be accepted.</summary>
+    public TimeSpan RetryAfter => _throttle.Evaluate().RetryAfter;
 
     public int PinLength => ParentPinPolicy.RequiredLength;
 
@@ -40,6 +49,20 @@ public sealed class ParentPinService : IParentPinService
 
     public PinVerificationResult Verify(string pin)
     {
+        // Before anything else, including the shape check. A malformed entry
+        // that skipped the throttle would be a free probe, and the attacker
+        // controls what they type.
+        var attempt = _throttle.Evaluate();
+
+        if (!attempt.IsAllowed)
+        {
+            _logger.Warning("Pin",
+                $"Parent PIN attempt refused; {attempt.ConsecutiveFailures} consecutive failures, " +
+                $"{attempt.RetryAfter.TotalSeconds:F0}s remaining.");
+
+            return PinVerificationResult.Throttled;
+        }
+
         if (string.IsNullOrWhiteSpace(pin) || pin.Length != PinLength || !pin.All(char.IsAsciiDigit))
         {
             return PinVerificationResult.Malformed;
@@ -51,7 +74,7 @@ public sealed class ParentPinService : IParentPinService
         {
             var ok = PinHasher.Verify(pin, settings.Hash!, settings.Salt!, settings.Iterations);
             _logger.Info("Pin", ok ? "Parent PIN accepted." : "Parent PIN rejected.");
-            return ok ? PinVerificationResult.Correct : PinVerificationResult.Incorrect;
+            return Record(ok);
         }
 
         if (_environment.IsProduction)
@@ -59,14 +82,33 @@ public sealed class ParentPinService : IParentPinService
             // No PIN and no fallback. Parent Mode stays shut rather than
             // opening on a PIN that is printed in the documentation.
             _logger.Warning("Pin", "No parent PIN configured in a production build; refusing entry.");
-            return PinVerificationResult.Incorrect;
+            return Record(false);
         }
 
         var devOk = PinHasher.FixedTimeEquals(pin, DevelopmentPin.Value);
         _logger.Warning("Pin", devOk
             ? "Development fallback PIN accepted. This build is not protected."
             : "Development fallback PIN rejected.");
-        return devOk ? PinVerificationResult.Correct : PinVerificationResult.Incorrect;
+        return Record(devOk);
+    }
+
+    /// <summary>
+    /// Feeds the outcome back to the throttle.
+    ///
+    /// A malformed entry deliberately does not count as a failure: it never
+    /// reached a comparison, so it says nothing about the PIN, and counting it
+    /// would let a stray keypress start a delay.
+    /// </summary>
+    private PinVerificationResult Record(bool correct)
+    {
+        if (correct)
+        {
+            _throttle.RecordSuccess();
+            return PinVerificationResult.Correct;
+        }
+
+        _throttle.RecordFailure();
+        return PinVerificationResult.Incorrect;
     }
 
     public bool TrySetPin(string pin)

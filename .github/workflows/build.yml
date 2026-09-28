@@ -286,6 +286,20 @@ jobs:
           # has a stated reason, so icons and artwork are not the target.
           & ./tools/check-responsive-layout.ps1
 
+      - name: Check composition
+        shell: pwsh
+        run: |
+          # The OPSV retest found the same shape of defect four times: a
+          # correct class, a thorough suite for it, and a production
+          # application that used a different path. Protected storage was
+          # written and registered nowhere.
+          #
+          # No unit test can catch that here - KidShell.App is a WinUI project
+          # and cannot be referenced from a test assembly - so this reads the
+          # composition root and fails the day somebody wires an old
+          # implementation back in.
+          & ./tools/check-composition.ps1
+
       - name: Check documentation links
         shell: pwsh
         run: |

@@ -88,8 +88,11 @@ public class AppLockerLeastPrivilegeTests
     {
         var policy = Build();
 
+        // The child's rules. The administrator recovery rules are deliberately
+        // broad and are scoped to a different principal entirely - see
+        // Recovery_rules_exist_for_administrators_only below.
         Assert.DoesNotContain(
-            policy.Rules,
+            policy.Rules.Where(r => !r.IsRecoveryRule),
             r => r.Strategy == RuleStrategy.Publisher && r.Value.Trim() == "*");
     }
 
@@ -103,7 +106,7 @@ public class AppLockerLeastPrivilegeTests
         var policy = Build();
 
         var blanket = policy.Rules
-            .Where(r => AppControlPolicyBuilder.IsBlanketRule(r.Value))
+            .Where(r => !r.IsRecoveryRule && AppControlPolicyBuilder.IsBlanketRule(r.Value))
             .Select(r => r.Value)
             .ToList();
 
@@ -256,7 +259,9 @@ public class AppLockerLeastPrivilegeTests
     {
         var policy = Build();
 
-        var packaged = policy.Rules.Where(r => r.Collection == RuleCollection.Appx).ToList();
+        var packaged = policy.Rules
+            .Where(r => r.Collection == RuleCollection.Appx && !r.IsRecoveryRule)
+            .ToList();
 
         Assert.NotEmpty(packaged);
         Assert.All(packaged, rule =>
@@ -295,8 +300,12 @@ public class AppLockerLeastPrivilegeTests
     {
         var policy = Build(WithApps(("Spel", @"C:\Users\Lucas\AppData\Local\Spel\spel.exe")));
 
-        Assert.Contains(policy.Warnings, w => w.Code == "weak-path-rule");
+        // Blocking now, not advisory. A path the child can write to is not a
+        // restriction: they copy anything they like into it and run it, so a
+        // policy carrying one must not report that it can be enforced.
         Assert.Contains(policy.Rules, r => r.IsWeak);
+        Assert.Contains(policy.Validation.Blocking, w => w.Code == "child-writable-allow-path");
+        Assert.False(policy.CanActivate);
     }
 
     [Fact]

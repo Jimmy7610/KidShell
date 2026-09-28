@@ -6,6 +6,7 @@ using KidShell.Core.Launching;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 using KidShell.Core.Runtime;
+using KidShell.Core.Security.Storage;
 using KidShell.Core.Security.Readiness;
 using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
@@ -66,8 +67,38 @@ public partial class App : Application
         services.AddSingleton<IRuntimeEnvironment>(BuildRuntimeEnvironment.Current);
         services.AddSingleton<IDeveloperOptions, DeveloperOptions>();
 
-        services.AddSingleton<IConfigurationStore>(
+        // OPSV FINDING 01 - the protected store existed and nothing used it.
+        //
+        // The parent's decisions no longer come from the file in the child's
+        // own LocalState. ProtectedConfigurationStore routes each part of the
+        // configuration to the store its trust class requires, and is the one
+        // place that decides what to do when the protected store is not
+        // usable: a development build falls back loudly, a production build
+        // refuses.
+        //
+        // The two implementations are told apart by the BUILD, not by
+        // configuration, for the same reason the runtime environment is.
+        services.AddSingleton<IProtectedPolicyStore>(sp =>
+        {
+            var logger = sp.GetRequiredService<IKidShellLogger>();
+
+            return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
+                ? new DevelopmentProtectedPolicyStore(AppPaths.DevelopmentPolicyDirectory, logger)
+                : new FileSystemProtectedPolicyStore(AppPaths.ProtectedPolicyDirectory, logger);
+        });
+
+        // Registered as the concrete type, so nothing can resolve the
+        // unprotected store by asking for IConfigurationStore - which is
+        // exactly how the protected one came to be bypassed.
+        services.AddSingleton(
             sp => new JsonConfigurationStore(AppPaths.ConfigurationFilePath, sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton<IConfigurationStore>(sp => new ProtectedConfigurationStore(
+            sp.GetRequiredService<JsonConfigurationStore>(),
+            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IRuntimeEnvironment>(),
+            sp.GetRequiredService<IKidShellLogger>()));
+
         services.AddSingleton<IAppStateService, AppStateService>();
 
         services.AddSingleton<IExecutableResolver>(new WindowsExecutableResolver());
@@ -94,6 +125,12 @@ public partial class App : Application
         services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
         services.AddSingleton<IParentPinService, ParentPinService>();
+
+        // Parent Mode re-locks. Without this it stayed open until somebody
+        // closed it, which on a machine the child also uses means it stayed
+        // open. See ParentSession for the semantics.
+        services.AddSingleton<IParentSession>(
+            sp => new ParentSession(sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<IOnboardingService, OnboardingService>();
 
         // Security readiness. Detection and account discovery are read-only
@@ -110,8 +147,15 @@ public partial class App : Application
 
         // Screen time. The counter lives in its own file for the reason given
         // on AppPaths.ScreenTimeStatePath.
-        services.AddSingleton<IScreenTimeStateStore>(
-            sp => new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()));
+        // The counter is security state: a child who can edit it gets an
+        // unlimited day, which PolicyDataClassification records as
+        // EnforcementState rather than personalisation. It therefore goes to
+        // the protected store too, with the same fall-back rules.
+        services.AddSingleton<IScreenTimeStateStore>(sp => new ProtectedScreenTimeStateStore(
+            new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()),
+            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IRuntimeEnvironment>(),
+            sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<ScreenTimeEngine>();
 
         // Something has to tick the engine and notice when a warning threshold
@@ -125,6 +169,12 @@ public partial class App : Application
         // Simulated on purpose: the only ISessionController that exists does
         // not sign anybody out. See DevelopmentSessionController.
         services.AddSingleton<ISessionController, DevelopmentSessionController>();
+
+        // The UI thread's own dispatcher, captured HERE because this runs on
+        // it. A background thread cannot obtain one - GetForCurrentThread
+        // returns null there - so asking later would fail exactly when the
+        // marshalling was needed. See IUiDispatcher.
+        services.AddSingleton<IUiDispatcher>(DispatcherQueueUiDispatcher.ForCurrentThread());
 
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
