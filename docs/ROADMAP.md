@@ -3,13 +3,20 @@
 Authoritative version progression. The README links here rather than
 duplicating it.
 
-**Current status: 0.2 development, on branch `work/full-roadmap`.**
+**Current status: 1.0.0-rc.1 — code complete, not validated on hardware.**
 
 > **WINDOWS LOCKDOWN STATUS: NOT ENABLED.**
-> No KidShell build has ever applied a Windows restriction. Every security
-> capability below is either detection, planning or artifact generation until
-> a milestone explicitly says otherwise — and that milestone requires a
-> dedicated test device, not a development machine.
+>
+> No KidShell build has ever applied a Windows restriction. What changed at the
+> release candidate is that the code to do so now exists and is tested — nine
+> operations, each with preflight, snapshot, apply, verify and rollback.
+>
+> They have never run. Every build is structurally incapable of running them:
+> the Apply context they require cannot be constructed, and reflection tests
+> keep it that way. Enabling it is a visible code change, not a flag.
+>
+> The remaining work is validation on a dedicated device. See
+> [`DEDICATED-DEVICE-VALIDATION.md`](DEDICATED-DEVICE-VALIDATION.md).
 
 ---
 
@@ -28,6 +35,27 @@ Four rules that decide arguments, in priority order.
 4. **Local-first.** No telemetry, no accounts, no cloud dependency, no ads.
 
 ---
+
+
+## After the external audit
+
+An independent audit of an older commit produced eight findings. All eight were
+re-tested against current HEAD, and the result is recorded in
+[EXTERNAL-AUDIT-REMEDIATION.md](EXTERNAL-AUDIT-REMEDIATION.md).
+
+Five were still present and are fixed. Three had already been fixed by later
+work and now have regression tests so they stay that way. Testing the three
+turned up two bugs the audit had not found, which are also fixed.
+
+What this leaves for a dedicated device, and only for a dedicated device:
+
+* applying the protected policy store's ACLs — the plan and its validation are
+  written, nothing has been applied;
+* enforcing the AppLocker policy — the policy, its audit report and its
+  activation gate are written, nothing has been deployed.
+
+Neither is waiting on more code.
+
 
 ## Completed
 

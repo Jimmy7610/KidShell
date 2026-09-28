@@ -65,7 +65,7 @@
                         </Grid.ColumnDefinitions>
                         <TextBox
                             x:Name="DomainBox"
-                            AutomationProperties.Name="{loc:Str Key=Web.AddDomainPlaceholder}"
+                            AutomationProperties.Name="{loc:Str Key=Web.AddDomainHint}"
                             KeyDown="OnDomainKeyDown"
                             PlaceholderText="{loc:Str Key=Web.AddDomainPlaceholder}"
                             Style="{StaticResource FormTextBoxStyle}" />
@@ -77,6 +77,20 @@
                             Style="{StaticResource SecondaryButtonStyle}" />
                     </Grid>
 
+                    <!--
+                        The example, underneath rather than inside the field.
+
+                        A PlaceholderText cannot wrap and is drawn by the
+                        TextBox template, so at 200% it needed 233 epx, was
+                        given 155, and read "till exempel svt" with no way to
+                        tell. Here it wraps, and it is still on screen once
+                        the parent starts typing.
+                    -->
+                    <TextBlock
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="{loc:Str Key=Web.AddDomainHint}"
+                        TextWrapping="Wrap" />
+
                     <ItemsRepeater x:Name="DomainList">
                         <ItemsRepeater.Layout>
                             <StackLayout Spacing="6" />
@@ -87,21 +101,70 @@
                                     Background="{StaticResource PanelStrongBrush}"
                                     CornerRadius="{StaticResource RadiusMd}"
                                     Padding="14,9">
-                                    <Grid>
-                                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <!--
+                                        Two columns, not one.
+
+                                        The name and the remove button used to
+                                        share a single cell with the button
+                                        aligned right, which works until the
+                                        name is long: a real hostname can be 63
+                                        characters, and it then ran straight
+                                        underneath the button with the glyph
+                                        sitting on top of the text. The name
+                                        now has its own column and ends in an
+                                        ellipsis; the whole value stays
+                                        available in the tooltip and to a
+                                        screen reader.
+                                    -->
+                                    <Grid ColumnSpacing="10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!--
+                                            A Grid, not a horizontal
+                                            StackPanel. A StackPanel measures
+                                            its children with unlimited width
+                                            in the direction it stacks, so the
+                                            name never learns how much room it
+                                            has and TextTrimming never fires -
+                                            the ellipsis was set here first and
+                                            did nothing at all.
+                                        -->
+                                        <Grid Grid.Column="0" ColumnSpacing="10" VerticalAlignment="Center">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+
                                             <FontIcon
+                                                Grid.Column="0"
                                                 FontFamily="{StaticResource SymbolFontFamily}"
                                                 FontSize="14"
                                                 Foreground="{StaticResource BrandBlueBrush}"
                                                 Glyph="&#xE774;" />
-                                            <TextBlock Style="{StaticResource BodyTextStyle}" Text="{x:Bind}" />
-                                        </StackPanel>
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                Style="{StaticResource BodyTextStyle}"
+                                                Text="{x:Bind}"
+                                                TextTrimming="CharacterEllipsis"
+                                                ToolTipService.ToolTip="{x:Bind}" />
+                                        </Grid>
+                                        <!--
+                                            Icon-only, so it needs a name. A
+                                            screen reader on this row otherwise
+                                            announces "button" with no clue
+                                            which site it would remove.
+                                        -->
                                         <Button
+                                            Grid.Column="1"
+                                            AutomationProperties.Name="{x:Bind}"
                                             Click="OnRemoveDomainClick"
-                                            HorizontalAlignment="Right"
                                             Padding="8,4"
                                             Style="{StaticResource QuietButtonStyle}"
-                                            Tag="{x:Bind}">
+                                            Tag="{x:Bind}"
+                                            ToolTipService.ToolTip="{x:Bind}">
                                             <FontIcon
                                                 FontFamily="{StaticResource SymbolFontFamily}"
                                                 FontSize="13"
@@ -114,11 +177,77 @@
                         </ItemsRepeater.ItemTemplate>
                     </ItemsRepeater>
 
+                    <!-- Why the last entry was refused. Silence was the old behaviour. -->
+                    <TextBlock
+                        x:Name="ValidationText"
+                        Foreground="{StaticResource StatusWarningBrush}"
+                        Style="{StaticResource CaptionTextStyle}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+
                     <TextBlock
                         x:Name="EmptyAllowlistText"
                         Style="{StaticResource CaptionTextStyle}"
                         Text="{loc:Str Key=Web.EmptyAllowlist}"
                         Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!--
+                Exactly what would be written, before anything is written.
+
+                "Review the exact machine changes" is not a slogan if the parent
+                cannot see them. This is a preview only: the values reach the
+                registry through the security transaction at secure setup, never
+                from this page.
+            -->
+            <Border x:Name="PolicyPanel" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="3">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Web.PreviewTitle}" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=Web.PreviewSubtitle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ItemsControl x:Name="PolicyWarnings">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <TextBlock
+                                    Margin="0,0,0,6"
+                                    Style="{StaticResource CaptionTextStyle}"
+                                    Text="{x:Bind}"
+                                    TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border
+                        Background="{StaticResource PanelBrush}"
+                        CornerRadius="10"
+                        Padding="12,10">
+                        <!--
+                            Horizontal scrolling is deliberate here, and the
+                            only place in KidShell where it is. This is a code
+                            area: a policy value is a single long line, and
+                            wrapping it would make it unreadable as the literal
+                            text that gets written. The height comes from the
+                            window rather than a constant; see ApplySize.
+                        -->
+                        <ScrollViewer
+                            x:Name="PolicyScroller"
+                            HorizontalScrollBarVisibility="Auto"
+                            HorizontalScrollMode="Enabled"
+                            VerticalScrollBarVisibility="Auto">
+                            <TextBlock
+                                x:Name="PolicyPreviewText"
+                                FontFamily="Consolas"
+                                FontSize="12"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextStyle}" />
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </Border>
 

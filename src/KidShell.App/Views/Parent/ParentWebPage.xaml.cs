@@ -1,3 +1,4 @@
+using KidShell.Core.Runtime;
 using KidShell.App.ViewModels.Parent;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -16,6 +17,9 @@ public sealed partial class ParentWebPage : UserControl
 
     public void Initialize(ParentWebViewModel viewModel)
     {
+        // The policy preview follows the window; see ApplySize.
+        SizeChanged += (_, e) => ApplySize(e.NewSize.Height);
+
         _viewModel = viewModel;
         DomainList.ItemsSource = viewModel.AllowedDomains;
         viewModel.AllowedDomains.CollectionChanged += (_, _) => RenderAllowlist();
@@ -43,6 +47,12 @@ public sealed partial class ParentWebPage : UserControl
         AllowlistPanel.IsHitTestVisible = _viewModel.IsAllowlist;
 
         RenderAllowlist();
+        RenderPolicy();
+
+        ValidationText.Text = _viewModel.ValidationMessage ?? string.Empty;
+        ValidationText.Visibility = _viewModel.HasValidationMessage
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         _loading = false;
     }
@@ -51,6 +61,22 @@ public sealed partial class ParentWebPage : UserControl
         EmptyAllowlistText.Visibility = _viewModel?.AllowedDomains.Count > 0
             ? Visibility.Collapsed
             : Visibility.Visible;
+
+    /// <summary>
+    /// Shows the exact Edge policy values this configuration would produce.
+    /// Nothing here writes them; the preview exists so the parent can read what
+    /// secure setup would do before agreeing to it.
+    /// </summary>
+    private void RenderPolicy()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        PolicyPreviewText.Text = _viewModel.PolicyPreview;
+        PolicyWarnings.ItemsSource = _viewModel.PolicyWarnings;
+    }
 
     private void OnModeChecked(object sender, RoutedEventArgs e)
     {
@@ -105,5 +131,23 @@ public sealed partial class ParentWebPage : UserControl
         {
             _viewModel?.RemoveDomain(domain);
         }
+    }
+
+    /// <summary>
+    /// Gives the policy preview a share of the window rather than a constant.
+    ///
+    /// 220 was comfortable on the monitor it was written on and most of a
+    /// 620-tall window at 150% scaling, where it pushed the rest of the page
+    /// out of reach.
+    /// </summary>
+    private void ApplySize(double height)
+    {
+        if (height <= 0 || double.IsNaN(height))
+        {
+            return;
+        }
+
+        PolicyScroller.MaxHeight = ResponsiveLayout.ScrollableHeight(
+            height, reservedForChrome: 420, minimum: 120, maximum: 320);
     }
 }

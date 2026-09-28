@@ -1,3 +1,5 @@
+using KidShell.Core.Runtime;
+
 namespace KidShell.Core.Launching;
 
 /// <summary>
@@ -49,7 +51,11 @@ public sealed class WindowsExecutableResolver : IExecutableResolver
             return new ExecutableResolution(ExecutableResolutionKind.ShellTarget, raw, "Protocol or app activation.");
         }
 
-        if (Path.IsPathRooted(raw))
+        // WindowsPath, not System.IO.Path: the latter answers about the host,
+        // and on Linux a backslash is an ordinary character, so a Core test
+        // asserting how a rooted Windows path resolves would get a different
+        // answer depending on where it ran.
+        if (WindowsPath.IsFullyQualified(raw))
         {
             return _fileExists(raw)
                 ? new ExecutableResolution(ExecutableResolutionKind.File, raw)

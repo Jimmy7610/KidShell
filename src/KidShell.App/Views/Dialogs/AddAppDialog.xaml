@@ -12,8 +12,13 @@
     PrimaryButtonText="{loc:Str Key=AddApp.Save}"
     mc:Ignorable="d">
 
-    <ScrollViewer MaxHeight="420" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
-        <StackPanel Width="440" Padding="0,0,6,0" Spacing="12">
+    <!--
+        The width and the scroll height come from the window, not from
+        constants: 440 wide and 420 tall are comfortable on a large monitor and
+        overflow a small one at 200% scaling.
+    -->
+    <ScrollViewer x:Name="FormScroller" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel x:Name="FormPanel" HorizontalAlignment="Stretch" Padding="0,0,6,0" Spacing="12">
 
             <StackPanel>
                 <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=AddApp.NameLabel}" />
@@ -54,6 +59,20 @@
                         Content="{loc:Str Key=AddApp.Browse}"
                         Style="{StaticResource SecondaryButtonStyle}" />
                 </Grid>
+
+                <!--
+                    The example, under the field rather than inside it.
+
+                    A PlaceholderText is drawn by the TextBox template and
+                    cannot wrap: at 200% this one needed 426 epx, was given
+                    201, and showed about a third of a path. Here it wraps,
+                    and it is still readable once the parent starts typing.
+                -->
+                <TextBlock
+                    Margin="2,6,0,0"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="{loc:Str Key=AddApp.PathHint}"
+                    TextWrapping="Wrap" />
             </StackPanel>
 
             <StackPanel>

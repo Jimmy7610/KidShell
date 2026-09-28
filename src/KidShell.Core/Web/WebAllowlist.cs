@@ -150,12 +150,48 @@ public static class WebAllowlist
             return (UrlValidation.IpAddress, trimmed);
         }
 
+        trimmed = ToAsciiHost(trimmed);
+
         if (!IsPlausibleHost(trimmed))
         {
             return (UrlValidation.Malformed, string.Empty);
         }
 
         return (UrlValidation.Ok, trimmed);
+    }
+
+    /// <summary>
+    /// Converts an internationalised name to the ASCII form DNS actually uses.
+    ///
+    /// "räksmörgås.se" and "xn--rksmrgs-5wao1o.se" are one site with two
+    /// spellings. Stored as written, they would be two entries, and a parent
+    /// who allowed the one they can read would find the other still blocked -
+    /// or, worse, the other way round, because the generated browser policy is
+    /// matched against what the browser resolves, which is always the ASCII
+    /// form.
+    ///
+    /// Non-ASCII input that cannot be converted is left as it was and refused
+    /// a moment later by the plausibility check, which is the right outcome
+    /// for something that is not a hostname at all.
+    /// </summary>
+    private static string ToAsciiHost(string host)
+    {
+        if (host.All(char.IsAscii))
+        {
+            return host;
+        }
+
+        try
+        {
+            return new System.Globalization.IdnMapping { AllowUnassigned = false, UseStd3AsciiRules = true }
+                .GetAscii(host)
+                .ToLowerInvariant();
+        }
+        catch (ArgumentException)
+        {
+            // Not a convertible name. IsPlausibleHost refuses it next.
+            return host;
+        }
     }
 
     /// <summary>Adds an entry, refusing duplicates.</summary>

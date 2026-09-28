@@ -59,6 +59,7 @@ public sealed partial class StatusStrip : UserControl
         if (_status.HasBattery && _status.BatteryPercent is { } percent)
         {
             BatteryPanel.Visibility = Visibility.Visible;
+            BatteryText.Visibility = Visibility.Visible;
             BatteryText.Text = string.Format(CultureInfo.CurrentCulture, "{0} %", percent);
             BatteryGlyph.Glyph = BatteryGlyphFor(percent);
             AutomationProperties.SetName(BatteryPanel, Strings.Format("Status.BatteryAutomation", percent));
@@ -66,6 +67,7 @@ public sealed partial class StatusStrip : UserControl
         else
         {
             BatteryPanel.Visibility = Visibility.Collapsed;
+            BatteryText.Visibility = Visibility.Collapsed;
         }
     }
 

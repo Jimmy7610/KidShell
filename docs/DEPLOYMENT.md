@@ -9,8 +9,9 @@ now so the boundaries are clear before anything is published.
 
 | | |
 | --- | --- |
+| Version | 1.0.0-rc.1 (package version 1.0.0.0) |
 | Packaging | MSIX, single-project, via the Windows App SDK |
-| Architecture | x64 (ARM64 not yet attempted) |
+| Architecture | x64 built and verified; ARM64 configured, not yet built |
 | Signing | **None.** No certificate exists. |
 | Distribution | **None.** No release has been published. |
 | Auto-update | **Disabled in code** (`UpdatePolicy.UpdatesEnabled = false`) |
@@ -18,6 +19,45 @@ now so the boundaries are clear before anything is published.
 KidShell installs today only as a development deployment on a machine with
 developer mode enabled. That is the honest state, and the sections below are
 what stands between it and a real installer.
+
+## One command
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\build-release.ps1
+```
+
+That verifies the SDK, refuses a dirty working tree unless told otherwise,
+restores, builds, runs both test suites, runs the helper and watchdog
+self-tests, packages the MSIX with its Windows App SDK dependencies, hashes
+everything and writes a README beside it. Output goes to `release-artifacts\`,
+which `.gitignore` excludes.
+
+To sign, supply material explicitly:
+
+```powershell
+.\tools\build-release.ps1 -Sign -CertificateThumbprint <thumbprint>
+```
+
+### Signing is a boundary, not a step
+
+Without material the script still produces a package and labels it **UNSIGNED**
+in the report, in the directory name and in the README beside it, with a
+paragraph explaining what that means.
+
+With `-Sign` it **fails** if material is absent. "Sign if you can, otherwise
+don't" is how an unsigned build reaches users. It also refuses to sign a build
+whose tests were skipped.
+
+No `.pfx` is ever read: the thumbprint selects a key that stays in the
+certificate store, no password is a parameter, and the certificate subject is
+never printed because it carries a real identity. Signatures are verified after
+signing rather than assumed — a tool that returns success and produces an
+unverifiable signature is exactly what that check is for.
+
+The version is read from `Directory.Build.props` rather than passed in, and the
+script stops if `Package.appxmanifest` disagrees. CI checks the same thing: a
+package whose manifest and binaries claim different versions is how an update
+check starts lying.
 
 ---
 

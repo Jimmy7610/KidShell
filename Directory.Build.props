@@ -4,6 +4,29 @@
     Shared build settings for every KidShell project.
     Keeping these central avoids per-project drift as the solution grows.
   -->
+
+  <!--
+    THE VERSION LIVES HERE AND NOWHERE ELSE.
+
+    Three shapes are needed and they are not interchangeable:
+
+      KidShellVersion         1.0.0        the product version
+      KidShellPrerelease      rc.1         empty for a stable release
+      KidShellPackageVersion  1.0.0.0      MSIX, which has no notion of a
+                                           prerelease suffix and requires four
+                                           numeric parts
+
+    MSIX cannot express "rc.1", so the package version stays numeric and the
+    prerelease lives in the informational version, which is what the About
+    screen shows. tools/build-release.ps1 asserts the manifest agrees with
+    KidShellPackageVersion, so the two cannot drift apart silently.
+  -->
+  <PropertyGroup>
+    <KidShellVersion>1.0.0</KidShellVersion>
+    <KidShellPrerelease>rc.1</KidShellPrerelease>
+    <KidShellPackageVersion>1.0.0.0</KidShellPackageVersion>
+  </PropertyGroup>
+
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -12,10 +35,18 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <Product>KidShell</Product>
     <Company>KidShell</Company>
-    <Version>0.1.0</Version>
+    <Copyright>Copyright © KidShell</Copyright>
     <NeutralLanguage>sv-SE</NeutralLanguage>
     <!-- Source files are UTF-8 without a BOM and contain Swedish text. -->
     <CodePage>65001</CodePage>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>$(KidShellVersion)</Version>
+    <AssemblyVersion>$(KidShellPackageVersion)</AssemblyVersion>
+    <FileVersion>$(KidShellPackageVersion)</FileVersion>
+    <InformationalVersion Condition="'$(KidShellPrerelease)' != ''">$(KidShellVersion)-$(KidShellPrerelease)</InformationalVersion>
+    <InformationalVersion Condition="'$(KidShellPrerelease)' == ''">$(KidShellVersion)</InformationalVersion>
   </PropertyGroup>
 
 </Project>

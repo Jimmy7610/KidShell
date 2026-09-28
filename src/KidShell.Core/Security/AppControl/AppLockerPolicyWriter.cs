@@ -49,6 +49,25 @@ public static class AppLockerPolicyWriter
     {
         ArgumentNullException.ThrowIfNull(policy);
 
+        // A policy nobody should trust may still be WRITTEN - that is how a
+        // parent reads what KidShell would do, and how the blocking warnings
+        // get explained to them. What it may not be is ENFORCED.
+        //
+        // The distinction is the whole point. AuditOnly blocks nothing and
+        // logs what would have been refused, which is exactly what somebody
+        // investigating a bad policy needs. Enabled, on a policy carrying a
+        // blanket rule or an allowed command prompt, would turn on a
+        // restriction that does not restrict - and tell a parent their child
+        // was limited to four apps while leaving the machine open.
+        if (enforcement == EnforcementMode.Enabled && !policy.CanActivate)
+        {
+            var reasons = string.Join("; ", policy.BlockingWarnings.Select(w => w.Code));
+
+            throw new InvalidOperationException(
+                $"Refusing to write an enforcing AppLocker policy that would not constrain the child ({reasons}). " +
+                "Generate it in audit mode, resolve the blocking warnings, and try again.");
+        }
+
         var sid = string.IsNullOrWhiteSpace(userOrGroupSid)
             ? string.IsNullOrWhiteSpace(policy.TargetUserSid) ? EveryoneSid : policy.TargetUserSid
             : userOrGroupSid;

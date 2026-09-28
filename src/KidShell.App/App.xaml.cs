@@ -72,7 +72,18 @@ public partial class App : Application
 
         services.AddSingleton<IExecutableResolver>(new WindowsExecutableResolver());
         services.AddSingleton<IProcessRunner, ProcessRunner>();
-        services.AddSingleton<IAppLauncher, AppLauncher>();
+
+        // The launcher everything resolves is the GUARDED one.
+        //
+        // AppLauncher itself is registered only as a concrete type, so asking
+        // for IAppLauncher cannot get you the unguarded one by accident. The
+        // screen-time check therefore sits on the single path every launch
+        // takes, rather than in each caller that remembered to write it.
+        services.AddSingleton<AppLauncher>();
+        services.AddSingleton<IAppLauncher>(sp => new ScreenTimeGuardedLauncher(
+            sp.GetRequiredService<AppLauncher>(),
+            sp.GetRequiredService<IScreenTimeCoordinator>(),
+            sp.GetRequiredService<IKidShellLogger>()));
 
         // Installed-application discovery. Every scanner is read-only; the
         // catalogue merges and de-duplicates what they find.
@@ -103,6 +114,11 @@ public partial class App : Application
             sp => new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<ScreenTimeEngine>();
 
+        // Something has to tick the engine and notice when a warning threshold
+        // is crossed. Without this the engine is a tested calculator nobody
+        // calls - which is exactly what it was until now.
+        services.AddSingleton<IScreenTimeCoordinator, ScreenTimeCoordinator>();
+
         services.AddSingleton<ChildSessionManager>();
         services.AddSingleton<IWatchdog, ShellHealthMonitor>();
 
@@ -113,6 +129,11 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
+
+        // Presentation, not security: Child Mode is borderless full screen in a
+        // shipped build and windowed in a developer one, so nobody gets trapped
+        // on the machine the code is written on.
+        services.AddSingleton<IChildPresentation, ChildPresentation>();
         services.AddSingleton<IAddAppFlow, AddAppFlow>();
         services.AddSingleton<IPinChangeFlow, PinChangeFlow>();
         services.AddSingleton<ISecurityDialogs, SecurityDialogs>();

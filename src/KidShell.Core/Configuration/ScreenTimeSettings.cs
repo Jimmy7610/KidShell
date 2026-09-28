@@ -35,7 +35,13 @@ public sealed class ScreenTimeSettings
     /// Minutes-remaining thresholds at which the child is warned. Descending;
     /// the engine picks the largest one that has been crossed.
     /// </summary>
-    public List<int> WarningMinutes { get; set; } = [15, 5, 1];
+    /// <summary>
+    /// The default warning points, named so that repairing a document with a
+    /// missing or nonsensical list produces the same thing a new one gets.
+    /// </summary>
+    public static readonly int[] DefaultWarningMinutes = [15, 5, 1];
+
+    public List<int> WarningMinutes { get; set; } = [.. DefaultWarningMinutes];
 
     /// <summary>Allowance for a given day, in minutes.</summary>
     public int MinutesFor(DayOfWeek day) =>

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The only project in KidShell that may change Windows.
+
+    It targets a Windows TFM because it talks to netapi32, the registry, the
+    service control manager and the task scheduler. KidShell.Core stays plain
+    net10.0 on purpose, so the rules, plans and transaction logic remain
+    testable without a machine - this project is where that ends.
+
+    Everything here is written against an interface in Platform/, so the
+    operations are unit-tested against fakes. No test in this repository calls
+    a real Windows mutation.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>KidShell.WindowsIntegration</RootNamespace>
+    <AssemblyName>KidShell.WindowsIntegration</AssemblyName>
+    <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KidShell.Core\KidShell.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KidShell.WindowsIntegration.Tests" />
+  </ItemGroup>
+
+</Project>

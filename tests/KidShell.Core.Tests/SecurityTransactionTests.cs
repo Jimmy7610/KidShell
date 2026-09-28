@@ -87,6 +87,22 @@ internal sealed class FakeOperation : ISecurityOperation
     /// </summary>
     public bool RollbackSawCancelledToken { get; private set; }
 
+    /// <summary>
+    /// Whether Apply should change something before it reports failure.
+    ///
+    /// The realistic case, and the one the audit found: an operation is rarely
+    /// a single atomic write, so "Apply returned failed" does not mean "Apply
+    /// changed nothing".
+    /// </summary>
+    public bool MutateBeforeFailing { get; init; }
+
+    /// <summary>
+    /// Stands for state left on the machine. Set by a mutating Apply and
+    /// cleared by Rollback, so a test can ask the only question that matters:
+    /// is anything still changed once the transaction has finished?
+    /// </summary>
+    public bool IsMutated { get; private set; }
+
     public string Description => $"Teståtgärd {Id}";
 
     public ChangeRiskLevel RiskLevel => ChangeRiskLevel.Low;
@@ -173,6 +189,14 @@ internal sealed class FakeOperation : ISecurityOperation
         // machine and something has to undo it.
         CancelAfterApply?.Cancel();
 
+        // The half-applied case. A real operation is several writes; this one
+        // models having completed the first and then hit a problem, which is
+        // the shape of a partial mutation that a failed Apply leaves behind.
+        if (MutateBeforeFailing)
+        {
+            IsMutated = true;
+        }
+
         if (_throwOnApply)
         {
             throw new InvalidOperationException("apply exploded");
@@ -210,6 +234,11 @@ internal sealed class FakeOperation : ISecurityOperation
         // The assertion that matters: rollback must not be handed a token
         // that is already cancelled.
         RollbackSawCancelledToken = cancellationToken.IsCancellationRequested;
+
+        if (_rollbackOk)
+        {
+            IsMutated = false;
+        }
 
         return Task.FromResult(_rollbackOk
             ? OperationOutcome.Ok()

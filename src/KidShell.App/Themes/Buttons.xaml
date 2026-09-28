@@ -137,9 +137,18 @@
         <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" />
         <Setter Property="FontSize" Value="26" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Width" Value="84" />
-        <Setter Property="Height" Value="64" />
-        <Setter Property="Padding" Value="0" />
+        <!--
+            A minimum, not a size.
+
+            Windows text scaling multiplies the font size, so at 200% these
+            digits are drawn at 52 and "Rensa" at 28 - neither of which fits a
+            key pinned to 84x64. The key looks identical at normal scale,
+            because a digit at 26 is smaller than this anyway, and grows with
+            the text rather than cropping it for a parent who needs it bigger.
+        -->
+        <Setter Property="MinWidth" Value="84" />
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Padding" Value="4,2" />
     </Style>
 
 </ResourceDictionary>

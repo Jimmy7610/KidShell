@@ -60,7 +60,7 @@ public sealed class ParentAppsViewModel : ObservableObject
 
     private async Task AddAppAsync()
     {
-        var definition = await _addAppFlow.RequestNewAppAsync();
+        var definition = await _addAppFlow.RequestNewAppAsync(_draft.Apps);
         if (definition is null)
         {
             return;

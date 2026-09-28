@@ -4,8 +4,10 @@ using KidShell.App.Services;
 using KidShell.App.ViewModels;
 using KidShell.App.ViewModels.Parent;
 using KidShell.Core.Configuration;
+using KidShell.Core.Runtime;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using KidShell.App.Controls;
 
 namespace KidShell.App.Views;
 
@@ -27,8 +29,8 @@ public sealed partial class ParentShellView : UserControl
         PageApps.Initialize(viewModel.Apps);
         PageScreenTime.Initialize(viewModel.ScreenTime);
         PageWeb.Initialize(viewModel.Web);
-        PageSecurity.Initialize(viewModel.Security);
-        PageProfile.Initialize(viewModel.Profile);
+        PageSecurity.Initialize(viewModel.Security, viewModel.Recovery);
+        PageProfile.Initialize(viewModel.Profile, viewModel.About);
 
         SaveButton.Command = viewModel.SaveCommand;
         BackButton.Command = viewModel.BackCommand;
@@ -39,8 +41,233 @@ public sealed partial class ParentShellView : UserControl
         viewModel.ScreenTime.PropertyChanged += (_, _) => RenderAside();
         viewModel.Web.PropertyChanged += (_, _) => RenderAside();
 
+        // The layout follows the space actually available, not the size the
+        // window happened to open at.
+        SizeChanged += (_, e) =>
+        {
+            // The stage fills the viewport, so at ordinary sizes nothing
+            // scrolls and the design is unchanged; when the content genuinely
+            // needs more room, the page scrolls instead of losing its bottom.
+            //
+            // Taken from THIS control's height, which the window decides, and
+            // never from the ScrollViewer's ViewportHeight. That property
+            // moves during layout, and feeding it back into the content's
+            // MinHeight is a cycle: WinUI detects it and throws
+            // LayoutCycleException, which killed the app outright on the
+            // Säkerhet page at 780x560 with enlarged text.
+            Stage.MinHeight = e.NewSize.Height;
+
+            ApplyLayout(e.NewSize.Width);
+            ApplyHeight(e.NewSize.Height);
+        };
+
         Render();
     }
+
+    /// <summary>
+    /// The last layout applied, so a resize that does not cross a boundary
+    /// costs nothing.
+    /// </summary>
+    private NavigationMode? _navigationMode;
+    private bool? _asideVisible;
+
+    /// <summary>
+    /// Adapts the chrome to the width available.
+    ///
+    /// Three things give way, in this order, because that is the order in
+    /// which they stop earning their space:
+    ///
+    ///  1. the at-a-glance column, which is a convenience - everything in it
+    ///     is reachable from a page;
+    ///  2. the navigation labels, leaving an icon rail;
+    ///  3. nothing else. The content column never shrinks below what a
+    ///     settings row needs; if the window is smaller than that, the page
+    ///     scrolls.
+    ///
+    /// The decisions come from ResponsiveLayout so they are tested against the
+    /// whole supported matrix rather than against one monitor.
+    /// </summary>
+    private void ApplyLayout(double width)
+    {
+        if (width <= 0 || double.IsNaN(width))
+        {
+            return;
+        }
+
+        var aside = ResponsiveLayout.ShowAside(width);
+
+        if (_asideVisible != aside)
+        {
+            _asideVisible = aside;
+            Aside.Visibility = aside ? Visibility.Visible : Visibility.Collapsed;
+
+            // Collapse the column too, not just its content: a hidden element
+            // in a fixed-width column still reserves the width.
+            AsideColumn.Width = aside
+                ? new GridLength(ResponsiveLayout.AsideWidth)
+                : new GridLength(0);
+        }
+
+        var navigation = ResponsiveLayout.DecideNavigation(width);
+
+        if (_navigationMode != navigation)
+        {
+            _navigationMode = navigation;
+            ApplyNavigationMode(navigation);
+        }
+
+        // Decoration gives way before anything functional does. The footer
+        // wordmark was sitting underneath the action buttons rather than
+        // beside them, and the header tagline pushed the child's name into the
+        // status strip.
+        var roomy = ResponsiveLayout.Classify(width) != LayoutSize.Compact;
+
+        // Asked of the measurement, not of the width. See FitFooterBrand.
+        FitFooterBrand(FooterBrand, width);
+        // A finite width, so the header's readouts can wrap.
+        //
+        // Both sit in Auto columns, which measure with unlimited width - and a
+        // WrapPanel measured against infinity reports one row and never wraps,
+        // which is how the clock and the battery ran off the edge at a larger
+        // text size. A share of the window gives them a real limit without
+        // pinning them to any particular screen.
+        Status.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.StatusShare);
+        // The wordmark is the widest thing in the header and it is a name, not
+        // a control. Bounded so it wraps instead of pushing the child block and
+        // the status readout off the right of the window.
+        HeaderBrand.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
+
+        // Across or down, decided by whether the three blocks actually fit.
+        // An Auto column never shrinks below its content, so at a larger text
+        // size the header ran off the edge of the window.
+        HeaderTagline.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+        HeaderChildText.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
+
+        // Narrower than the design allows for, so the wordmark loses the
+        // width it needs and wraps to three lines, which at a large text size
+        // is most of the window. It is a name, and the page it sits above
+        // already says what page it is; the buttons underneath are the way out
+        // of Föräldraläge. Decoration gives way, function does not.
+        HeaderBrand.Visibility = ResponsiveLayout.ShowHeaderDecoration(width)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        // Narrower than the design allows for, so the avatar loses the width
+        // it needs and is drawn as a sliver. It says nothing the header does
+        // not, and a distorted picture of a child is worse than none.
+        HeaderChild.Visibility = ResponsiveLayout.ShowHeaderDecoration(width)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Keeps the footer wordmark from crowding out the buttons.
+    ///
+    /// Deliberately NOT by measuring the buttons. Measuring a live element
+    /// with a different constraint than its parent will use overwrites its
+    /// DesiredSize, and the buttons live in a WrapPanel - measured against
+    /// unlimited width it reports a single row, caches that, and then never
+    /// wraps. An earlier version of this method did exactly that and stopped
+    /// the wrapping it was written to enable.
+    ///
+    /// A share of the row and the existing width rule are enough, and neither
+    /// touches the layout.
+    /// </summary>
+    private static void FitFooterBrand(FrameworkElement brand, double available)
+    {
+        if (!ResponsiveLayout.ShowFooterBrand(available))
+        {
+            brand.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        brand.Visibility = Visibility.Visible;
+        brand.MaxWidth = ResponsiveLayout.ShareOfRow(available, ResponsiveLayout.BrandShare);
+    }
+
+    /// <summary>
+    /// Gives the page back the space the frame was using, on a very short
+    /// window.
+    ///
+    /// The frame's padding and the gap around the body come to 62 epx of
+    /// height, which is generous and right at any ordinary size. At 480 it was
+    /// enough to push the Spara/Avsluta row five pixels off the bottom of the
+    /// screen.
+    ///
+    /// 480 is below the minimum KidShell asks for, but the minimum is set
+    /// through an API that is documented without a unit and has an open bug
+    /// about scaling, so it is not something to rely on. The layout holding
+    /// underneath it costs a few pixels of padding and means it does not
+    /// matter which way that bug goes.
+    /// </summary>
+    private void ApplyHeight(double height)
+    {
+        if (height <= 0 || double.IsNaN(height))
+        {
+            return;
+        }
+
+        var tight = ResponsiveLayout.IsShort(height);
+
+        Stage.Padding = tight ? new Thickness(40, 12, 40, 10) : new Thickness(40, 22, 40, 20);
+        BodyGrid.Margin = tight ? new Thickness(0, 10, 0, 8) : new Thickness(0, 20, 0, 14);
+    }
+
+    private void ApplyNavigationMode(NavigationMode mode)
+    {
+        var expanded = mode == NavigationMode.Expanded;
+
+        NavigationPanel.Width = expanded
+            ? ResponsiveLayout.ExpandedNavigationWidth
+            : ResponsiveLayout.RailNavigationWidth;
+
+        // The labels go, the icons stay. Each button keeps an automation name
+        // and a tooltip, so the rail is still announceable and still
+        // explains itself on hover.
+        var labelVisibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+
+        foreach (var label in new[]
+                 {
+                     NavLabelOverview, NavLabelApps, NavLabelScreenTime,
+                     NavLabelWeb, NavLabelSecurity, NavLabelProfile
+                 })
+        {
+            label.Visibility = labelVisibility;
+        }
+
+        // Centre the glyph with symmetric padding rather than by changing the
+        // content alignment.
+        //
+        // HorizontalContentAlignment="Center" was the obvious lever and the
+        // wrong one: it makes the content presenter size to its content and
+        // centre it, so the button's own row - icon plus the collapsed label's
+        // spacing - ended up wider than the rail and was clipped, taking the
+        // icons with it.
+        //
+        // Stretch keeps the row anchored at the left edge, and the padding
+        // does the centring: 72 wide, less the panel's 24 of padding, leaves
+        // 48 for a 26-wide glyph, so 11 either side.
+        const double railPadding = (RailNavigationInnerWidth - NavigationGlyphWidth) / 2;
+
+        var padding = expanded
+            ? new Thickness(16, 10, 16, 10)
+            : new Thickness(railPadding, 10, railPadding, 10);
+
+        foreach (var button in new[]
+                 {
+                     NavOverview, NavApps, NavScreenTime,
+                     NavWeb, NavSecurity, NavProfile
+                 })
+        {
+            button.Padding = padding;
+        }
+    }
+
+    /// <summary>The rail's width less the panel's own padding.</summary>
+    private const double RailNavigationInnerWidth = ResponsiveLayout.RailNavigationWidth - 24;
+
+    /// <summary>Matches NavigationGlyphStyle's Width.</summary>
+    private const double NavigationGlyphWidth = 26;
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => Render();
 

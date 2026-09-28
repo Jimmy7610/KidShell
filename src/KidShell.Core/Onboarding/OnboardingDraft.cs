@@ -57,6 +57,22 @@ public sealed class OnboardingDraft
 
     public bool HasTheme => ThemeIds.IsKnown(ThemeId);
 
+    // ------------------------------------------------------------- rules
+    // Collected during setup so a parent does not finish first-run with a
+    // machine that has no limits at all and no prompt to add any. Every value
+    // has a workable default, so a parent who accepts the suggestion gets
+    // something sensible rather than nothing.
+
+    /// <summary>Whether screen time is switched on for the child.</summary>
+    public bool ScreenTimeEnabled { get; set; } = true;
+
+    public int WeekdayMinutes { get; set; } = 60;
+
+    public int WeekendMinutes { get; set; } = 120;
+
+    /// <summary>How much of the web the child may reach.</summary>
+    public WebMode WebMode { get; set; } = WebMode.NoBrowser;
+
     /// <summary>
     /// Whether the profile half of setup is finished. A production build
     /// additionally requires a parent PIN - see

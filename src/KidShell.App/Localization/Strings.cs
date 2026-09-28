@@ -22,6 +22,15 @@ public static class Strings
         ["Child.ParentAccessHint"] = "Håll in i tre sekunder",
         ["Child.ParentAccessAutomation"] = "För vuxna. Håll knappen intryckt i tre sekunder för att öppna föräldraläget.",
         ["Child.Greeting"] = "Hej {0}!",
+        // Screen time, as a child reads it
+        ["Child.TimeUpTitle"] = "Tiden är slut för i dag",
+        ["Child.TimeUpBody"] = "Bra jobbat! Gå och säg till en vuxen om du vill ha mer tid.",
+        ["Child.OutsideHoursTitle"] = "Datorn vilar nu",
+        ["Child.OutsideHoursBody"] = "Just nu är det inte datortid. Fråga en vuxen om du undrar.",
+        ["Child.WarningMinutes"] = "{0} minuter kvar",
+        ["Child.WarningOneMinute"] = "En minut kvar",
+        ["Child.WarningOk"] = "Okej",
+
         ["Child.Encouragement"] = "Du är fantastisk!",
         ["Child.EmptyGridTitle"] = "Inga appar är påslagna",
         ["Child.EmptyGridBody"] = "En vuxen kan slå på appar i Föräldraläge.",
@@ -79,18 +88,18 @@ public static class Strings
         ["Overview.AppsValue"] = "{0} tillåtna",
         ["Overview.AppsHint"] = "Av totalt {0} konfigurerade.",
         ["Overview.ScreenTimeTitle"] = "Skärmtid",
-        ["Overview.ScreenTimeNoLimit"] = "Ingen gräns i MVP 0.1",
+        ["Overview.ScreenTimeNoLimit"] = "Ingen gräns inställd",
         ["Overview.ScreenTimeConfigured"] = "{0} min vardag · {1} min helg",
-        ["Overview.ScreenTimeHint"] = "Inställningen sparas men används inte ännu.",
+        ["Overview.ScreenTimeHint"] = "Gäller i Barnläge. Windows är inte låst.",
         ["Overview.WebTitle"] = "Webbfilter",
         ["Overview.WebNotConfigured"] = "Inte konfigurerat",
-        ["Overview.WebHint"] = "Valet sparas lokalt. Ingen webbläsare styrs ännu.",
+        ["Overview.WebHint"] = "Valet sparas lokalt. Webbläsarregler skrivs först vid säker installation.",
         ["Overview.SecurityTitle"] = "Säkerhet",
         ["Overview.SecurityValue"] = "Utvecklingsläge",
         ["Overview.SecurityHint"] = "Windows är inte låst.",
-        ["Overview.BannerTitle"] = "MVP 0.1 låser inte Windows",
+        ["Overview.BannerTitle"] = "Windows är inte låst på den här datorn",
         ["Overview.BannerBody"] =
-            "Den här versionen är ett visuellt och arkitekturellt skal. Barnet kan fortfarande minimera KidShell och nå resten av Windows. Riktig låsning kommer i en senare milstolpe.",
+            "KidShell styr vad barnet ser och hur länge, men Windows självt är orört. Barnet kan fortfarande minimera KidShell och nå resten av datorn. Riktig låsning görs vid säker installation på en dator du valt för ändamålet.",
 
         // ---------- Apps page ----------
         ["Apps.Title"] = "Tillåtna appar",
@@ -104,6 +113,31 @@ public static class Strings
         ["Apps.DisabledTag"] = "Avstängd",
         ["Apps.Count"] = "{0} av {1} appar är påslagna",
 
+        // ---------- Installed application browser ----------
+        ["Discover.Title"] = "Välj ett program",
+        ["Discover.Subtitle"] = "Program som är installerade på den här datorn. Välj ett så fyller KidShell i resten.",
+        ["Discover.Search"] = "Sök bland programmen",
+        ["Discover.Refresh"] = "Sök igen",
+        ["Discover.Scanning"] = "Letar efter installerade program...",
+        ["Discover.Manual"] = "Lägg till manuellt",
+        ["Discover.Add"] = "Lägg till",
+        ["Discover.AlreadyAdded"] = "Tillagd",
+        ["Discover.AutomationAdd"] = "Lägg till {0}",
+        ["Discover.AutomationAdded"] = "{0} är redan tillagd",
+        ["Discover.Count"] = "Visar {0} av {1} program.",
+        ["Discover.NoMatches"] = "Inget program matchar \"{0}\".",
+        ["Discover.NothingFound"] = "Inga program hittades. Du kan lägga till ett manuellt i stället.",
+        ["Discover.ScanFailed"] = "Alla program kunde inte läsas. Listan kan vara ofullständig.",
+        ["Discover.KindWin32"] = "Program",
+        ["Discover.KindPackaged"] = "Microsoft Store",
+        ["Discover.KindLauncher"] = "Startprogram",
+        ["Discover.KindProtocol"] = "Systemlänk",
+        ["Discover.KindUnknown"] = "Okänd typ",
+        ["Discover.ReviewLauncher"] = "Startar andra program",
+        ["Discover.ReviewBrowser"] = "Når hela webben",
+        ["Discover.NotPermissionNote"] =
+            "Att lägga till ett program visar det i Barnläge. Det är inte samma sak som att Windows tillåter det – det bestäms först vid säker installation.",
+
         // ---------- Add app dialog ----------
         ["AddApp.Title"] = "Lägg till app",
         ["AddApp.NameLabel"] = "Namn som barnet ser",
@@ -111,7 +145,11 @@ public static class Strings
         ["AddApp.ProgramLabel"] = "Programmets namn",
         ["AddApp.ProgramPlaceholder"] = "Till exempel Paint",
         ["AddApp.PathLabel"] = "Sökväg till program",
-        ["AddApp.PathPlaceholder"] = "C:\\Program Files\\...\\program.exe",
+        // Short enough to survive a narrow field at 200% text scaling; a
+        // PlaceholderText is drawn by the TextBox template and cannot wrap,
+        // so the full example is a caption under the field instead.
+        ["AddApp.PathPlaceholder"] = "program.exe",
+        ["AddApp.PathHint"] = "C:\\Program Files\\...\\program.exe",
         ["AddApp.Browse"] = "Välj program...",
         ["AddApp.ArgumentsLabel"] = "Argument (valfritt)",
         ["AddApp.CategoryLabel"] = "Kategori",
@@ -121,6 +159,11 @@ public static class Strings
         ["AddApp.Cancel"] = "Avbryt",
         ["AddApp.NameRequired"] = "Ge appen ett namn först.",
         ["AddApp.PathMissing"] = "Programmet hittades inte på den här datorn.",
+        ["AddApp.PathRequired"] = "Välj ett program.",
+        ["AddApp.PathScript"] = "Skriptfiler går inte att lägga till. Ett skript körs av kommandotolken, och den får barnet inte använda. Välj programmets .exe-fil i stället.",
+        ["AddApp.PathShortcut"] = "Genvägar går inte att lägga till, eftersom en genväg kan ändras till att peka på något annat. Välj programmets .exe-fil i stället.",
+        ["AddApp.PathUnsupported"] = "Välj en programfil som slutar på .exe. Appar från Microsoft Store lägger du till via \"Bläddra bland appar\".",
+        ["AddApp.PathNotSafe"] = "Det här är ett systemverktyg som barnet inte bör kunna starta.",
         ["AddApp.PickerFailed"] = "Filväljaren kunde inte öppnas.",
 
         // ---------- Screen time ----------
@@ -133,9 +176,101 @@ public static class Strings
         ["ScreenTime.HoursAndMinutes"] = "{0} h {1} min",
         ["ScreenTime.Hours"] = "{0} timmar",
         ["ScreenTime.OneHour"] = "1 timme",
-        ["ScreenTime.NoticeTitle"] = "Konfiguration finns – kontroll saknas",
+        ["ScreenTime.NoticeTitle"] = "Gäller i Barnläge, inte i hela Windows",
         ["ScreenTime.NoticeBody"] =
-            "KidShell sparar de här tiderna men avbryter ingenting ännu. Tidskontrollen kräver bakgrundsövervakning som kommer i en senare milstolpe.",
+            "KidShell håller koll på tiden och slutar starta program när den tar slut. Så länge Windows inte är låst kan barnet fortfarande lämna Barnläge – då gäller inte tiden.",
+
+        // Daily window
+        ["ScreenTime.RestrictHours"] = "Begränsa när datorn får användas",
+        ["ScreenTime.RestrictHoursHint"] = "Ett barn med en timme kvar klockan 23 ska ändå sova.",
+        ["ScreenTime.From"] = "Från",
+        ["ScreenTime.Until"] = "Till",
+        ["ScreenTime.HoursSummary"] = "Datorn får användas mellan {0} och {1}.",
+        ["ScreenTime.HoursOff"] = "Datorn får användas när som helst på dygnet.",
+
+        // Today
+        ["ScreenTime.TodayTitle"] = "I dag",
+        ["ScreenTime.Used"] = "Använt",
+        ["ScreenTime.Remaining"] = "Kvar",
+        ["ScreenTime.StatusOff"] = "Skärmtid är avstängd. Ingen tid räknas.",
+        ["ScreenTime.UnsavedNotice"] =
+            "Du har ändringar som inte är sparade. Siffrorna här visar det som gäller just nu – spara för att de nya tiderna ska börja räknas.",
+        ["ScreenTime.StatusUnknown"] = "Tiden har inte räknats i dag än.",
+        ["ScreenTime.StatusExpired"] = "Dagens tid är slut.",
+        ["ScreenTime.StatusOutsideHours"] = "Datorn får inte användas just nu.",
+        ["ScreenTime.StatusRemaining"] = "{0} kvar i dag.",
+        ["ScreenTime.BonusGranted"] = "Du har gett {0} extra i dag.",
+        ["ScreenTime.ClockWarning"] =
+            "Datorns klocka har ställts tillbaka. Tiden räknas från en klocka som inte går att ändra, så ingen tid har försvunnit.",
+
+        // Extensions
+        ["ScreenTime.ExtendTitle"] = "Ge mer tid i dag",
+        ["ScreenTime.ExtendHint"] = "Gäller bara i dag och börjar gälla direkt.",
+        ["ScreenTime.Extend15"] = "+15 min",
+        ["ScreenTime.Extend30"] = "+30 min",
+        ["ScreenTime.Extend60"] = "+1 timme",
+        ["ScreenTime.ExtendRestOfDay"] = "Resten av dagen",
+        ["ScreenTime.ResetToday"] = "Nollställ dagen",
+        ["ScreenTime.GrantedExtension"] = "{0} extra tillagt.",
+        ["ScreenTime.GrantedRestOfDay"] = "Resten av dagen är fri.",
+        ["ScreenTime.ResetDone"] = "Dagens räknare är nollställd.",
+
+        // ---------- About ----------
+        ["About.Title"] = "Om KidShell",
+        ["About.Subtitle"] = "Version, byggläge och vad den här datorn klarar.",
+        ["About.Version"] = "Version",
+        ["About.Build"] = "Byggläge",
+        ["About.Commit"] = "Ändring {0}",
+        ["About.BuildRelease"] = "Release",
+        ["About.BuildDevelopment"] = "UTVECKLING",
+        ["About.DevelopmentWarning"] =
+            "Det här är ett utvecklingsbygge. Det accepterar en PIN-kod som står i dokumentationen och ska inte användas av ett barn på riktigt.",
+        ["About.Windows"] = "Windows",
+        ["About.Build.Number"] = "Build {0} · {1}",
+        ["About.StandardMode"] = "Standardläge",
+        ["About.StandardHint"] = "Fungerar på alla Windows-utgåvor.",
+        ["About.SecureMode"] = "Säkert läge",
+        ["About.SecureHint"] = "Den här utgåvan stöder Windows begränsade läge.",
+        ["About.SecureUnsupportedHint"] = "{0} har inte Windows begränsade läge. Det kräver Pro, Enterprise, Education eller IoT Enterprise.",
+        ["About.AppControl"] = "Appkontroll i Windows",
+        ["About.AppControlHint"] =
+            "Att Windows kan spärra program är inte samma sak som att det går att installera reglerna här. KidShell skiljer på de två.",
+        ["About.SecurityStatus"] = "Säkerhetsläge",
+        ["About.SecurityNotApplied"] = "Inget är tillämpat",
+        ["About.SecurityNotAppliedHint"] = "KidShell har inte ändrat någon Windows-inställning på den här datorn.",
+        ["About.Updates"] = "Uppdateringar",
+        ["About.UpdatesOn"] = "På",
+        ["About.UpdatesOff"] = "Avstängda",
+        ["About.UpdatesHint"] =
+            "Automatiska uppdateringar är avstängda tills paketet är signerat. En uppdaterare som installerar osignerade paket är en säkerhetsrisk.",
+        ["About.Licence"] = "Licens",
+        ["About.LicenceValue"] = "MIT-licens. Öppen källkod.",
+        ["About.Available"] = "Tillgängligt",
+        ["About.PartlyAvailable"] = "Delvis",
+        ["About.NotSupported"] = "Stöds inte",
+
+        // ---------- Recovery ----------
+        ["Recovery.Title"] = "Återställning",
+        ["Recovery.Refresh"] = "Läs om",
+        ["Recovery.Loading"] = "Läser...",
+        ["Recovery.NothingApplied"] = "Ingenting har ändrats i Windows",
+        ["Recovery.Count"] = "{0} registrerade ändringar",
+        ["Recovery.NeedsAttention"] = "{0} ändring(ar) behöver åtgärdas",
+        ["Recovery.NormalBody"] =
+            "KidShell skriver en återställningsfil innan någon Windows-inställning ändras. Så länge ingenting har ändrats finns det inget att återställa.",
+        ["Recovery.AttentionBody"] =
+            "En ändring gick fel och kunde inte ångras automatiskt. Datorn kan vara i ett läge som ingen valt. Öppna återställningsfilen och följ stegen, eller kör KidShell.Recovery.exe som administratör.",
+        ["Recovery.EntrySummary"] = "{0} steg",
+        ["Recovery.StateCommitted"] = "Genomförd",
+        ["Recovery.StateRolledBack"] = "Återställd",
+        ["Recovery.StateRollbackFailed"] = "Behöver åtgärdas",
+        ["Recovery.StateRefused"] = "Avbröts",
+        ["Recovery.StateCancelled"] = "Avbruten",
+        ["Recovery.StateUnfinished"] = "Avslutades aldrig",
+        ["Recovery.LocationTitle"] = "Återställningsfiler",
+        ["Recovery.UnknownLocation"] = "(okänd plats)",
+        ["Recovery.ToolHint"] =
+            "KidShell.Recovery.exe läser de här filerna utan att KidShell behöver starta. Kör den som administratör om KidShell inte går att öppna.",
 
         // ---------- Web ----------
         ["Web.Title"] = "Webbfilter",
@@ -147,9 +282,16 @@ public static class Strings
         ["Web.ModeOpen"] = "Friare webb",
         ["Web.ModeOpenHint"] = "Barnet kan surfa fritt. Rekommenderas inte för sexåringar.",
         ["Web.AllowlistTitle"] = "Godkända sidor",
-        ["Web.AddDomainPlaceholder"] = "till exempel svt.se",
+        // Short enough to survive a narrow field at 200% text scaling; the
+        // full example is a caption under the field, where it can wrap.
+        ["Web.AddDomainPlaceholder"] = "svt.se",
+        ["Web.AddDomainHint"] = "till exempel svt.se",
         ["Web.AddDomain"] = "Lägg till",
         ["Web.RemoveDomainAutomation"] = "Ta bort {0}",
+        ["Web.PreviewTitle"] = "Det här skrivs vid säker installation",
+        ["Web.PreviewSubtitle"] =
+            "Exakt de här värdena sätts i Microsoft Edge. Ingenting skrivs härifrån – det sker först när du genomför säker installation på en dator du valt.",
+
         ["Web.EmptyAllowlist"] = "Inga godkända sidor ännu.",
         ["Web.NoticeTitle"] = "Valet sparas lokalt",
         ["Web.NoticeBody"] =
@@ -196,6 +338,32 @@ public static class Strings
 
         ["Setup.NameTitle"] = "Vad heter barnet som ska använda datorn?",
         ["Setup.NameBody"] = "Namnet används för att hälsa på barnet i Barnläge.",
+        // Parent PIN step
+        ["Setup.PinTitle"] = "Skapa en föräldra-PIN",
+        ["Setup.PinBody"] =
+            "Den här koden krävs för att öppna Föräldraläge. Välj en som barnet inte kan gissa.",
+        ["Setup.PinBodyDeveloper"] =
+            "Den här koden krävs för att öppna Föräldraläge. I utvecklingsläge kan du hoppa över steget – då används standardkoden tills du väljer en egen.",
+        ["Setup.PinLabel"] = "PIN-kod (sex siffror)",
+        ["Setup.PinConfirmLabel"] = "Skriv koden igen",
+        ["Setup.PinHint"] =
+            "Undvik 123456, 000000 och barnets födelsedatum. Koden sparas aldrig i klartext.",
+        ["Setup.PinRequired"] =
+            "En riktig föräldra-PIN krävs innan installationen kan slutföras.",
+
+        // Rules step
+        ["Setup.RulesTitle"] = "Regler för datorn",
+        ["Setup.RulesBody"] = "Du kan ändra allt det här senare i Föräldraläge.",
+        ["Setup.RulesWebHint"] =
+            "Valet sparas nu. Webbläsarregler skrivs i Windows först vid säker installation.",
+        ["Setup.RulesTime"] = "{0} vardag · {1} helg",
+        ["Setup.RulesNoTime"] = "Ingen tidsgräns",
+
+        // What setup did not do
+        ["Setup.DoneSecurityTitle"] = "Windows är inte låst ännu",
+        ["Setup.DoneSecurityBody"] =
+            "Den här installationen har ställt in KidShell, inte Windows. Barnet kan fortfarande lämna Barnläge. Säker installation görs separat i Föräldraläge → Säkerhet, på en dator du valt för ändamålet.",
+
         ["Setup.NamePlaceholder"] = "Skriv barnets namn",
         ["Setup.NameLabel"] = "Barnets namn",
         ["Setup.NameEmpty"] = "Skriv barnets namn för att fortsätta.",
@@ -417,6 +585,15 @@ public static class Strings
         ["Dialog.ExitBodyDeveloper"] =
             "I utvecklingsläge stänger den här knappen bara KidShell. Ingen Windows-användare loggas ut.",
         ["Dialog.ExitPrimary"] = "Avsluta KidShell",
+        ["Dialog.ExitBodySignOut"] =
+            "Barnet loggas ut från Windows och kommer till inloggningsskärmen. Osparat arbete i öppna program går förlorat.",
+        ["Dialog.ExitPrimarySignOut"] = "Logga ut barnet",
+        ["Dialog.ExitSignOutFailed"] =
+            "Utloggningen kunde inte genomföras. KidShell stängs i stället – datorn är fortfarande inloggad.",
+        ["Dialog.ExitUnsaved"] =
+            "Du har ändringar som inte är sparade. Om du avslutar nu försvinner de.",
+        ["Dialog.ExitDiscard"] = "Avsluta ändå",
+        ["Dialog.ExitStay"] = "Stanna kvar",
         ["Dialog.ChangePinTitle"] = "Ändra PIN-kod",
         ["Dialog.ChangePinBody"] = "Ange en ny sexsiffrig PIN-kod.",
         ["Dialog.ChangePinConfirm"] = "Upprepa PIN-koden",

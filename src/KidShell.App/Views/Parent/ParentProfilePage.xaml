@@ -20,11 +20,20 @@
                     Text="{loc:Str Key=Profile.Subtitle}" />
             </StackPanel>
 
-            <Grid ColumnSpacing="18">
+            <!--
+                The form and its live preview sit side by side while both are
+                readable, and stack below that. Code-behind moves the preview
+                between column 1 and row 1; see ApplyLayout.
+            -->
+            <Grid x:Name="ProfileGrid" ColumnSpacing="18" RowSpacing="16">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition x:Name="PreviewColumn" Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
                 <StackPanel Grid.Column="0" Spacing="16">
                     <StackPanel>
@@ -39,12 +48,17 @@
 
                     <StackPanel>
                         <Grid>
-                            <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AgeLabel}" />
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Style="{StaticResource FormLabelStyle}" Text="{loc:Str Key=Profile.AgeLabel}" Grid.Column="0" />
                             <TextBlock
+                                Grid.Column="1"
                                 x:Name="AgeValueText"
                                 FontWeight="SemiBold"
                                 Foreground="{StaticResource BrandBlueBrush}"
-                                HorizontalAlignment="Right"
                                 Style="{StaticResource BodyTextStyle}" />
                         </Grid>
                         <Slider
@@ -73,8 +87,10 @@
 
                 <!-- Live preview of what the child will see -->
                 <Border
+                    x:Name="PreviewPanel"
                     Grid.Column="1"
-                    Width="248"
+                    MinWidth="248"
+                    MaxWidth="360"
                     Background="{StaticResource TintBlueBrush}"
                     Style="{StaticResource InfoPanelStyle}"
                     VerticalAlignment="Top">
@@ -132,15 +148,20 @@
                                     BorderThickness="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource SelectionThickness}}"
                                     CornerRadius="{StaticResource RadiusPill}">
                                     <Grid>
-                                        <Viewbox Margin="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Viewbox Margin="4" Grid.Column="0">
                                             <controls:AvatarPresenter AvatarId="{x:Bind Id}" Width="100" Height="100" />
                                         </Viewbox>
                                         <!-- Selection is shown by a badge as well as the ring. -->
                                         <Border
+                                            Grid.Column="1"
                                             Width="26" Height="26"
                                             Background="{StaticResource BrandBlueBrush}"
                                             CornerRadius="{StaticResource RadiusPill}"
-                                            HorizontalAlignment="Right"
                                             Margin="0,0,2,2"
                                             VerticalAlignment="Bottom"
                                             Visibility="{x:Bind IsSelected, Mode=OneWay, Converter={StaticResource BoolToVisibility}}">
@@ -188,13 +209,104 @@
                             Text="{loc:Str Key=Profile.RerunBody}" />
                     </StackPanel>
 
+                    <!--
+                        The caption wraps rather than being cut. A Button's
+                        default content presenter does not wrap, so at a larger
+                        text size "Kör introduktionen igen" simply lost its
+                        last word.
+                    -->
                     <Button
                         x:Name="RerunOnboardingButton"
                         Grid.Column="2"
-                        Content="{loc:Str Key=Profile.RerunOnboarding}"
+                        MaxWidth="260"
                         Style="{StaticResource SecondaryButtonStyle}"
-                        VerticalAlignment="Center" />
+                        VerticalAlignment="Center">
+                        <TextBlock
+                            Text="{loc:Str Key=Profile.RerunOnboarding}"
+                            TextWrapping="Wrap" />
+                    </Button>
                 </Grid>
+            </Border>
+
+
+            <!--
+                Om KidShell.
+
+                Every line is derived: the version from the assembly, the
+                edition from the readiness report, the security state from what
+                KidShell can verify. A constant somebody has to remember to
+                update is a constant that eventually lies.
+            -->
+            <Border Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
+                <StackPanel Spacing="14">
+
+                    <StackPanel Spacing="3">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=About.Title}" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="{loc:Str Key=About.Subtitle}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!-- A developer build says so loudly: its PIN is published. -->
+                    <Border
+                        x:Name="DevelopmentWarning"
+                        Background="{StaticResource TintAmberBrush}"
+                        CornerRadius="12"
+                        Padding="14,11"
+                        Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                Grid.Column="0"
+                                FontFamily="{StaticResource SymbolFontFamily}"
+                                FontSize="20"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Glyph="&#xE7BA;"
+                                VerticalAlignment="Top" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Style="{StaticResource SecondaryTextStyle}"
+                                Text="{loc:Str Key=About.DevelopmentWarning}"
+                                TextWrapping="Wrap" />
+                        </Grid>
+                    </Border>
+
+                    <ItemsControl x:Name="AboutFacts">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AboutFact">
+                                <Grid Margin="0,0,0,12" ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" MinWidth="150" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock
+                                        Grid.Column="0"
+                                        Style="{StaticResource CaptionTextStyle}"
+                                        Text="{x:Bind Label}"
+                                        TextWrapping="Wrap"
+                                        VerticalAlignment="Top" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock
+                                            FontWeight="SemiBold"
+                                            Style="{StaticResource BodyTextStyle}"
+                                            Text="{x:Bind Value}"
+                                            TextWrapping="Wrap" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextStyle}"
+                                            Text="{x:Bind Detail}"
+                                            TextWrapping="Wrap"
+                                            Visibility="{x:Bind Detail, Converter={StaticResource StringToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                </StackPanel>
             </Border>
 
         </StackPanel>

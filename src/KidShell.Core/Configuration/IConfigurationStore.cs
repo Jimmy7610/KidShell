@@ -10,7 +10,17 @@ public enum ConfigurationLoadStatus
     CreatedDefaults = 1,
 
     /// <summary>The document was unreadable; defaults were used and a copy kept.</summary>
-    RecoveredFromCorruption = 2
+    RecoveredFromCorruption = 2,
+
+    /// <summary>
+    /// The document was unreadable but the previous good one was, so the
+    /// parent's settings survived.
+    ///
+    /// Distinct from <see cref="RecoveredFromCorruption"/> on purpose: one of
+    /// these means "we kept your configuration" and the other means "we lost
+    /// it", and a parent deserves to be told which.
+    /// </summary>
+    RecoveredFromBackup = 3
 }
 
 public sealed record ConfigurationLoadResult(

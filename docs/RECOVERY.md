@@ -12,9 +12,14 @@ on a bad day.
 
 ## Nothing has been applied yet
 
-Every 0.x build runs in `AuditOnly`. It detects, evaluates and plans. There is
-no implementation of `ISecurityOperation`, `ISecurityMutator` or
-`IAppControlDeploymentChannel` anywhere in the product, and tests assert that.
+At 1.0.0-rc.1 the operations that change Windows exist and are tested. None of
+them has run.
+
+Every build runs in `AuditOnly`, and not as a setting: `SecurityExecutionContext`
+has a private constructor and one public factory that returns audit mode, so no
+KidShell build can construct the Apply context the operations require. Reflection
+tests assert it, and every operation refuses a non-Apply context in a sealed
+method no subclass can weaken.
 
 So, today:
 
@@ -23,6 +28,9 @@ So, today:
 * no Assigned Access configuration exists;
 * no service has been installed;
 * UAC, the Winlogon shell and the Task Manager policy are untouched.
+
+If you are reading this on a machine where secure setup was never run, that is
+still the complete answer: **KidShell is not why anything is wrong.**
 
 ---
 
@@ -146,6 +154,30 @@ repair: use Windows' own recovery (Shift + Restart → Troubleshoot) or a local
 administrator you created outside KidShell. **Make sure you have one before
 running secure setup on a real device** — it is the first pre-flight check for
 this reason.
+
+---
+
+## The recovery tool
+
+`KidShell.Recovery.exe` reads the manifests and prints what happened, plus
+numbered steps in reverse order. It needs neither KidShell nor the child's
+configuration, because those are exactly what is unavailable when it is needed.
+
+```powershell
+KidShell.Recovery.exe --list          # every recorded change
+KidShell.Recovery.exe --outstanding   # only those needing attention
+KidShell.Recovery.exe --show <id>     # one change, step by step
+KidShell.Recovery.exe --export a.txt  # save the instructions to a file
+```
+
+Run it as the recovery administrator. The manifests live machine-wide, under
+`C:\ProgramData\KidShell\security\recovery`, precisely so an administrator
+who is not the account KidShell ran under can read them.
+
+`--restore` exists and, in this build, says plainly that it cannot undo
+automatically because this build cannot change Windows at all. That is
+deliberate: a tool that appeared to work and did nothing would be worse than
+one that admits its limits.
 
 ---
 

@@ -59,3 +59,6 @@ $RECYCLE.BIN/
 
 ## KidShell local runtime data (never commit a real child's configuration)
 *.kidshell.local.json
+
+## Release artifacts (produced by tools/build-release.ps1, never committed)
+release-artifacts/

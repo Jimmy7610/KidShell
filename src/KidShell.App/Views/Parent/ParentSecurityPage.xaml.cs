@@ -14,10 +14,11 @@ namespace KidShell.App.Views.Parent;
 public sealed partial class ParentSecurityPage : UserControl
 {
     private ParentSecurityViewModel? _viewModel;
+    private RecoveryStatusViewModel? _recovery;
 
     public ParentSecurityPage() => InitializeComponent();
 
-    public void Initialize(ParentSecurityViewModel viewModel)
+    public void Initialize(ParentSecurityViewModel viewModel, RecoveryStatusViewModel recovery)
     {
         _viewModel = viewModel;
 
@@ -38,6 +39,36 @@ public sealed partial class ParentSecurityPage : UserControl
 
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Render();
+
+        _recovery = recovery;
+        RecoveryRefreshButton.Command = recovery.RefreshCommand;
+        recovery.PropertyChanged += (_, _) => RenderRecovery();
+
+        _ = recovery.LoadAsync();
+        RenderRecovery();
+    }
+
+    /// <summary>
+    /// Återställning. Almost always reports that nothing has been changed; the
+    /// panel exists for the rare case where a rollback failed and somebody has
+    /// to act.
+    /// </summary>
+    private void RenderRecovery()
+    {
+        if (_recovery is null)
+        {
+            return;
+        }
+
+        RecoveryHeadline.Text = _recovery.Headline;
+        RecoveryExplanation.Text = _recovery.Explanation;
+        RecoveryList.ItemsSource = _recovery.Entries;
+        RecoveryLocation.Text = _recovery.Location;
+
+        // The one state that needs a human is the one that changes colour.
+        RecoveryPanel.Background = _recovery.NeedsAttention
+            ? (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TintAmberBrush"]
+            : (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["TintNeutralBrush"];
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e) => Render();

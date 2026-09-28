@@ -6,7 +6,11 @@ using KidShell.Core.Diagnostics;
 using KidShell.Core.Mvvm;
 using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
+using KidShell.Core.Runtime;
+using KidShell.Core.ScreenTime;
 using KidShell.Core.Security.Readiness;
+using KidShell.Core.Security.Transactions;
+using KidShell.Core.Sessions;
 
 namespace KidShell.App.ViewModels;
 
@@ -35,6 +39,7 @@ public sealed class ParentShellViewModel : ObservableObject
     private readonly IPinChangeFlow _pinChangeFlow;
     private readonly IOnboardingService _onboarding;
     private readonly IDeveloperOptions _developerOptions;
+    private readonly ISessionController _sessions;
     private readonly IKidShellLogger _logger;
 
     private KidShellConfiguration _draft;
@@ -52,6 +57,10 @@ public sealed class ParentShellViewModel : ObservableObject
         ISecurityReadinessService readiness,
         ISecurityDialogs securityDialogs,
         IDeveloperOptions developerOptions,
+        IRuntimeEnvironment runtime,
+        ScreenTimeEngine screenTimeEngine,
+        ISessionController sessions,
+        IRecoveryManifestStore recoveryStore,
         IKidShellLogger logger)
     {
         _state = state;
@@ -60,16 +69,23 @@ public sealed class ParentShellViewModel : ObservableObject
         _pinChangeFlow = pinChangeFlow;
         _onboarding = onboarding;
         _developerOptions = developerOptions;
+        _sessions = sessions;
         _logger = logger;
 
         _draft = state.CreateDraft();
 
         Overview = new ParentOverviewViewModel();
         Apps = new ParentAppsViewModel(addAppFlow, MarkDirty);
-        ScreenTime = new ParentScreenTimeViewModel(MarkDirty);
+        ScreenTime = new ParentScreenTimeViewModel(MarkDirty, screenTimeEngine, state);
         Web = new ParentWebViewModel(MarkDirty);
         Security = new ParentSecurityViewModel(pinService, developerOptions, readiness, securityDialogs);
         Profile = new ParentProfileViewModel(MarkDirty, () => _ = RerunOnboardingAsync());
+        About = new AboutViewModel(runtime);
+        Recovery = new RecoveryStatusViewModel(recoveryStore);
+
+        // One scan feeds both surfaces: Säkerhet shows the detail, Om KidShell
+        // shows the summary, and neither reads the machine twice.
+        Security.ReportChanged += (_, capabilities) => About.Load(capabilities);
 
         SelectPageCommand = new RelayCommand(parameter =>
         {
@@ -96,6 +112,12 @@ public sealed class ParentShellViewModel : ObservableObject
     public ParentAppsViewModel Apps { get; }
 
     public ParentScreenTimeViewModel ScreenTime { get; }
+
+    /// <summary>Om KidShell: version, build and what this machine can do.</summary>
+    public AboutViewModel About { get; }
+
+    /// <summary>What KidShell has changed, and whether any of it needs a human.</summary>
+    public RecoveryStatusViewModel Recovery { get; }
 
     public ParentWebViewModel Web { get; }
 
@@ -291,20 +313,78 @@ public sealed class ParentShellViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Avsluta barnläget.
+    ///
+    /// WHAT THIS MUST DO, AND WHY IT DEPENDS
+    /// -------------------------------------
+    /// On a machine with a verified secure configuration, ending Child Mode has
+    /// to sign the child's Windows session out. Merely closing KidShell would
+    /// drop the child onto the desktop of an account that is still signed in -
+    /// the exact opposite of what a parent pressing that button intends, and a
+    /// way out of KidShell that a child would find within a week.
+    ///
+    /// On a development machine it must do no such thing. A developer who loses
+    /// their session to a button they were testing has lost their work.
+    ///
+    /// The controller decides which, and the confirmation text says which is
+    /// about to happen rather than describing the one that sounds better.
+    /// </summary>
     private async Task ExitAsync()
     {
-        // MVP 0.1 never signs a Windows user out. In developer mode this just
-        // closes KidShell; real secure logout belongs to the Windows
-        // integration milestone.
+        if (HasUnsavedChanges)
+        {
+            // Signing out with unsaved edits would discard them silently.
+            var unsaved = await _dialogs.ShowConfirmAsync(
+                Strings.Get("Dialog.ExitTitle"),
+                Strings.Get("Dialog.ExitUnsaved"),
+                Strings.Get("Dialog.ExitDiscard"),
+                cancelText: Strings.Get("Dialog.ExitStay"));
+
+            if (unsaved != ConfirmChoice.Primary)
+            {
+                return;
+            }
+        }
+
+        var willSignOut = !_sessions.IsSimulated;
+
         var choice = await _dialogs.ShowConfirmAsync(
             Strings.Get("Dialog.ExitTitle"),
-            Strings.Get("Dialog.ExitBodyDeveloper"),
-            Strings.Get("Dialog.ExitPrimary"));
+            willSignOut
+                ? Strings.Get("Dialog.ExitBodySignOut")
+                : Strings.Get("Dialog.ExitBodyDeveloper"),
+            willSignOut
+                ? Strings.Get("Dialog.ExitPrimarySignOut")
+                : Strings.Get("Dialog.ExitPrimary"));
 
-        if (choice == ConfirmChoice.Primary)
+        if (choice != ConfirmChoice.Primary)
         {
-            ExitRequested?.Invoke(this, EventArgs.Empty);
+            return;
         }
+
+        var result = await _sessions
+            .PerformAsync(willSignOut ? SessionAction.SignOut : SessionAction.CloseKidShell)
+            .ConfigureAwait(true);
+
+        _logger.Info("Session", $"Parent ended Child Mode: {result.Description}");
+
+        if (!result.Performed)
+        {
+            // Simulated, or it failed. Either way the honest fallback is to
+            // close KidShell, and the parent is told which happened.
+            if (willSignOut)
+            {
+                await _dialogs.ShowMessageAsync(
+                    Strings.Get("Dialog.ExitTitle"),
+                    Strings.Get("Dialog.ExitSignOutFailed"));
+            }
+
+            ExitRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
+        // Windows is tearing the session down; there is nothing further to do.
     }
 
     /// <summary>

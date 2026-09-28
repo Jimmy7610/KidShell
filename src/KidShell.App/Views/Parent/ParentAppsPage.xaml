@@ -9,15 +9,31 @@
     xmlns:vm="using:KidShell.App.ViewModels.Parent"
     mc:Ignorable="d">
 
+    <!--
+        The whole page scrolls, like the other five.
+
+        This one used to pin its header and scroll only the list, which is a
+        better shape while the header fits. At a larger text size it does not:
+        the title wraps, the Add button grows, and the header alone needed more
+        than the page had - so it overflowed and the list was left with a
+        negative share. A pinned header that pushes the content off the screen
+        is not a pinned header.
+    -->
+    <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
     <Grid Padding="26,24,26,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!-- Header -->
         <Grid Grid.Row="0" Margin="0,0,0,16">
-            <StackPanel VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel VerticalAlignment="Center" Grid.Column="0">
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="{loc:Str Key=Apps.Title}" />
                 <TextBlock
                     x:Name="SubtitleText"
@@ -26,8 +42,8 @@
             </StackPanel>
 
             <Button
+                Grid.Column="1"
                 x:Name="AddAppButton"
-                HorizontalAlignment="Right"
                 Style="{StaticResource PrimaryButtonStyle}"
                 VerticalAlignment="Top">
                 <StackPanel Orientation="Horizontal" Spacing="8">
@@ -42,7 +58,6 @@
 
         <!-- Rows -->
         <Border Grid.Row="1" Background="{StaticResource TintNeutralBrush}" CornerRadius="{StaticResource RadiusLg}" Padding="8,4">
-            <ScrollViewer HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
                 <ItemsRepeater x:Name="AppRows">
                     <ItemsRepeater.Layout>
                         <StackLayout Spacing="0" />
@@ -119,7 +134,7 @@
                         </DataTemplate>
                     </ItemsRepeater.ItemTemplate>
                 </ItemsRepeater>
-            </ScrollViewer>
         </Border>
     </Grid>
+    </ScrollViewer>
 </UserControl>

@@ -1,3 +1,5 @@
+using KidShell.Core.Runtime;
+
 namespace KidShell.Core.Apps;
 
 /// <summary>
@@ -181,6 +183,58 @@ public sealed class ApplicationCatalog : IApplicationCatalog
     /// are irrelevant on Windows, and quotes routinely survive from shortcut
     /// command lines.
     /// </summary>
+    /// <summary>
+    /// Whether a discovered application is already in the child's grid.
+    ///
+    /// Matched on what IDENTIFIES the application - the executable path, or the
+    /// AUMID for a packaged app - never on the display name. A parent who
+    /// renamed Paint to "Rita" has still added Paint, and offering it again
+    /// would produce two cards that start the same program.
+    /// </summary>
+    public static bool IsAlreadyAdded(
+        DiscoveredApplication application,
+        IEnumerable<Configuration.KidAppDefinition> existing)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(existing);
+
+        foreach (var app in existing)
+        {
+            if (string.IsNullOrWhiteSpace(app.ExecutablePath))
+            {
+                continue;
+            }
+
+            if (application.Kind == ApplicationKind.Packaged)
+            {
+                // An AUMID is compared literally: it is already a canonical
+                // identifier, and normalising it as a path would mangle it.
+                if (!string.IsNullOrWhiteSpace(application.Aumid) &&
+                    string.Equals(app.ExecutablePath, application.Aumid, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(application.ExecutablePath))
+            {
+                continue;
+            }
+
+            if (string.Equals(
+                    NormalizePath(app.ExecutablePath),
+                    NormalizePath(application.ExecutablePath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static string NormalizePath(string path)
     {
         var trimmed = (path ?? string.Empty).Trim().Trim('"');
@@ -192,17 +246,12 @@ public sealed class ApplicationCatalog : IApplicationCatalog
 
         trimmed = trimmed.Replace('/', '\\').TrimEnd('\\');
 
-        try
-        {
-            trimmed = Path.GetFullPath(trimmed);
-        }
-        catch
-        {
-            // Not a well-formed path; compare what we were given rather than
-            // throwing out an otherwise usable entry.
-        }
-
-        return trimmed.ToLowerInvariant();
+        // Deliberately NOT Path.GetFullPath: that resolves against the HOST's
+        // current directory and separator rules, so the same two discovered
+        // programs could compare equal on one machine and differ on another.
+        // De-duplication only needs a canonical spelling, which is what this
+        // returns, and it returns the same one everywhere.
+        return WindowsPath.Canonical(trimmed).ToLowerInvariant();
     }
 
     /// <summary>

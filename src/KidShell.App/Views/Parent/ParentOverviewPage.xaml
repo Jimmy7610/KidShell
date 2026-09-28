@@ -31,15 +31,23 @@
 
                 <Border Grid.Row="0" Grid.Column="0" Background="{StaticResource TintBlueBrush}" Style="{StaticResource InfoPanelStyle}">
                     <StackPanel Spacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
+                        <!-- A Grid: a horizontal StackPanel measures against unlimited
+                             width, so the title is cut off by the card rather than
+                             wrapping inside it. -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <FontIcon
+                                Grid.Column="0"
                                 FontFamily="{StaticResource SymbolFontFamily}"
                                 FontSize="20"
                                 Foreground="{StaticResource BrandBlueBrush}"
                                 Glyph="&#xE8A9;"
                                 VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.AppsTitle}" />
-                        </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.AppsTitle}" TextWrapping="Wrap" />
+                        </Grid>
                         <TextBlock x:Name="AppsValueText" Style="{StaticResource MetricValueTextStyle}" />
                         <TextBlock x:Name="AppsHintText" Style="{StaticResource CaptionTextStyle}" />
                     </StackPanel>
@@ -47,15 +55,23 @@
 
                 <Border Grid.Row="0" Grid.Column="1" Background="{StaticResource TintAmberBrush}" Style="{StaticResource InfoPanelStyle}">
                     <StackPanel Spacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
+                        <!-- A Grid: a horizontal StackPanel measures against unlimited
+                             width, so the title is cut off by the card rather than
+                             wrapping inside it. -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <FontIcon
+                                Grid.Column="0"
                                 FontFamily="{StaticResource SymbolFontFamily}"
                                 FontSize="20"
                                 Foreground="{StaticResource StatusWarningBrush}"
                                 Glyph="&#xE823;"
                                 VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.ScreenTimeTitle}" />
-                        </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.ScreenTimeTitle}" TextWrapping="Wrap" />
+                        </Grid>
                         <TextBlock x:Name="ScreenTimeValueText" Style="{StaticResource MetricValueTextStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.ScreenTimeHint}" />
                     </StackPanel>
@@ -63,15 +79,23 @@
 
                 <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource TintNeutralBrush}" Style="{StaticResource InfoPanelStyle}">
                     <StackPanel Spacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
+                        <!-- A Grid: a horizontal StackPanel measures against unlimited
+                             width, so the title is cut off by the card rather than
+                             wrapping inside it. -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <FontIcon
+                                Grid.Column="0"
                                 FontFamily="{StaticResource SymbolFontFamily}"
                                 FontSize="20"
                                 Foreground="{StaticResource TextSecondaryBrush}"
                                 Glyph="&#xE774;"
                                 VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.WebTitle}" />
-                        </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.WebTitle}" TextWrapping="Wrap" />
+                        </Grid>
                         <TextBlock x:Name="WebValueText" Style="{StaticResource MetricValueTextStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.WebHint}" />
                     </StackPanel>
@@ -79,15 +103,23 @@
 
                 <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource TintRoseBrush}" Style="{StaticResource InfoPanelStyle}">
                     <StackPanel Spacing="8">
-                        <StackPanel Orientation="Horizontal" Spacing="12">
+                        <!-- A Grid: a horizontal StackPanel measures against unlimited
+                             width, so the title is cut off by the card rather than
+                             wrapping inside it. -->
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <FontIcon
+                                Grid.Column="0"
                                 FontFamily="{StaticResource SymbolFontFamily}"
                                 FontSize="20"
                                 Foreground="{StaticResource StatusAlertBrush}"
                                 Glyph="&#xEA18;"
                                 VerticalAlignment="Center" />
-                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.SecurityTitle}" />
-                        </StackPanel>
+                            <TextBlock Grid.Column="1" Style="{StaticResource SectionTitleTextStyle}" Text="{loc:Str Key=Overview.SecurityTitle}" TextWrapping="Wrap" />
+                        </Grid>
                         <TextBlock x:Name="SecurityValueText" Style="{StaticResource MetricValueTextStyle}" />
                         <TextBlock Style="{StaticResource CaptionTextStyle}" Text="{loc:Str Key=Overview.SecurityHint}" />
                     </StackPanel>

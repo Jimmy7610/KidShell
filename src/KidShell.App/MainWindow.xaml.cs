@@ -28,6 +28,7 @@ public sealed partial class MainWindow : Window
 
     private readonly ShellViewModel _viewModel;
     private readonly ISystemStatusService _status;
+    private readonly IChildPresentation _presentation;
     private readonly IAppStateService _state;
     private readonly IDialogService _dialogs;
     private readonly IFilePickerService _picker;
@@ -39,7 +40,8 @@ public sealed partial class MainWindow : Window
         IAppStateService state,
         IDialogService dialogs,
         IFilePickerService picker,
-        IKidShellLogger logger)
+        IKidShellLogger logger,
+        IChildPresentation presentation)
     {
         _viewModel = viewModel;
         _status = status;
@@ -51,6 +53,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
 
         Title = Strings.Get("App.Title");
+
+        _presentation = presentation;
 
         ConfigureWindow();
         ConfigureTitleBar();
@@ -81,9 +85,18 @@ public sealed partial class MainWindow : Window
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            // Below this the 4x2 grid stops being a comfortable read.
-            presenter.PreferredMinimumWidth = 1000;
-            presenter.PreferredMinimumHeight = 680;
+            // The minimum the layout genuinely supports, not the size the
+            // design was drawn at.
+            //
+            // This was 1000x680, which was really a workaround: below it the
+            // fixed sidebar and aside column squeezed the content to nothing,
+            // so the window simply refused to get there. Now the aside drops
+            // and the navigation collapses to an icon rail, so a narrower
+            // window is a supported layout rather than a broken one - and a
+            // 1024x768 display at 125% scaling, which is 819 effective pixels,
+            // could not have shown KidShell at all before.
+            presenter.PreferredMinimumWidth = 780;
+            presenter.PreferredMinimumHeight = 560;
         }
 
         AppWindow.SetIcon("Assets/KidShell.ico");
@@ -117,7 +130,6 @@ public sealed partial class MainWindow : Window
         ChildView.Initialize(
             _viewModel.Child,
             _viewModel.DeveloperMode,
-            _viewModel.DevelopmentPinActive,
             onSettingsRequested: () => _ = ShowChildSettingsNoticeAsync(),
             onParentAccessRequested: _viewModel.OpenPin);
 
@@ -156,6 +168,38 @@ public sealed partial class MainWindow : Window
     private async void OnFirstActivated(object sender, WindowActivatedEventArgs args)
     {
         Activated -= OnFirstActivated;
+
+        // Developer mode only, for the same reason Ctrl+Shift+P is.
+        //
+        // The audit is driven by a file in the app's own data directory, which
+        // is a place the signed-in user can write to - so in a shipped build a
+        // child could drop that file and have KidShell resize itself out of
+        // full screen and then close. It is a development tool, and it stays
+        // one.
+        if (!_viewModel.DeveloperMode)
+        {
+            await _viewModel.ReportStartupIssuesAsync();
+            return;
+        }
+
+        // It exists so the supported display matrix can be rendered and
+        // measured rather than reasoned about.
+        if (LayoutAudit.TakeRequest() is { } auditPath)
+        {
+            var findings = await new LayoutAudit(this, _viewModel, _logger).RunAsync();
+            await LayoutAudit.WriteAsync(auditPath, findings);
+            Close();
+            return;
+        }
+
+        // Same door, but it holds one screen open instead of sweeping them
+        // all, so that the screens which are slow to reach by hand can still
+        // be looked at by a person.
+        if (LayoutAudit.TakePose() is { } pose)
+        {
+            await new LayoutAudit(this, _viewModel, _logger).PoseAsync(pose);
+            return;
+        }
 
         await _viewModel.ReportStartupIssuesAsync();
     }
@@ -233,6 +277,11 @@ public sealed partial class MainWindow : Window
         {
             PinOverlay.PrepareForEntry();
         }
+
+        // Child Mode is borderless full screen in a shipped build, windowed in
+        // a developer one. Presentation only: it hides the rest of Windows
+        // rather than preventing it, and every row of the escape matrix says so.
+        _presentation.Apply(AppWindow, _viewModel.IsChildMode);
 
         ApplySceneTheme();
     }

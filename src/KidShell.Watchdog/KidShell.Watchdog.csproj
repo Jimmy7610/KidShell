@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The watchdog service.
+
+    Its whole job is: if KidShell stops on the child's session, start it again.
+    It takes no configuration, exposes no endpoint and accepts no commands,
+    because a LocalSystem service that reads instructions from anywhere a child
+    account can write is a privilege escalation with a friendly name.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>KidShell.Watchdog</RootNamespace>
+    <AssemblyName>KidShell.Watchdog</AssemblyName>
+    <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KidShell.Core\KidShell.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="KidShell.WindowsIntegration.Tests" />
+  </ItemGroup>
+
+</Project>

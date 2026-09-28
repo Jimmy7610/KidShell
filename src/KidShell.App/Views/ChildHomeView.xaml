@@ -11,31 +11,59 @@
     x:Name="RootControl"
     mc:Ignorable="d">
 
-    <Grid Padding="{StaticResource StagePadding}">
+    <!--
+        The page scrolls only when it has to.
+
+        MinHeight ties the stage to the viewport, so at ordinary text sizes it
+        fills exactly and nothing scrolls - the greeting stays at the top, the
+        footer at the bottom, and the tile grid takes the middle, which is the
+        approved design. At a much larger text size the greeting and the
+        buttons genuinely need more than 560 effective pixels between them, and
+        then the page scrolls rather than pushing the footer off the screen.
+    -->
+    <ScrollViewer
+        x:Name="PageScroller"
+        HorizontalScrollMode="Disabled"
+        VerticalScrollBarVisibility="Auto"
+        ZoomMode="Disabled">
+    <Grid x:Name="Stage" Padding="{StaticResource StagePadding}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- ============================= Header ============================= -->
-        <Grid Grid.Row="0" ColumnSpacing="24">
+        <!--
+            ============================= Header =============================
+
+            The columns are set from code: across while the three blocks fit,
+            down a single column when they do not. See AdaptiveHeader.
+        -->
+        <Grid x:Name="HeaderGrid" Grid.Row="0" ColumnSpacing="24" RowSpacing="10">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
+
             <!-- Wordmark -->
-            <StackPanel Grid.Column="0" VerticalAlignment="Top">
+            <StackPanel x:Name="HeaderBrandBlock" Grid.Column="0" VerticalAlignment="Top">
                 <Grid HorizontalAlignment="Left">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
                     <TextBlock
+                        Grid.Column="0"
                         Style="{StaticResource WordmarkTextStyle}"
+                        TextWrapping="Wrap"
                         Text="{loc:Str Key=Child.Wordmark}" />
                     <Canvas
+                        Grid.Column="1"
                         Width="46" Height="34"
                         Margin="0,-6,-40,0"
-                        HorizontalAlignment="Right"
                         VerticalAlignment="Top">
                         <Path
                             Stroke="{StaticResource BrandSparkBrush}" StrokeThickness="5"
@@ -51,6 +79,7 @@
 
             <!-- Child identity -->
             <StackPanel
+                x:Name="HeaderChildBlock"
                 Grid.Column="1"
                 Orientation="Horizontal"
                 Spacing="16"
@@ -72,6 +101,8 @@
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock
                         x:Name="GreetingText"
+                        MaxLines="1"
+                        TextTrimming="CharacterEllipsis"
                         FontFamily="{StaticResource DisplayFontFamily}"
                         FontSize="23"
                         FontWeight="SemiBold"
@@ -99,6 +130,49 @@
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top" />
         </Grid>
+
+        <!--
+            "Time is nearly up", shown once per threshold.
+
+            A line rather than a dialog: interrupting a six-year-old mid-task
+            with something modal is how you get a child who stops trusting the
+            warning. It is dismissible, and the next threshold still appears.
+        -->
+        <Border
+            x:Name="WarningBanner"
+            Grid.Row="0"
+            Margin="0,10,0,0"
+            VerticalAlignment="Bottom"
+            Background="{StaticResource TintAmberBrush}"
+            CornerRadius="14"
+            Padding="16,10"
+            Visibility="Collapsed">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <FontIcon
+                    Grid.Column="0"
+                    FontFamily="{StaticResource SymbolFontFamily}"
+                    FontSize="20"
+                    Foreground="{StaticResource StatusWarningBrush}"
+                    Glyph="&#xE823;" />
+                <TextBlock
+                    x:Name="WarningText"
+                    Grid.Column="1"
+                    FontWeight="SemiBold"
+                    Style="{StaticResource BodyTextStyle}"
+                    TextWrapping="Wrap"
+                    VerticalAlignment="Center" />
+                <Button
+                    Grid.Column="2"
+                    Click="OnDismissWarning"
+                    Content="{loc:Str Key=Child.WarningOk}"
+                    Style="{StaticResource QuietButtonStyle}" />
+            </Grid>
+        </Border>
 
         <!-- ============================= App grid ============================= -->
         <Grid Grid.Row="1" Margin="0,22,0,10">
@@ -153,6 +227,44 @@
                 </ItemsRepeater>
             </ScrollViewer>
 
+            <!--
+                Time is up.
+
+                It covers the grid rather than closing anything: slamming the
+                screen off mid-drawing teaches a child to distrust the machine.
+                The wording sends them to an adult instead of just refusing.
+            -->
+            <Border
+                x:Name="TimeUpState"
+                MaxWidth="520"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Style="{StaticResource PanelStyle}"
+                Translation="0,0,26"
+                Visibility="Collapsed">
+                <StackPanel Spacing="14">
+                    <Viewbox MaxHeight="88" HorizontalAlignment="Center">
+                        <FontIcon
+                            FontFamily="{StaticResource SymbolFontFamily}"
+                            FontSize="64"
+                            Foreground="{StaticResource BrandBlueBrush}"
+                            Glyph="&#xE916;" />
+                    </Viewbox>
+                    <TextBlock
+                        x:Name="TimeUpTitleText"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SectionTitleTextStyle}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        x:Name="TimeUpBodyText"
+                        HorizontalAlignment="Center"
+                        Style="{StaticResource SecondaryTextStyle}"
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <!-- Shown when a parent has switched everything off -->
             <Border
                 x:Name="EmptyState"
@@ -177,8 +289,39 @@
         </Grid>
 
         <!-- ============================= Footer ============================= -->
-        <Grid Grid.Row="2" VerticalAlignment="Bottom">
+        <!--
+            Two columns. The same lesson as the Föräldraläge footer: the brand
+            and the buttons shared one cell, aligned to opposite edges, which
+            works only until they meet. Enlarged text makes them meet.
+        -->
+        <Grid Grid.Row="2" ColumnSpacing="16" VerticalAlignment="Bottom">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--
+                The ACTIONS take the starred column, not the brand.
+
+                A WrapPanel in an Auto column is never told how much width it
+                has - Auto measures with infinity - so it laid everything on
+                one row and ran off the edge however wide the buttons got.
+                Starred, it is handed a real limit and wraps inside it, which
+                is the entire reason it is a WrapPanel.
+
+                The brand is Auto because it is decoration that disappears
+                when it does not fit; FitFooterBrand decides that by
+                measurement before this column is ever used.
+            -->
+
+            <!--
+                Hidden on a narrow window: at 800 it collided with the
+                development badge in the middle of the footer. It is decoration,
+                so it is the thing that gives way.
+            -->
             <StackPanel
+                x:Name="FooterBrand"
+                Grid.Column="0"
                 Orientation="Horizontal"
                 Spacing="10"
                 VerticalAlignment="Center"
@@ -237,10 +380,12 @@
                 </Border>
             </StackPanel>
 
-            <StackPanel
-                Orientation="Horizontal"
-                Spacing="14"
+            <controls:WrapPanel
+                x:Name="FooterActions"
+                Grid.Column="1"
                 HorizontalAlignment="Right"
+                HorizontalSpacing="14"
+                VerticalSpacing="10"
                 VerticalAlignment="Center">
                 <Button
                     x:Name="SettingsButton"
@@ -289,7 +434,8 @@
                             Text="{loc:Str Key=Child.ParentAccess}" />
                     </StackPanel>
                 </controls:HoldButton>
-            </StackPanel>
+            </controls:WrapPanel>
         </Grid>
     </Grid>
+    </ScrollViewer>
 </UserControl>

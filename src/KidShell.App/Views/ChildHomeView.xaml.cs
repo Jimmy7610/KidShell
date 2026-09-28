@@ -1,8 +1,10 @@
+using KidShell.Core.Runtime;
 using System.ComponentModel;
 using KidShell.App.Localization;
 using KidShell.App.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using KidShell.App.Controls;
 
 namespace KidShell.App.Views;
 
@@ -18,10 +20,29 @@ public sealed partial class ChildHomeView : UserControl
     public void Initialize(
         ChildHomeViewModel viewModel,
         bool developerMode,
-        bool developmentPinActive,
         Action onSettingsRequested,
         Action onParentAccessRequested)
     {
+        // The footer follows the width; see ApplyLayout. The stage follows
+        // the height, so the page fills the viewport at ordinary text sizes
+        // and scrolls only when the content genuinely needs more room.
+        //
+        // Taken from THIS control's height, which the window decides, and
+        // never from the ScrollViewer's ViewportHeight: that property moves
+        // during layout, and feeding it back into the content's MinHeight is
+        // a cycle WinUI refuses - it throws LayoutCycleException and the app
+        // dies, which is what happened on Säkerhet at 780x560 with enlarged
+        // text.
+        SizeChanged += (_, e) =>
+        {
+            Stage.MinHeight = e.NewSize.Height;
+            ApplyLayout(e.NewSize.Width);
+        };
+
+        // The cards follow the height of the grid area rather than of the
+        // window, because the header and the footer take a share of it first.
+        GridScroller.SizeChanged += (_, e) => ApplyGridHeight(e.NewSize.Height);
+
         _viewModel = viewModel;
         _onSettingsRequested = onSettingsRequested;
         _onParentAccessRequested = onParentAccessRequested;
@@ -32,13 +53,6 @@ public sealed partial class ChildHomeView : UserControl
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         DeveloperBadge.Visibility = developerMode ? Visibility.Visible : Visibility.Collapsed;
-
-        // Name the state that actually matters. "Development build" is a
-        // detail; "the PIN printed in the README opens Parent Mode right now"
-        // is the thing somebody needs to notice.
-        DeveloperBadgeText.Text = developmentPinActive
-            ? Localization.Strings.Get("Dev.BadgeOpenPin")
-            : Localization.Strings.Get("Dev.Badge");
 
         Render();
     }
@@ -54,14 +68,47 @@ public sealed partial class ChildHomeView : UserControl
 
         GreetingText.Text = _viewModel.Greeting;
         Avatar.AvatarId = _viewModel.AvatarId;
+
+        // Rendered every time, not captured at startup. Name the state that
+        // actually matters: "development build" is a detail, "the PIN printed
+        // in the README opens Parent Mode right now" is what somebody needs to
+        // notice - and it stops being true the moment a parent sets a real one.
+        DeveloperBadgeText.Text = _viewModel.DevelopmentPinActive
+            ? Localization.Strings.Get("Dev.BadgeOpenPin")
+            : Localization.Strings.Get("Dev.Badge");
+
+        RenderScreenTime();
         UpdateEmptyState();
     }
 
+    private void RenderScreenTime()
+    {
+        if (_viewModel is null)
+        {
+            return;
+        }
+
+        TimeUpTitleText.Text = _viewModel.TimeUpTitle;
+        TimeUpBodyText.Text = _viewModel.TimeUpBody;
+        TimeUpState.Visibility = _viewModel.IsTimeUp ? Visibility.Visible : Visibility.Collapsed;
+
+        WarningText.Text = _viewModel.WarningText;
+        WarningBanner.Visibility = _viewModel.HasWarning ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OnDismissWarning(object sender, RoutedEventArgs e) =>
+        _viewModel?.DismissWarningCommand.Execute(null);
+
     private void UpdateEmptyState()
     {
+        // Three states share this space and only one may show. Time up wins:
+        // "no apps are switched on" is true but unhelpful when the real reason
+        // the grid is gone is that the day's time has run out.
+        var timeUp = _viewModel?.IsTimeUp ?? false;
         var hasTiles = _viewModel?.Tiles.Count > 0;
-        EmptyState.Visibility = hasTiles ? Visibility.Collapsed : Visibility.Visible;
-        GridScroller.Visibility = hasTiles ? Visibility.Visible : Visibility.Collapsed;
+
+        EmptyState.Visibility = !timeUp && !hasTiles ? Visibility.Visible : Visibility.Collapsed;
+        GridScroller.Visibility = !timeUp && hasTiles ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnTileClick(object sender, RoutedEventArgs e)
@@ -91,4 +138,85 @@ public sealed partial class ChildHomeView : UserControl
 
     /// <summary>Title used by assistive technology for the whole screen.</summary>
     public string ScreenName => Strings.Get("Child.Wordmark");
+
+    /// <summary>
+    /// Adapts the child's chrome to the width available.
+    ///
+    /// The app grid needs no help - UniformGridLayout drops from four columns
+    /// to three, two and one on its own as the window narrows, which is
+    /// exactly the behaviour wanted and is why it was chosen over a fixed
+    /// grid. Only the footer decoration needs a decision, because at 800 it
+    /// collided with the development badge.
+    /// </summary>
+    private void ApplyLayout(double width)
+    {
+        if (width <= 0 || double.IsNaN(width))
+        {
+            return;
+        }
+
+        // The decorative wordmark gives the footer row to the buttons on a
+        // compact window. Decided by ResponsiveLayout, not here, because the
+        // parent shell's footer answers the same question and two copies of a
+        // rule drift apart.
+        //
+        // Deliberately NOT by measuring the buttons. Measuring a live element
+        // against a different constraint than its parent will use overwrites
+        // its DesiredSize, and the buttons live in a WrapPanel - measured
+        // against unlimited width it reports a single row, caches that, and
+        // then never wraps. An earlier version of this method did exactly
+        // that and stopped the wrapping it was written to enable.
+        FooterBrand.Visibility = ResponsiveLayout.ShowFooterBrand(width)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        FooterBrand.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
+
+        // A finite width, so the header's readouts can wrap.
+        //
+        // Both sit in Auto columns, which measure with unlimited width - and a
+        // WrapPanel measured against infinity reports one row and never wraps,
+        // which is how the clock and the battery ran off the edge at a larger
+        // text size. A share of the window gives them a real limit without
+        // pinning them to any particular screen.
+        Status.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.StatusShare);
+
+        // The wordmark is the widest thing in the header and it is a name, not
+        // a control. Bounded so it wraps instead of pushing the child block and
+        // the status readout off the right of the window.
+        HeaderBrandBlock.MaxWidth = ResponsiveLayout.ShareOfRow(width, ResponsiveLayout.BrandShare);
+    }
+
+    /// <summary>
+    /// Fits the cards to the height the grid actually got.
+    ///
+    /// The columns look after themselves, but the rows did not: at 819x614
+    /// two rows of full-height cards came to more than the space available,
+    /// and since the grid is centred, the bottom row was sliced through its
+    /// own label with no scrollbar in view to suggest there was more. The
+    /// cards now shrink a little first, and only scroll once they have
+    /// reached the smallest size a child can still read.
+    /// </summary>
+    private void ApplyGridHeight(double height)
+    {
+        if (height <= 0 || double.IsNaN(height) || AppGrid.Layout is not UniformGridLayout layout)
+        {
+            return;
+        }
+
+        // The space available decides how tall a card MAY be; the text inside
+        // decides how tall it MUST be. A card shrunk to fit the window but not
+        // its own label is a label cut in half.
+        var available = ResponsiveLayout.TileHeight(
+            height - GridScroller.Padding.Top - GridScroller.Padding.Bottom);
+
+        layout.MinItemHeight = available;
+
+        // Centred while it fits, top-aligned once it does not: a centred grid
+        // taller than its viewport loses its first row as well as its last,
+        // and no amount of scrolling brings the top one back.
+        AppGrid.VerticalAlignment = AppGrid.DesiredSize.Height > height
+            ? VerticalAlignment.Top
+            : VerticalAlignment.Center;
+    }
 }
