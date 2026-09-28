@@ -47,6 +47,27 @@ public static class AppPaths
         "KidShell", "security", "recovery");
 
     /// <summary>
+    /// The protected policy store: %ProgramData%\KidShell\policy.
+    ///
+    /// Machine-wide rather than per-user, because the whole point is that it
+    /// does NOT belong to the signed-in child. KidShell never creates it -
+    /// a directory created here would be owned by whoever ran KidShell, which
+    /// on a locked-down machine is the child, and that is a store that looks
+    /// like protection and is not. An elevated provisioning step creates and
+    /// permissions it; see ProtectedStorePlan.
+    /// </summary>
+    public static string ProtectedPolicyDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "KidShell", "policy");
+
+    /// <summary>
+    /// The development stand-in for the protected store. In the signed-in
+    /// user's own profile, and therefore not protected at all - which is why
+    /// only a development build is allowed to use it.
+    /// </summary>
+    public static string DevelopmentPolicyDirectory => Path.Combine(DataDirectory, "policy");
+
+    /// <summary>
     /// Where generated policy artifacts are written for review. Nothing here
     /// is ever applied; it exists so a parent can read what KidShell would do.
     /// </summary>
