@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using KidShell.Core.Configuration;
 
@@ -177,7 +178,12 @@ public static class BrowserPolicyGenerator
             }
             else
             {
-                builder.AppendLine($"\"{setting.Name}\"=dword:{int.Parse(setting.Value):x8}");
+                // Invariant, because a .reg file is a fixed format read by
+                // Windows rather than by a person: a host whose culture uses a
+                // different digit grouping would otherwise write a number
+                // Windows cannot read back.
+                builder.AppendLine(CultureInfo.InvariantCulture,
+                    $"\"{setting.Name}\"=dword:{int.Parse(setting.Value, CultureInfo.InvariantCulture):x8}");
             }
         }
 

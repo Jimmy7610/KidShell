@@ -1,3 +1,4 @@
+using KidShell.Core.Apps;
 using KidShell.Core.Runtime;
 using Xunit;
 
@@ -21,6 +22,35 @@ namespace KidShell.Core.Tests;
 /// </summary>
 public class WindowsPathPortabilityTests
 {
+
+    // ------------------------------------------------------------------
+    // OPSV RETEST: the same rule, applied to two places that still asked the
+    // host. Both take a path on the WINDOWS machine being described, so the
+    // answer must not depend on where the code is running.
+    // ------------------------------------------------------------------
+
+    [Fact]
+    public void A_windows_program_path_yields_the_same_file_name_on_any_host()
+    {
+        // ApplicationProfileLibrary and ApplicationCatalog both used
+        // Path.GetFileName, which returns the WHOLE string for a Windows path
+        // on Linux - so a profile that matched on Windows matched nothing
+        // there, and the generated policy was missing the child processes the
+        // profile knows about.
+        Assert.Equal("mspaint.exe", WindowsPath.FileName(@"C:\Windows\System32\mspaint.exe"));
+        Assert.Equal("app.exe", WindowsPath.FileName(@"%PROGRAMFILES%\Vendor\app.exe"));
+        Assert.Equal("app.exe", WindowsPath.FileName(@"\\server\share\app.exe"));
+    }
+
+    [Fact]
+    public void A_profile_is_found_for_a_fully_qualified_windows_path()
+    {
+        var name = WindowsPath.FileName(@"C:\Windows\System32\mspaint.exe");
+
+        Assert.Contains(
+            ApplicationProfileLibrary.Default.Profiles,
+            p => p.ExecutableNames.Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)));
+    }
     [Theory]
     [InlineData(@"C:\Program Files\App\app.exe")]
     [InlineData(@"c:\app.exe")]

@@ -1,3 +1,4 @@
+using System.Globalization;
 using KidShell.Core.Configuration;
 using KidShell.Core.ScreenTime;
 using Xunit;
@@ -249,11 +250,16 @@ public class ScreenTimeClockRollbackTests
     public void Only_a_later_date_returns_the_allowance(string from, string to, bool expectReset)
     {
         using var dir = new TempDirectory();
-        var (engine, _, time) = Create(dir, DateTimeOffset.Parse(from));
+        // Invariant, explicitly. The product's contract here is a fixed ISO-8601
+        // instant, not "whatever this host's locale reads that as" - and a
+        // test host in a culture with a different date order parsed these into
+        // different days, which is a deviation in the test rather than in the
+        // product.
+        var (engine, _, time) = Create(dir, DateTimeOffset.Parse(from, CultureInfo.InvariantCulture));
 
         Spend(engine, time, 60);
 
-        time.SetWallClock(DateTimeOffset.Parse(to));
+        time.SetWallClock(DateTimeOffset.Parse(to, CultureInfo.InvariantCulture));
         var snapshot = engine.Tick();
 
         Assert.Equal(expectReset ? TimeSpan.Zero : TimeSpan.FromMinutes(60), snapshot.Used);
