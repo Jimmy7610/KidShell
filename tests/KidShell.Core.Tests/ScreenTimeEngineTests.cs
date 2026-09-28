@@ -593,20 +593,25 @@ public class ScreenTimeEngineTests
     // ------------------------------------------------ persistence
 
     [Fact]
-    public void A_corrupt_state_file_starts_a_fresh_counter()
+    public void A_corrupt_state_file_is_not_a_fresh_counter()
     {
         using var dir = new TempDirectory();
         var path = Path.Combine(dir.Path, "screentime.json");
         File.WriteAllText(path, "{ not json");
 
         var store = new JsonScreenTimeStateStore(path, new RecordingLogger());
+        var load = store.Load();
 
-        // Losing today's count is an annoyance; failing to start is not.
-        Assert.Equal(0, store.Load().UsedSeconds);
+        // This test used to assert the opposite, and the opposite was the bug:
+        // "losing today's count is only an annoyance" is true for a crash and
+        // false for a child who deleted the file. A counter that existed and
+        // cannot be read is unknown, not zero.
+        Assert.Equal(ScreenTimeLoadOutcome.Unreadable, load.Outcome);
+        Assert.False(load.IsTrustworthy);
     }
 
     [Fact]
-    public void A_future_schema_starts_a_fresh_counter()
+    public void A_future_schema_is_unreadable_rather_than_empty()
     {
         using var dir = new TempDirectory();
         var path = Path.Combine(dir.Path, "screentime.json");
@@ -614,8 +619,10 @@ public class ScreenTimeEngineTests
 
         var store = new JsonScreenTimeStateStore(path, new RecordingLogger());
 
-        // A number from a schema we do not understand might not mean seconds.
-        Assert.Equal(0, store.Load().UsedSeconds);
+        // A number from a schema we do not understand might not mean seconds -
+        // which is exactly the case where guessing downwards hands out an
+        // afternoon.
+        Assert.Equal(ScreenTimeLoadOutcome.Unreadable, store.Load().Outcome);
     }
 
     [Fact]
@@ -625,7 +632,7 @@ public class ScreenTimeEngineTests
         var path = Path.Combine(dir.Path, "screentime.json");
         File.WriteAllText(path, """{ "schemaVersion": 1, "usedSeconds": -500, "bonusMinutes": -10 }""");
 
-        var state = new JsonScreenTimeStateStore(path, new RecordingLogger()).Load();
+        var state = new JsonScreenTimeStateStore(path, new RecordingLogger()).Load().State;
 
         Assert.Equal(0, state.UsedSeconds);
         Assert.Equal(0, state.BonusMinutes);
@@ -646,7 +653,7 @@ public class ScreenTimeEngineTests
             SuspiciousClockEvents = 2
         }));
 
-        var loaded = store.Load();
+        var loaded = store.Load().State;
 
         Assert.Equal("2026-03-11", loaded.LocalDate);
         Assert.Equal(1234, loaded.UsedSeconds);

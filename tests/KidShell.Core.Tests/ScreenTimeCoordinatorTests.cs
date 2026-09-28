@@ -376,12 +376,16 @@ public class ScreenTimeCoordinatorTests
     private sealed class InMemoryScreenTimeStore : IScreenTimeStateStore
     {
         private ScreenTimeState _state = new();
+        private bool _written;
 
-        public ScreenTimeState Load() => _state.Clone();
+        public ScreenTimeStateLoad Load() => _written
+            ? new ScreenTimeStateLoad(_state.Clone(), ScreenTimeLoadOutcome.Primary)
+            : ScreenTimeStateLoad.FirstRun();
 
         public bool Save(ScreenTimeState state)
         {
             _state = state.Clone();
+            _written = true;
             return true;
         }
     }

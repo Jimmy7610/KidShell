@@ -6,8 +6,20 @@ namespace KidShell.Core.ScreenTime;
 /// <summary>Persists the running counter.</summary>
 public interface IScreenTimeStateStore
 {
-    ScreenTimeState Load();
+    /// <summary>
+    /// Reads the counter, saying where it came from.
+    ///
+    /// The outcome is part of the answer rather than a detail of the
+    /// implementation: "there has never been a counter" and "there was one and
+    /// it cannot be read" are different facts, and collapsing them into a
+    /// fresh zero is how a failed write turned into free time.
+    /// </summary>
+    ScreenTimeStateLoad Load();
 
+    /// <summary>
+    /// Writes the counter. False means it did not reach the disk, and the
+    /// caller is expected to care - this is security state, not telemetry.
+    /// </summary>
     bool Save(ScreenTimeState state);
 }
 
@@ -62,8 +74,20 @@ public sealed class ScreenTimeEngine
         _logger = logger;
         _time = time ?? TimeProvider.System;
 
-        _current = _store.Load();
+        var load = _store.Load();
+        _current = load.State;
         _lastTickStamp = _time.GetTimestamp();
+
+        // A counter that existed and could not be read is not a fresh day.
+        // Treating it as one is the refund; treating today as spent is the
+        // conservative direction, and a parent can clear it in one tap.
+        _isUsageUnknown = load.Outcome == ScreenTimeLoadOutcome.Unreadable;
+
+        if (_isUsageUnknown)
+        {
+            _logger.Warning("ScreenTime",
+                $"Screen-time usage is unknown ({load.Detail}); today is treated as spent until a parent resets it.");
+        }
 
         RollOverIfNewDay();
     }
@@ -71,9 +95,63 @@ public sealed class ScreenTimeEngine
     /// <summary>Raised when the status changes, so the UI can react once.</summary>
     public event EventHandler<ScreenTimeSnapshot>? StatusChanged;
 
+    /// <summary>
+    /// Whether the counter could not be read at startup.
+    ///
+    /// The day is treated as spent while this is true. Surfaced rather than
+    /// hidden: a parent seeing "time is up" on a fresh morning deserves to
+    /// know the counter was damaged rather than consumed.
+    /// </summary>
+    public bool IsUsageUnknown => _isUsageUnknown;
+
+    /// <summary>
+    /// Whether the most recent write failed to reach the disk.
+    ///
+    /// The in-memory counter keeps advancing while this is true, so the
+    /// current session is still limited; what is lost is the record across a
+    /// restart, and the backup copy is what covers that.
+    /// </summary>
+    public bool IsPersistenceFailing => _persistenceFailing;
+
     public ScreenTimeState State => _current;
 
+    private bool _isUsageUnknown;
+    private bool _persistenceFailing;
+
     private ScreenTimeSettings Settings => _state.Current.ScreenTime;
+
+    /// <summary>
+    /// Writes the counter and notices when it did not work.
+    ///
+    /// Every call site used to discard this. A failed save is not a logging
+    /// concern: it is the difference between a limit that survives a restart
+    /// and one that does not.
+    /// </summary>
+    private bool Persist()
+    {
+        var ok = _store.Save(_current);
+
+        if (ok)
+        {
+            if (_persistenceFailing)
+            {
+                _logger.Info("ScreenTime", "The screen-time counter is being persisted again.");
+            }
+
+            _persistenceFailing = false;
+            return true;
+        }
+
+        if (!_persistenceFailing)
+        {
+            _logger.Error("ScreenTime",
+                "The screen-time counter could not be persisted. Counting continues in memory; " +
+                "a restart will fall back to the last durable value, which never refunds time.");
+        }
+
+        _persistenceFailing = true;
+        return false;
+    }
 
     /// <summary>The local date, as the key a day's usage is stored under.</summary>
     public string Today => LocalDateKey(_time.GetLocalNow());
@@ -118,7 +196,7 @@ public sealed class ScreenTimeEngine
             _current.LastUpdatedUtc = _time.GetUtcNow();
 
             // Saved every tick: a crash should cost one tick, not a session.
-            _store.Save(_current);
+            Persist();
         }
 
         var snapshot = Evaluate();
@@ -165,6 +243,16 @@ public sealed class ScreenTimeEngine
 
         var allowance = TimeSpan.FromMinutes(
             settings.MinutesFor(localNow.DayOfWeek) + Math.Max(0, _current.BonusMinutes));
+
+        // The counter existed and could not be read. How much of today has
+        // gone is unknown, and the only answer that cannot hand out free time
+        // is "all of it". A parent clears this with the reset they already
+        // have; a child cannot clear it by deleting a file, which is the
+        // attack this closes.
+        if (_isUsageUnknown)
+        {
+            return Snapshot(ScreenTimeStatus.Expired, allowance, allowance, null, isWeekend);
+        }
 
         var used = _current.Used;
         var remaining = allowance > used ? allowance - used : TimeSpan.Zero;
@@ -246,7 +334,7 @@ public sealed class ScreenTimeEngine
         RollOverIfNewDay();
 
         _current.BonusMinutes += minutes;
-        _store.Save(_current);
+        Persist();
 
         _logger.Info("ScreenTime", $"A parent granted {minutes} extra minutes today.");
 
@@ -261,7 +349,7 @@ public sealed class ScreenTimeEngine
         RollOverIfNewDay();
 
         _current.UnlimitedForToday = true;
-        _store.Save(_current);
+        Persist();
 
         _logger.Info("ScreenTime", "A parent lifted today's screen-time limit.");
 
@@ -282,7 +370,13 @@ public sealed class ScreenTimeEngine
             SuspiciousClockEvents = _current.SuspiciousClockEvents
         };
 
-        _store.Save(_current);
+        // A parent saying "start today again" is the one thing that should
+        // clear an unreadable counter. It is a deliberate act by somebody who
+        // knows the PIN, which is exactly the authority this state was
+        // protecting.
+        _isUsageUnknown = false;
+
+        Persist();
         _logger.Info("ScreenTime", "Today's screen-time counter was reset by a parent.");
 
         var snapshot = Evaluate();
@@ -342,7 +436,7 @@ public sealed class ScreenTimeEngine
             SuspiciousClockEvents = _current.SuspiciousClockEvents
         };
 
-        _store.Save(_current);
+        Persist();
     }
 
     /// <summary>
@@ -387,6 +481,6 @@ public sealed class ScreenTimeEngine
     private void RecordSuspiciousClock()
     {
         _current.SuspiciousClockEvents++;
-        _store.Save(_current);
+        Persist();
     }
 }
