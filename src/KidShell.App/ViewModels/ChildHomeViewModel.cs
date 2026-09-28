@@ -4,6 +4,7 @@ using KidShell.App.Services;
 using KidShell.Core.Configuration;
 using KidShell.Core.Launching;
 using KidShell.Core.Mvvm;
+using KidShell.Core.Runtime;
 using KidShell.Core.ScreenTime;
 using KidShell.Core.Security;
 
@@ -32,6 +33,7 @@ public sealed class ChildHomeViewModel : ObservableObject
     private readonly IDialogService _dialogs;
     private readonly IScreenTimeCoordinator _screenTime;
     private readonly IParentPinService _pins;
+    private readonly IUiDispatcher _ui;
 
     private string _greeting = string.Empty;
     private string _avatarId = "fox";
@@ -44,13 +46,15 @@ public sealed class ChildHomeViewModel : ObservableObject
         IDialogService dialogs,
         ISystemStatusService status,
         IScreenTimeCoordinator screenTime,
-        IParentPinService pins)
+        IParentPinService pins,
+        IUiDispatcher ui)
     {
         _state = state;
         _launcher = launcher;
         _dialogs = dialogs;
         _screenTime = screenTime;
         _pins = pins;
+        _ui = ui;
         Status = status;
 
         _status = screenTime.Current;
@@ -58,8 +62,18 @@ public sealed class ChildHomeViewModel : ObservableObject
         LaunchCommand = new RelayCommand(parameter => _ = LaunchAsync(parameter as ChildAppTileViewModel));
         DismissWarningCommand = new RelayCommand(DismissWarning);
 
-        _state.ConfigurationChanged += (_, _) => Refresh();
-        _screenTime.Changed += (_, view) => OnScreenTimeChanged(view);
+        // Marshalled, because the coordinator ticks on a System.Threading.Timer
+        // and its callback arrives on a thread-pool thread. Setting bound
+        // properties from there is not reliably an exception - WinUI sometimes
+        // updates, sometimes drops the change - which is why "the time-is-up
+        // screen did not appear" was an intermittent report nobody could
+        // reproduce.
+        //
+        // Configuration changes go the same way. They are raised on whichever
+        // thread committed them, which is the UI thread today and is not a
+        // property this view model should have to rely on.
+        _state.ConfigurationChanged += (_, _) => _ui.Post(Refresh);
+        _screenTime.Changed += (_, view) => _ui.Post(() => OnScreenTimeChanged(view));
 
         Refresh();
     }

@@ -126,6 +126,12 @@ public partial class App : Application
         // not sign anybody out. See DevelopmentSessionController.
         services.AddSingleton<ISessionController, DevelopmentSessionController>();
 
+        // The UI thread's own dispatcher, captured HERE because this runs on
+        // it. A background thread cannot obtain one - GetForCurrentThread
+        // returns null there - so asking later would fail exactly when the
+        // marshalling was needed. See IUiDispatcher.
+        services.AddSingleton<IUiDispatcher>(DispatcherQueueUiDispatcher.ForCurrentThread());
+
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IFilePickerService, FilePickerService>();
         services.AddSingleton<ISystemStatusService, SystemStatusService>();
