@@ -47,6 +47,7 @@ public static class Strings
         ["Pin.Title"] = "Föräldraläge",
         ["Pin.Prompt"] = "Ange din PIN-kod",
         ["Pin.Wrong"] = "Fel PIN-kod",
+        ["Pin.TooManyAttempts"] = "För många försök. Försök igen om {0} sekunder.",
         ["Pin.Cancel"] = "Avbryt",
         ["Pin.Delete"] = "Radera siffra",
         ["Pin.Clear"] = "Rensa",

@@ -125,14 +125,43 @@ public sealed class PinOverlayViewModel : ObservableObject
         if (result == PinVerificationResult.Correct)
         {
             HasError = false;
+            IsThrottled = false;
             Accepted?.Invoke(this, EventArgs.Empty);
             return;
         }
+
+        // Told apart from "wrong", because a parent who mistyped four times
+        // and is now being made to wait must not be told their correct PIN is
+        // wrong. Nothing about the expected PIN is revealed either way.
+        IsThrottled = result == PinVerificationResult.Throttled;
 
         // Same message for "wrong" and "malformed": nothing about the expected
         // PIN is revealed.
         HasError = true;
     }
+
+    private bool _isThrottled;
+
+    /// <summary>
+    /// Whether the last attempt was refused for being too soon rather than
+    /// for being wrong.
+    /// </summary>
+    public bool IsThrottled
+    {
+        get => _isThrottled;
+        private set
+        {
+            if (SetProperty(ref _isThrottled, value))
+            {
+                OnPropertyChanged(nameof(ErrorText));
+            }
+        }
+    }
+
+    /// <summary>What to tell the parent about the last attempt.</summary>
+    public string ErrorText => IsThrottled
+        ? Strings.Format("Pin.TooManyAttempts", Math.Max(1, (int)Math.Ceiling(_pinService.RetryAfter.TotalSeconds)))
+        : Strings.Get("Pin.Wrong");
 
     private void NotifyEntryChanged()
     {

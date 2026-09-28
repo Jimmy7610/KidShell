@@ -94,6 +94,12 @@ public partial class App : Application
         services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
         services.AddSingleton<IParentPinService, ParentPinService>();
+
+        // Parent Mode re-locks. Without this it stayed open until somebody
+        // closed it, which on a machine the child also uses means it stayed
+        // open. See ParentSession for the semantics.
+        services.AddSingleton<IParentSession>(
+            sp => new ParentSession(sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<IOnboardingService, OnboardingService>();
 
         // Security readiness. Detection and account discovery are read-only
