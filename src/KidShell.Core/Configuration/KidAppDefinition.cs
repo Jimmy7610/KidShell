@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using KidShell.Core.Launching;
 
 namespace KidShell.Core.Configuration;
 
@@ -38,8 +39,23 @@ public sealed class KidAppDefinition
     public bool IsEnabled { get; set; } = true;
 
     /// <summary>
-    /// Executable, shell command or protocol activation string. May be empty,
-    /// which means "not configured yet" rather than "broken".
+    /// How this entry is started.
+    ///
+    /// Recorded rather than guessed from <see cref="ExecutablePath"/>. The
+    /// guess is what made every Store app unaddable: a packaged identity was
+    /// written into the same field a typed path goes in, and then validated by
+    /// the rule for typed paths, which demands .exe.
+    ///
+    /// Defaults to <see cref="ApplicationLaunchKind.Win32Executable"/>, so a
+    /// configuration written before this field existed deserialises to what it
+    /// actually held.
+    /// </summary>
+    public ApplicationLaunchKind LaunchKind { get; set; } = ApplicationLaunchKind.Win32Executable;
+
+    /// <summary>
+    /// Executable path, packaged application identity or protocol activation
+    /// string, according to <see cref="LaunchKind"/>. May be empty, which
+    /// means "not configured yet" rather than "broken".
     /// </summary>
     public string ExecutablePath { get; set; } = string.Empty;
 
@@ -57,6 +73,7 @@ public sealed class KidAppDefinition
         Icon = Icon,
         AccentStyle = AccentStyle,
         IsEnabled = IsEnabled,
+        LaunchKind = LaunchKind,
         ExecutablePath = ExecutablePath,
         Arguments = Arguments,
         SortOrder = SortOrder

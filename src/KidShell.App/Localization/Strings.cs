@@ -163,6 +163,8 @@ public static class Strings
         ["AddApp.PathScript"] = "Skriptfiler går inte att lägga till. Ett skript körs av kommandotolken, och den får barnet inte använda. Välj programmets .exe-fil i stället.",
         ["AddApp.PathShortcut"] = "Genvägar går inte att lägga till, eftersom en genväg kan ändras till att peka på något annat. Välj programmets .exe-fil i stället.",
         ["AddApp.PathUnsupported"] = "Välj en programfil som slutar på .exe. Appar från Microsoft Store lägger du till via \"Bläddra bland appar\".",
+        ["AddApp.PackagedNotAnIdentity"] = "Det här ser inte ut som en app från Microsoft Store. Välj appen i listan \"Bläddra bland appar\" i stället.",
+        ["AddApp.ProtocolUnsupported"] = "KidShell kan inte starta den här typen av genväg. Välj ett program eller en app i listan i stället.",
         ["AddApp.PathNotSafe"] = "Det här är ett systemverktyg som barnet inte bör kunna starta.",
         ["AddApp.PickerFailed"] = "Filväljaren kunde inte öppnas.",
 

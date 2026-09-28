@@ -30,6 +30,15 @@ public sealed class AppLauncher : IAppLauncher
             return Report(LaunchResult.Blocked(app));
         }
 
+        // A packaged application is activated through the apps folder by its
+        // AUMID. Sending it to the executable resolver would ask the file
+        // system about an identity that is not a path - which is how a Store
+        // app that Windows can start perfectly well became "not found".
+        if (app.LaunchKind == ApplicationLaunchKind.PackagedApp)
+        {
+            return LaunchPackaged(app);
+        }
+
         ExecutableResolution resolution;
         try
         {
@@ -62,6 +71,37 @@ public sealed class AppLauncher : IAppLauncher
         try
         {
             _runner.Start(target, app.Arguments, useShell);
+            return Report(LaunchResult.Success(app, target));
+        }
+        catch (Exception ex)
+        {
+            return Report(LaunchResult.Failed(app, $"{ex.GetType().Name}: {ex.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Starts a Store application by its AUMID.
+    ///
+    /// shell:AppsFolder&#92;&lt;AUMID&gt; is the documented way to activate a
+    /// packaged application from a shell, and it needs the shell rather than
+    /// CreateProcess - there is no executable to start.
+    /// </summary>
+    private LaunchResult LaunchPackaged(KidAppDefinition app)
+    {
+        var check = LaunchTargetPolicy.Check(ApplicationLaunchKind.PackagedApp, app.ExecutablePath);
+
+        if (!check.IsAllowed)
+        {
+            return Report(check.Verdict == ManualProgramVerdict.Empty
+                ? LaunchResult.NotConfigured(app)
+                : LaunchResult.Failed(app, $"Packaged identity refused: {check.Verdict}."));
+        }
+
+        var target = $@"shell:AppsFolder\{app.ExecutablePath.Trim()}";
+
+        try
+        {
+            _runner.Start(target, app.Arguments, useShellExecute: true);
             return Report(LaunchResult.Success(app, target));
         }
         catch (Exception ex)
