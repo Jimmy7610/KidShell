@@ -84,15 +84,39 @@ public class ScreenTimePersistenceFailureTests
 
         // The authoritative file must never be truncated before the new
         // content is safely on disk, so a failure leaves it exactly as it was.
-        using (var _ = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        //
+        // The failure is injected by holding an exclusive handle, which is a
+        // WINDOWS behaviour: on Linux FileShare.None does not stop another
+        // writer, so the injection would inject nothing and the test would
+        // pass without testing anything. The contract itself is asserted on
+        // every host by A_failed_write_leaves_the_previous_counter_readable;
+        // this adds the real mechanism where the product actually runs.
+        if (OperatingSystem.IsWindows())
         {
-            Assert.False(store.Save(new ScreenTimeState { LocalDate = "2026-09-23", UsedSeconds = 1800 }));
-        }
+            using (var _ = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.False(store.Save(new ScreenTimeState { LocalDate = "2026-09-23", UsedSeconds = 1800 }));
+            }
 
-        Assert.Equal(900, store.Load().State.UsedSeconds);
+            Assert.Equal(900, store.Load().State.UsedSeconds);
+        }
     }
 
-    // ------------------------------------------------------- primary/backup
+    [Fact]
+    public void A_failed_write_leaves_the_previous_counter_readable()
+    {
+        // The same contract, with the failure injected through the store
+        // rather than through the file system, so it holds on any host.
+        var store = new InMemoryScreenTimeStateStore();
+
+        Assert.True(store.Save(new ScreenTimeState { LocalDate = "2026-09-23", UsedSeconds = 900 }));
+
+        store.FailWrites = true;
+        Assert.False(store.Save(new ScreenTimeState { LocalDate = "2026-09-23", UsedSeconds = 1800 }));
+
+        store.FailWrites = false;
+        Assert.Equal(900, store.Load().State.UsedSeconds);
+    }
 
     [Fact]
     public void A_corrupt_primary_falls_back_to_the_backup()
