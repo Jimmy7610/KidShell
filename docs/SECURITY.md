@@ -169,8 +169,18 @@ The boundary is ACLs and an account that is not an administrator:
 SYSTEM in full control, the child **read only**. Read rather than nothing,
 because KidShell runs as the child and has to load the policy it enforces.
 
-The application now **uses** that store. Each part of the configuration goes to
-the store its trust class requires:
+The application now **uses** that store, and - since the OPSV retest 2 pass - it
+also has a way to write to it.
+
+That sounds obvious and was not. The store is trustworthy precisely when the
+account KidShell runs as *cannot* write to it, so a child-process writer was a
+contradiction: Ready exactly when it could not be used. Reading and writing are
+different responsibilities with different privileges, so they are different
+interfaces. The child reads; the elevated helper writes; the request names a
+**document** and never a path, so there is no destination for a caller to get
+wrong and none to attack.
+
+Each part of the configuration goes to the store its trust class requires:
 
 | Data | Where it lives |
 | --- | --- |
@@ -183,7 +193,19 @@ product teaches a family to click through UAC prompts.
 
 A production build that finds no usable protected store **refuses**: the
 configuration fails to load and nothing is saved, including to the
-child-writable file. A refusal that still wrote the policy would be the original
+child-writable file.
+
+It also refuses when the store IS usable and the policy is absent. "This device
+has never been set up" and "the policy that was here is gone" are the same
+absence and completely different facts, and only the first may initialise
+anything. A provisioning marker - itself protected, so a child cannot
+manufacture a first run by deleting a file in their own profile - tells them
+apart. A damaged marker counts as provisioned, because otherwise damaging one
+small file would be a route back to first-run initialisation.
+
+Saving commits the authoritative half first. It used to be the other way round,
+so a failed protected write returned failure with the child-writable file
+already rewritten. A refusal that still wrote the policy would be the original
 defect with an error message attached. A development build falls back and says
 so in the log, every time.
 
@@ -217,10 +239,22 @@ triggers by typing their own PIN.
 ### The usage counter is security state
 
 A child who can reset it gets an unlimited day, so it is classed as enforcement
-state rather than personalisation. Beyond living in the protected store, a
-counter that cannot be read is treated as **spent** rather than fresh. The rule
-is one-directional: a failure may over-count and may cost a parent a reset, and
-may never hand back time that was spent.
+state rather than personalisation. The rule is one-directional: a failure may
+over-count and may cost a parent a reset, and may never hand back time that was
+spent.
+
+A backup alone could not deliver that, because a backup is older than the
+primary by definition - recovering from one hands back the difference. So the
+session is recorded as open BEFORE any time is credited, recovery takes the
+highest figure for the day and never a lower one, and a session that did not
+close cleanly means the true total is unknown and the day is spent until a
+parent resets it. If the open-session record cannot be written at all,
+enforcement reports itself unavailable rather than counting into memory that no
+restart will read back.
+
+The PIN throttle is security state for the same reason and lives in the same
+place. It used to be in memory, so restarting the shell returned the attempts a
+child had already spent.
 
 ---
 
