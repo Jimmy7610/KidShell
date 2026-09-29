@@ -129,6 +129,11 @@ public partial class App : Application
         // Parent Mode re-locks. Without this it stayed open until somebody
         // closed it, which on a machine the child also uses means it stayed
         // open. See ParentSession for the semantics.
+        // The parent session's own heartbeat. Deliberately not the screen-time
+        // timer: that one is allowed to be silent, and a session lifetime
+        // cannot depend on a signal that is allowed to be silent.
+        services.AddSingleton<IPeriodicScheduler, TimerPeriodicScheduler>();
+
         services.AddSingleton<IParentSession>(
             sp => new ParentSession(sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<IOnboardingService, OnboardingService>();
