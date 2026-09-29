@@ -51,8 +51,24 @@ $required = @(
         Reason  = 'the screen-time counter would be editable by the child (OPSV 01/04)'
     },
     @{
-        Pattern = 'AddSingleton<IProtectedPolicyStore>'
+        Pattern = 'AddSingleton<IProtectedStateReader>'
         Reason  = 'nothing would decide between the real store and the development stand-in (OPSV 01)'
+    },
+    @{
+        Pattern = 'AddSingleton<IProtectedStateWriter>'
+        Reason  = 'the child process would have no write path at all, which is the contradiction OPSV2 01 found'
+    },
+    @{
+        Pattern = 'new BrokeredProtectedStateWriter'
+        Reason  = 'production would not route protected writes through the privileged helper (OPSV2 01)'
+    },
+    @{
+        Pattern = 'new ProtectedPinThrottleStore'
+        Reason  = 'the PIN throttle would reset on every restart (OPSV2 throttle)'
+    },
+    @{
+        Pattern = 'AddSingleton<IPeriodicScheduler'
+        Reason  = 'the parent session would expire only when screen time changed (OPSV2 04)'
     },
     @{
         Pattern = 'AddSingleton<IUiDispatcher>'
@@ -89,6 +105,14 @@ $forbidden = @(
     @{
         Pattern = 'AddSingleton<IAppLauncher, AppLauncher>'
         Reason  = 'resolves the unguarded launcher'
+    },
+    @{
+        Pattern = 'AddSingleton<IParentPinService, ParentPinService>'
+        Reason  = 'resolves a PIN service with an in-memory-only throttle (OPSV2 throttle)'
+    },
+    @{
+        Pattern = 'AddSingleton<IProtectedStateWriter>\(sp => new FileSystemProtectedStateReader'
+        Reason  = 'would put a direct protected file writer back in the child process (OPSV2 01)'
     }
 )
 

@@ -147,7 +147,21 @@ public partial class App : Application
         services.AddSingleton<IApplicationScanner, PackagedApplicationScanner>();
         services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
-        services.AddSingleton<IParentPinService, ParentPinService>();
+        // The PIN throttle is security state and goes through the same
+        // privileged write path as everything else. It used to live only in
+        // memory, so restarting the shell returned the attempts a child had
+        // already spent.
+        services.AddSingleton(sp => new ProtectedPinThrottleStore(
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
+            sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton<IParentPinService>(sp => new ParentPinService(
+            sp.GetRequiredService<IAppStateService>(),
+            sp.GetRequiredService<IRuntimeEnvironment>(),
+            sp.GetRequiredService<IKidShellLogger>(),
+            time: null,
+            sp.GetRequiredService<ProtectedPinThrottleStore>()));
 
         // Parent Mode re-locks. Without this it stayed open until somebody
         // closed it, which on a machine the child also uses means it stayed
