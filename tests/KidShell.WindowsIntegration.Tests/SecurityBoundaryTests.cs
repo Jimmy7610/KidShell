@@ -2,7 +2,7 @@ using KidShell.Core.Security.Readiness;
 using KidShell.Core.Security.Transactions;
 using KidShell.Core.Web;
 using KidShell.Core.Configuration;
-using KidShell.WindowsIntegration.Broker;
+using KidShell.Core.Security.Broker;
 using KidShell.WindowsIntegration.Operations;
 using KidShell.WindowsIntegration.Platform;
 using Xunit;

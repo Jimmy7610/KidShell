@@ -343,6 +343,10 @@ public class ScreenTimeClockRollbackTests
         Spend(first, time, 30);
         Assert.Equal(TimeSpan.FromMinutes(30), first.Evaluate().Used);
 
+        // An ordinary shutdown. Without it the next start sees an unclosed
+        // session and fails closed, which is right for a crash and wrong for
+        // a restart.
+        first.CloseSession();
         // Restarted later the same evening, still before midnight.
         var (second, _, _) = Create(
             dir, new DateTimeOffset(2026, 9, 24, 23, 55, 0, TimeSpan.Zero), store: store);
@@ -361,6 +365,10 @@ public class ScreenTimeClockRollbackTests
 
         Spend(first, time, 30);
 
+        // An ordinary shutdown. Without it the next start sees an unclosed
+        // session and fails closed, which is right for a crash and wrong for
+        // a restart.
+        first.CloseSession();
         // Restarted after midnight.
         var (second, _, _) = Create(
             dir, new DateTimeOffset(2026, 9, 25, 0, 10, 0, TimeSpan.Zero), store: store);
@@ -384,6 +392,10 @@ public class ScreenTimeClockRollbackTests
         Spend(first, time, 60);
         Assert.Equal(ScreenTimeStatus.Expired, first.Evaluate().Status);
 
+        // An ordinary shutdown. Without it the next start sees an unclosed
+        // session and fails closed, which is right for a crash and wrong for
+        // a restart.
+        first.CloseSession();
         // Clock wound back, then KidShell restarted.
         var (second, _, _) = Create(
             dir, new DateTimeOffset(2026, 9, 23, 18, 0, 0, TimeSpan.Zero), store: store);

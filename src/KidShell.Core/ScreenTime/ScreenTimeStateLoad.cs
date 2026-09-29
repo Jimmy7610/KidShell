@@ -45,7 +45,13 @@ public enum ScreenTimeLoadOutcome
 public sealed record ScreenTimeStateLoad(
     ScreenTimeState State,
     ScreenTimeLoadOutcome Outcome,
-    string Detail = "")
+    string Detail = "",
+
+    /// <summary>The authoritative copy as read, when it could be read.</summary>
+    ScreenTimeState? Primary = null,
+
+    /// <summary>The previous known-good copy, when there is one.</summary>
+    ScreenTimeState? Backup = null)
 {
     /// <summary>
     /// Whether the counter is a measurement rather than a guess.

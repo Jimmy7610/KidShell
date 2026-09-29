@@ -279,6 +279,11 @@ public class ScreenTimePersistenceFailureTests
         var used = first.State.UsedSeconds;
         Assert.True(used > 0);
 
+        // An ordinary shutdown. Without it the next start sees an unclosed
+        // session and fails closed, which is right for a crash and wrong for
+        // a restart.
+        first.CloseSession();
+
         var second = Engine(new JsonScreenTimeStateStore(path, logger), out _);
 
         Assert.Equal(used, second.State.UsedSeconds);

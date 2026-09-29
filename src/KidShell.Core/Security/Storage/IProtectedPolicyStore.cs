@@ -35,31 +35,6 @@ public sealed record ProtectedStoreState(ProtectedStoreStatus Status, string Det
 }
 
 /// <summary>
-/// Where the parent's decisions live, on the far side of a boundary the child
-/// cannot cross.
-///
-/// Injectable on purpose. The production implementation is a directory under
-/// %ProgramData% whose permissions an elevated operation set up; tests use a
-/// fake, and development uses a clearly-labelled stand-in. None of those three
-/// may be mistaken for another, which is what
-/// <see cref="ProtectedStoreState"/> is for.
-/// </summary>
-public interface IProtectedPolicyStore
-{
-    /// <summary>Whether this store can be trusted, and why not when it cannot.</summary>
-    ProtectedStoreState Probe();
-
-    /// <summary>Reads a document, or null when it is not there.</summary>
-    string? Read(string name);
-
-    /// <summary>
-    /// Writes a document. Requires the parent's elevation in production, and
-    /// returns false rather than throwing when that is missing.
-    /// </summary>
-    bool Write(string name, string content);
-}
-
-/// <summary>
 /// Decides whether KidShell may run on the policy it just loaded.
 ///
 /// THE RULE THIS EXISTS TO ENFORCE

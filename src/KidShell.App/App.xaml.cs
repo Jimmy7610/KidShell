@@ -7,6 +7,7 @@ using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 using KidShell.Core.Runtime;
 using KidShell.Core.Security.Storage;
+using KidShell.Core.Security.Broker;
 using KidShell.Core.Security.Readiness;
 using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
@@ -78,13 +79,34 @@ public partial class App : Application
         //
         // The two implementations are told apart by the BUILD, not by
         // configuration, for the same reason the runtime environment is.
-        services.AddSingleton<IProtectedPolicyStore>(sp =>
+        services.AddSingleton<IProtectedStateReader>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
 
             return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
-                ? new DevelopmentProtectedPolicyStore(AppPaths.DevelopmentPolicyDirectory, logger)
-                : new FileSystemProtectedPolicyStore(AppPaths.ProtectedPolicyDirectory, logger);
+                ? new DevelopmentProtectedStateReader(AppPaths.DevelopmentPolicyDirectory, logger)
+                : new FileSystemProtectedStateReader(AppPaths.ProtectedPolicyDirectory, logger);
+        });
+
+        // OPSV RETEST 2, FINDING 01. Reading and writing are different
+        // responsibilities with different privileges, so they are different
+        // registrations.
+        //
+        // The protected store is trustworthy only when the account KidShell
+        // runs as CANNOT write to it, which made a child-process writer a
+        // contradiction: Ready exactly when it could not be used. Production
+        // therefore asks the elevated helper through a typed request that
+        // names a DOCUMENT and never a path.
+        services.AddSingleton<IElevatedBrokerClient>(sp => new ProcessElevatedBrokerClient(
+            AppPaths.SecurityHostPath, sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton<IProtectedStateWriter>(sp =>
+        {
+            var logger = sp.GetRequiredService<IKidShellLogger>();
+
+            return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
+                ? new DirectProtectedStateWriter(AppPaths.DevelopmentPolicyDirectory, logger)
+                : new BrokeredProtectedStateWriter(sp.GetRequiredService<IElevatedBrokerClient>(), logger);
         });
 
         // Registered as the concrete type, so nothing can resolve the
@@ -95,7 +117,8 @@ public partial class App : Application
 
         services.AddSingleton<IConfigurationStore>(sp => new ProtectedConfigurationStore(
             sp.GetRequiredService<JsonConfigurationStore>(),
-            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>()));
 
@@ -158,7 +181,8 @@ public partial class App : Application
         // the protected store too, with the same fall-back rules.
         services.AddSingleton<IScreenTimeStateStore>(sp => new ProtectedScreenTimeStateStore(
             new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()),
-            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<ScreenTimeEngine>();

@@ -47,6 +47,24 @@ public sealed class ScreenTimeState
     /// </summary>
     public int SuspiciousClockEvents { get; set; }
 
+    /// <summary>
+    /// Whether the session that wrote this had closed.
+    ///
+    /// Written as Open BEFORE any usage is credited, so a crash or a failed
+    /// write cannot look like a clean stop. See ScreenTimeJournalRules.
+    /// </summary>
+    public ScreenTimeSessionState SessionState { get; set; } = ScreenTimeSessionState.Clean;
+
+    /// <summary>
+    /// Increments on every durable write.
+    ///
+    /// Not used to order the primary against the backup - the used-seconds
+    /// figure does that, and it is the one that must not go down - but it
+    /// makes "which of these two is newer" answerable in a log or a support
+    /// conversation.
+    /// </summary>
+    public int Sequence { get; set; }
+
     [JsonIgnore]
     public TimeSpan Used => TimeSpan.FromSeconds(Math.Max(0, UsedSeconds));
 
@@ -58,7 +76,9 @@ public sealed class ScreenTimeState
         BonusMinutes = BonusMinutes,
         UnlimitedForToday = UnlimitedForToday,
         LastUpdatedUtc = LastUpdatedUtc,
-        SuspiciousClockEvents = SuspiciousClockEvents
+        SuspiciousClockEvents = SuspiciousClockEvents,
+        SessionState = SessionState,
+        Sequence = Sequence
     };
 }
 
