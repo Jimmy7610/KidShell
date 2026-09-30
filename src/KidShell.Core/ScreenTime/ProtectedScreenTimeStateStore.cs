@@ -7,31 +7,23 @@ using KidShell.Core.Security.Storage;
 namespace KidShell.Core.ScreenTime;
 
 /// <summary>
-/// The screen-time counter, kept where the child cannot edit it.
+/// The screen-time counter, read from the protected store and written through
+/// the privileged broker.
 ///
-/// WHY THE COUNTER IS SECURITY STATE
-/// ---------------------------------
-/// PolicyDataClassification classes it as EnforcementState, with the
-/// consequence written next to it: "Reset today's counter and carry on." It
-/// changes every thirty seconds and the parent's settings change once a month,
-/// which is why it lives in its own file - but a file in the child's own
-/// profile is a file the child owns, and deleting it used to be an afternoon.
+/// The counter is enforcement state, not personalisation: a child who can
+/// reset it gets an unlimited day. PolicyDataClassification says so, with the
+/// consequence written beside it.
 ///
-/// Finding 04 made an unreadable counter fail safe rather than reset. That
-/// closes the damage; this closes the door.
-///
-/// THE SAME RULES AS THE POLICY STORE
-/// ----------------------------------
-/// Production with no usable protected store refuses; development falls back
-/// to the ordinary file, loudly. Both decisions go through
-/// <see cref="ProtectedStoreGate"/> so there is one answer rather than two
-/// that can drift.
+/// READ HERE, WRITTEN THERE
+/// ------------------------
+/// This is the same split as the policy store, for the same reason. The
+/// protected directory is trustworthy only when the account KidShell runs as
+/// cannot write to it, so a version of this class that wrote directly could
+/// only work on a machine where the boundary did not hold. That was OPSV
+/// retest 2 finding 01.
 /// </summary>
 public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
 {
-    /// <summary>The document name inside the protected store.</summary>
-    public const string DocumentName = "screen-time-state.json";
-
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -40,25 +32,28 @@ public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
     };
 
     private readonly IScreenTimeStateStore _fallback;
-    private readonly IProtectedPolicyStore _protectedStore;
+    private readonly IProtectedStateReader _reader;
+    private readonly IProtectedStateWriter _writer;
     private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
 
     public ProtectedScreenTimeStateStore(
         IScreenTimeStateStore fallback,
-        IProtectedPolicyStore protectedStore,
+        IProtectedStateReader reader,
+        IProtectedStateWriter writer,
         IRuntimeEnvironment environment,
         IKidShellLogger logger)
     {
         _fallback = fallback;
-        _protectedStore = protectedStore;
+        _reader = reader;
+        _writer = writer;
         _environment = environment;
         _logger = logger;
     }
 
     public ScreenTimeStateLoad Load()
     {
-        var state = _protectedStore.Probe();
+        var state = _reader.Probe();
 
         if (!state.IsTrustworthy)
         {
@@ -67,21 +62,19 @@ public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
                 return _fallback.Load();
             }
 
-            // Production with no boundary. Reading the counter out of a file
-            // the child controls would be worse than not reading one, because
-            // the number would be believed.
-            return new ScreenTimeStateLoad(
-                new ScreenTimeState(),
-                ScreenTimeLoadOutcome.Unreadable,
-                $"protected storage is {state.Status}");
+            // Production with no boundary. Reading the counter from a file the
+            // child controls would be worse than not reading one, because the
+            // number would be believed.
+            return Unknown($"protected storage is {state.Status}");
         }
 
-        var document = _protectedStore.Read(DocumentName);
+        var document = _reader.Read(ProtectedDocument.ScreenTimeState);
 
         if (string.IsNullOrWhiteSpace(document))
         {
-            // Provisioned, and nothing counted yet. A genuine first run on a
-            // prepared machine.
+            // Provisioned and nothing counted yet. A genuine first run on a
+            // prepared machine - and the ONLY absence that means zero, because
+            // this store is one the child cannot empty.
             return ScreenTimeStateLoad.FirstRun();
         }
 
@@ -91,18 +84,20 @@ public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
 
             if (parsed is null || parsed.SchemaVersion > ScreenTimeState.CurrentSchemaVersion)
             {
-                return Unreadable("the protected counter is not in a form this build understands");
+                return Unknown("the protected counter is not in a form this build understands");
             }
 
             parsed.UsedSeconds = Math.Max(0, parsed.UsedSeconds);
             parsed.BonusMinutes = Math.Max(0, parsed.BonusMinutes);
 
-            return new ScreenTimeStateLoad(parsed, ScreenTimeLoadOutcome.Primary);
+            // Carried as the primary so the journal rules can take the highest
+            // figure for today rather than simply the one that parsed.
+            return new ScreenTimeStateLoad(parsed, ScreenTimeLoadOutcome.Primary, string.Empty, parsed);
         }
         catch (Exception ex)
         {
             _logger.Warning("ScreenTime", "The protected screen-time counter could not be read.", ex);
-            return Unreadable("the protected counter could not be parsed");
+            return Unknown("the protected counter could not be parsed");
         }
     }
 
@@ -110,17 +105,16 @@ public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
     /// Unknown usage, not zero usage.
     ///
     /// The engine treats this as a spent day. Damaging the file must not be a
-    /// way to earn an afternoon, which is the whole of finding 04 applied to
-    /// the protected copy as well.
+    /// way to earn an afternoon.
     /// </summary>
-    private static ScreenTimeStateLoad Unreadable(string detail) =>
+    private static ScreenTimeStateLoad Unknown(string detail) =>
         new(new ScreenTimeState(), ScreenTimeLoadOutcome.Unreadable, detail);
 
     public bool Save(ScreenTimeState state)
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        var probe = _protectedStore.Probe();
+        var probe = _reader.Probe();
 
         if (!probe.IsTrustworthy)
         {
@@ -128,6 +122,15 @@ public sealed class ProtectedScreenTimeStateStore : IScreenTimeStateStore
                 && _fallback.Save(state);
         }
 
-        return _protectedStore.Write(DocumentName, JsonSerializer.Serialize(state, Options));
+        var write = _writer.SaveScreenTimeState(JsonSerializer.Serialize(state, Options));
+
+        if (!write.Success)
+        {
+            // Logged by the caller once rather than every tick; here it is
+            // enough to answer honestly so the engine can fail closed.
+            return false;
+        }
+
+        return true;
     }
 }

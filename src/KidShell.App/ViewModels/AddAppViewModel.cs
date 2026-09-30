@@ -38,6 +38,8 @@ public sealed class AddAppViewModel : ObservableObject
     private string _programName = string.Empty;
     private string _executablePath = string.Empty;
     private ApplicationLaunchKind _launchKind = ApplicationLaunchKind.Win32Executable;
+    private string _publisher = string.Empty;
+    private string _packageFamilyName = string.Empty;
     private string _arguments = string.Empty;
     private string _category = string.Empty;
     private string? _validationMessage;
@@ -90,6 +92,18 @@ public sealed class AddAppViewModel : ObservableObject
         ExecutablePath = application.LaunchTarget;
         Arguments = application.Arguments;
 
+        // OPSV RETEST 2, FINDING 05. These were dropped here, and the identity
+        // could not be recovered afterwards: a publisher cannot be derived
+        // from a display name or from an AUMID. The approval therefore reached
+        // AppLocker with nothing to write a packaged rule from, and the policy
+        // came out with zero rules and a "packaged-app-without-identity"
+        // warning for an app the parent had explicitly allowed.
+        //
+        // AppLocker supports only publisher rules for packaged apps, so
+        // without these two fields there is no rule that can be written at all.
+        _publisher = application.Publisher ?? string.Empty;
+        _packageFamilyName = PackageFamilyNameOf(application);
+
         // What the catalogue found it to BE, carried across rather than
         // guessed back out of the string afterwards. Without this a Store app
         // arrived here as a bare AUMID and was then judged by the rule for
@@ -105,6 +119,22 @@ public sealed class AddAppViewModel : ObservableObject
         // A guessed icon is better than the generic one, and the parent can
         // still change it before adding.
         SelectedIconIndex = GuessIconIndex(application.DisplayName);
+    }
+
+    /// <summary>
+    /// The package family name, which is the AUMID up to the "!".
+    ///
+    /// Taken from the AUMID rather than asked of Windows again, because the
+    /// AUMID is what the parent actually approved and the two must describe
+    /// the same package. A rule built from a family name the parent never saw
+    /// would allow something they did not choose.
+    /// </summary>
+    private static string PackageFamilyNameOf(KidShell.Core.Apps.DiscoveredApplication application)
+    {
+        var aumid = (application.Aumid ?? string.Empty).Trim();
+        var separator = aumid.IndexOf('!', StringComparison.Ordinal);
+
+        return separator > 0 ? aumid[..separator] : string.Empty;
     }
 
     /// <summary>
@@ -165,6 +195,9 @@ public sealed class AddAppViewModel : ObservableObject
             if (SetProperty(ref _executablePath, value))
             {
                 ValidationMessage = null;
+
+                _publisher = string.Empty;
+                _packageFamilyName = string.Empty;
 
                 // Editing the field makes this a hand-typed path again,
                 // whatever it was prefilled from. A parent who prefills from a
@@ -265,6 +298,8 @@ public sealed class AddAppViewModel : ObservableObject
             AccentStyle = accent.Style,
             IsEnabled = true,
             LaunchKind = _launchKind,
+            Publisher = _publisher,
+            PackageFamilyName = _packageFamilyName,
             ExecutablePath = ExecutablePath.Trim(),
             Arguments = Arguments.Trim()
         };
@@ -285,6 +320,8 @@ public sealed class AddAppViewModel : ObservableObject
         // Picking a file replaces whatever kind was prefilled: a path from the
         // file picker is an executable, and must be judged as one.
         _launchKind = ApplicationLaunchKind.Win32Executable;
+        _publisher = string.Empty;
+        _packageFamilyName = string.Empty;
 
         if (string.IsNullOrWhiteSpace(ProgramName))
         {

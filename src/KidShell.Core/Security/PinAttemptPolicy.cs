@@ -94,6 +94,23 @@ public sealed class PinAttemptThrottle
 
     public PinAttemptThrottle(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
 
+    /// <summary>
+    /// Restores a throttle that survived a restart.
+    ///
+    /// OPSV RETEST 2, ADDITIONAL FINDING. Without this, a child who could
+    /// close or crash the shell got their attempts back and the progressive
+    /// delay priced nothing.
+    /// </summary>
+    public void Restore(int consecutiveFailures, DateTimeOffset? cooldownUntilUtc)
+    {
+        _consecutiveFailures = Math.Max(0, consecutiveFailures);
+        _blockedUntil = cooldownUntilUtc ?? DateTimeOffset.MinValue;
+    }
+
+    /// <summary>The state to persist, so a restart does not clear it.</summary>
+    public (int Failures, DateTimeOffset? Until) Snapshot() =>
+        (_consecutiveFailures, _blockedUntil == DateTimeOffset.MinValue ? null : _blockedUntil);
+
     public int ConsecutiveFailures => _consecutiveFailures;
 
     /// <summary>Whether a PIN may be checked now, and how long until it may be.</summary>

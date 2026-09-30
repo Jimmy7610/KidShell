@@ -20,17 +20,52 @@ public sealed class ParentPinService : IParentPinService
     private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
     private readonly PinAttemptThrottle _throttle;
+    private readonly ProtectedPinThrottleStore? _throttleStore;
 
     public ParentPinService(
         IAppStateService state,
         IRuntimeEnvironment environment,
         IKidShellLogger logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        ProtectedPinThrottleStore? throttleStore = null)
     {
         _state = state;
         _environment = environment;
         _logger = logger;
         _throttle = new PinAttemptThrottle(time);
+        _throttleStore = throttleStore;
+
+        // OPSV RETEST 2, ADDITIONAL FINDING. The throttle used to start empty
+        // in every process, so restarting the shell returned the attempts a
+        // child had already spent.
+        if (_throttleStore?.Load() is { } persisted)
+        {
+            _throttle.Restore(persisted.FailedAttemptCount, persisted.CooldownUntilUtc);
+        }
+    }
+
+    /// <summary>
+    /// Writes the throttle out so a restart does not clear it.
+    ///
+    /// Through the same privileged path as the policy and the counter: a
+    /// second storage mechanism for security state is how two of them drift
+    /// apart.
+    /// </summary>
+    private void PersistThrottle()
+    {
+        if (_throttleStore is null)
+        {
+            return;
+        }
+
+        var (failures, until) = _throttle.Snapshot();
+
+        _throttleStore.Save(new PinThrottleState
+        {
+            FailedAttemptCount = failures,
+            CooldownUntilUtc = until,
+            LastFailureUtc = failures > 0 ? DateTimeOffset.UtcNow : null
+        });
     }
 
     /// <summary>How long until another attempt will be accepted.</summary>
@@ -104,10 +139,12 @@ public sealed class ParentPinService : IParentPinService
         if (correct)
         {
             _throttle.RecordSuccess();
+            PersistThrottle();
             return PinVerificationResult.Correct;
         }
 
         _throttle.RecordFailure();
+        PersistThrottle();
         return PinVerificationResult.Incorrect;
     }
 

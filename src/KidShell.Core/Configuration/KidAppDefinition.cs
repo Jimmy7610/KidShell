@@ -80,6 +80,34 @@ public sealed class KidAppDefinition
     /// </summary>
     public string PackageFamilyName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Whether this entry carries enough identity for application control.
+    ///
+    /// Derived, never persisted: it is a statement about what is recorded, and
+    /// storing it would let the two disagree.
+    ///
+    /// Honest rather than optimistic. A packaged app with no publisher can
+    /// still be launched in Standard Mode, and saying it is "ready for Secure
+    /// Mode" would promise a parent an enforcement rule that cannot be
+    /// written - AppLocker supports only publisher rules for packaged apps, so
+    /// without a publisher and a package family name there is no rule at all.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSecureModeReady => LaunchKind switch
+    {
+        ApplicationLaunchKind.PackagedApp =>
+            !string.IsNullOrWhiteSpace(Publisher) &&
+            Publisher.Trim() != "*" &&
+            !string.IsNullOrWhiteSpace(PackageFamilyName),
+
+        ApplicationLaunchKind.Win32Executable =>
+            !string.IsNullOrWhiteSpace(ExecutablePath),
+
+        // A protocol names whichever application is registered for it today,
+        // which is not an identity application control can act on.
+        _ => false
+    };
+
     public int SortOrder { get; set; }
 
     public KidAppDefinition Clone() => new()

@@ -78,18 +78,40 @@ public sealed class ScreenTimeEngine
         _current = load.State;
         _lastTickStamp = _time.GetTimestamp();
 
-        // A counter that existed and could not be read is not a fresh day.
-        // Treating it as one is the refund; treating today as spent is the
-        // conservative direction, and a parent can clear it in one tap.
-        _isUsageUnknown = load.Outcome == ScreenTimeLoadOutcome.Unreadable;
+        // OPSV RETEST 2, FINDING 03. What a restart may conclude is decided by
+        // ScreenTimeJournalRules, not by which copy happened to be readable.
+        //
+        // The old code took the newest READABLE counter, and a backup is older
+        // than the primary by definition - so a corrupt primary holding 1200
+        // was answered with a backup holding 600 and the child got ten minutes
+        // back. Recovery may now raise the figure and never lower it, and
+        // where the true figure cannot be established the day is spent.
+        var recovery = ScreenTimeJournalRules.Recover(
+            Today, load.Outcome, load.Primary ?? load.State, load.Backup);
+
+        if (recovery.UsedSeconds > _current.UsedSeconds)
+        {
+            _current.LocalDate = Today;
+            _current.UsedSeconds = recovery.UsedSeconds;
+        }
+
+        _isUsageUnknown = recovery.MustFailClosed;
 
         if (_isUsageUnknown)
         {
             _logger.Warning("ScreenTime",
-                $"Screen-time usage is unknown ({load.Detail}); today is treated as spent until a parent resets it.");
+                $"Screen-time usage cannot be proven ({recovery.Reason}); " +
+                "today is treated as spent until a parent resets it.");
         }
 
         RollOverIfNewDay();
+
+        // Write-ahead. The session is recorded as OPEN before a single second
+        // is credited, so a crash or a failed write cannot look like a clean
+        // stop. If it cannot be written there is no durable record that time
+        // is being used at all, and enforcement says so rather than counting
+        // into memory nobody will read back.
+        OpenSession();
     }
 
     /// <summary>Raised when the status changes, so the UI can react once.</summary>
@@ -117,6 +139,65 @@ public sealed class ScreenTimeEngine
 
     private bool _isUsageUnknown;
     private bool _persistenceFailing;
+
+    /// <summary>
+    /// Whether enforcement has stopped being durable.
+    ///
+    /// True when the session could not be recorded as open, or when writes
+    /// have failed since. It is fail-closed rather than best-effort: the
+    /// alternative is counting in memory that no restart will ever read back,
+    /// which is exactly how "all writes fail, restart, zero" happened.
+    /// </summary>
+    public bool IsEnforcementUnavailable => _enforcementUnavailable;
+
+    private bool _enforcementUnavailable;
+
+    /// <summary>
+    /// Records that a session is running, before any time is credited.
+    ///
+    /// The write-ahead half of the invariant. A durable Open marker is what
+    /// lets a later restart tell "the child stopped at 60" from "the last
+    /// thing we managed to write was 60".
+    /// </summary>
+    private void OpenSession()
+    {
+        _current.SessionState = ScreenTimeSessionState.Open;
+        _current.Sequence++;
+
+        if (Persist())
+        {
+            _enforcementUnavailable = false;
+            return;
+        }
+
+        // Nothing durable says time is being used. Continuing would grant the
+        // child an unbounded session that no restart can account for.
+        _enforcementUnavailable = true;
+
+        _logger.Error("ScreenTime",
+            "The screen-time session could not be recorded. Enforcement is unavailable and " +
+            "further use is refused until it can be written.");
+    }
+
+    /// <summary>
+    /// Records that the session ended tidily.
+    ///
+    /// Called on shutdown. Without it every restart looks like a crash, which
+    /// would be correct-but-useless: a product that blocks the day after every
+    /// ordinary close has replaced a refund with a lockout.
+    /// </summary>
+    public void CloseSession()
+    {
+        if (_enforcementUnavailable)
+        {
+            return;
+        }
+
+        _current.SessionState = ScreenTimeSessionState.Clean;
+        _current.Sequence++;
+
+        Persist();
+    }
 
     private ScreenTimeSettings Settings => _state.Current.ScreenTime;
 
@@ -150,6 +231,13 @@ public sealed class ScreenTimeEngine
         }
 
         _persistenceFailing = true;
+
+        // A failed checkpoint means the durable figure is now behind the real
+        // one by an unknown amount. Carrying on in memory is what made a
+        // restart look like a refund, so enforcement stops being available
+        // instead.
+        _enforcementUnavailable = true;
+
         return false;
     }
 
@@ -244,12 +332,12 @@ public sealed class ScreenTimeEngine
         var allowance = TimeSpan.FromMinutes(
             settings.MinutesFor(localNow.DayOfWeek) + Math.Max(0, _current.BonusMinutes));
 
-        // The counter existed and could not be read. How much of today has
-        // gone is unknown, and the only answer that cannot hand out free time
-        // is "all of it". A parent clears this with the reset they already
-        // have; a child cannot clear it by deleting a file, which is the
-        // attack this closes.
-        if (_isUsageUnknown)
+        // The counter existed and could not be read, or the durable record
+        // has stopped advancing. How much of today has gone is unknown, and
+        // the only answer that cannot hand out free time is "all of it". A
+        // parent clears this with the reset they already have; a child cannot
+        // clear it by deleting a file, which is the attack this closes.
+        if (_isUsageUnknown || _enforcementUnavailable)
         {
             return Snapshot(ScreenTimeStatus.Expired, allowance, allowance, null, isWeekend);
         }
@@ -371,10 +459,12 @@ public sealed class ScreenTimeEngine
         };
 
         // A parent saying "start today again" is the one thing that should
-        // clear an unreadable counter. It is a deliberate act by somebody who
-        // knows the PIN, which is exactly the authority this state was
-        // protecting.
+        // clear an unreadable counter or a broken session. It is a deliberate
+        // act by somebody who knows the PIN, which is exactly the authority
+        // this state was protecting.
         _isUsageUnknown = false;
+        _enforcementUnavailable = false;
+        _current.SessionState = ScreenTimeSessionState.Open;
 
         Persist();
         _logger.Info("ScreenTime", "Today's screen-time counter was reset by a parent.");

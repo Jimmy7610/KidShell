@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace KidShell.WindowsIntegration.Broker;
+namespace KidShell.Core.Security.Broker;
 
 /// <summary>
 /// The complete set of things the elevated helper will do.
@@ -31,7 +31,23 @@ public enum ElevatedOperationKind
     ConfigureApplicationIdentityService = 5,
     ConfigureAssignedAccess = 6,
     DeployBrowserPolicy = 7,
-    InstallWatchdogService = 8
+    InstallWatchdogService = 8,
+
+    // ---------------------------------------------- protected state writes
+    //
+    // OPSV RETEST 2, FINDING 01. The child process reads its own policy and
+    // must not write it, so it asks for these instead. Each one names a
+    // DOCUMENT rather than a path: the helper owns the mapping from document
+    // to location, because the caller is the unprivileged side.
+    //
+    // There is deliberately no member that takes a destination. A
+    // "write these bytes to this path as an administrator" operation would
+    // make everything else in this enum decorative.
+
+    SaveParentPolicy = 9,
+    SaveScreenTimeState = 10,
+    SavePinThrottleState = 11,
+    MarkProvisioned = 12
 }
 
 /// <summary>
@@ -82,6 +98,15 @@ public sealed record ElevatedRequest
 
     /// <summary>Full path to the watchdog executable.</summary>
     public string? ExecutablePath { get; init; }
+
+    /// <summary>
+    /// A protected document's contents, for the SaveX operations.
+    ///
+    /// Contents only. Which document it is comes from <see cref="Kind"/>, and
+    /// where it lands is the helper's business - the caller is the
+    /// unprivileged side and never names a destination.
+    /// </summary>
+    public string? ProtectedPayload { get; init; }
 
     /// <summary>Whether the helper should apply, or only report what it would do.</summary>
     public bool DryRun { get; init; } = true;
@@ -185,9 +210,68 @@ public static class ElevatedRequestValidator
             ElevatedOperationKind.InstallWatchdogService =>
                 ValidateExecutablePath(request.ExecutablePath),
 
+            ElevatedOperationKind.SaveParentPolicy or
+            ElevatedOperationKind.SaveScreenTimeState or
+            ElevatedOperationKind.SavePinThrottleState or
+            ElevatedOperationKind.MarkProvisioned =>
+                ValidateProtectedPayload(request),
+
             _ => "Okänd åtgärd."
         };
     }
+
+    /// <summary>
+    /// A protected-state write, checked before the helper looks at its meaning.
+    ///
+    /// The helper does not trust its caller even though the only intended one
+    /// is KidShell's own UI, so this runs on the privileged side regardless of
+    /// what the unprivileged side already checked.
+    ///
+    /// Notice what is NOT here: there is no path to validate, because the
+    /// request carries none. Rejecting traversal is not enough when the
+    /// contract lets a caller name a destination at all - the contract does
+    /// not.
+    /// </summary>
+    public static string? ValidateProtectedPayload(ElevatedRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.ProtectedPayload is null)
+        {
+            return "Begäran saknar innehåll.";
+        }
+
+        if (request.ProtectedPayload.Length > MaxProtectedPayloadCharacters)
+        {
+            return "Innehållet är för stort.";
+        }
+
+        if (System.Text.Encoding.UTF8.GetByteCount(request.ProtectedPayload) > MaxProtectedPayloadBytes)
+        {
+            return "Innehållet är för stort.";
+        }
+
+        var trimmed = request.ProtectedPayload.TrimStart();
+
+        if (trimmed.Length == 0 || trimmed[0] != '{')
+        {
+            return "Innehållet är inte ett JSON-objekt.";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 256 KiB, far more than any of these documents needs and small enough
+    /// that a caller cannot fill a system volume by asking politely and often.
+    /// </summary>
+    private const int MaxProtectedPayloadBytes = 256 * 1024;
+
+    /// <summary>
+    /// Checked before the byte count, so a hostile caller cannot make the
+    /// helper walk a gigabyte of characters just to measure it.
+    /// </summary>
+    private const int MaxProtectedPayloadCharacters = MaxProtectedPayloadBytes;
 
     public static string? ValidateUserName(string? username)
     {

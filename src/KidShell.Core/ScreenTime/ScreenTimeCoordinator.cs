@@ -121,6 +121,14 @@ public sealed class ScreenTimeCoordinator : IScreenTimeCoordinator, IDisposable
     {
         _timer?.Dispose();
         _timer = null;
+
+        // Records that the session ended tidily.
+        //
+        // Without this every ordinary shutdown would look identical to a
+        // crash, and the next start would fail closed - correct-but-useless,
+        // because a product that blocks the day after every normal close has
+        // replaced a refund with a lockout. See ScreenTimeJournalRules.
+        _engine.CloseSession();
     }
 
     private void Tick()

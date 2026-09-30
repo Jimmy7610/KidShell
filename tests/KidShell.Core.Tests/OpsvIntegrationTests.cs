@@ -32,10 +32,10 @@ public class OpsvIntegrationTests
         using var dir = new TempDirectory();
         var logger = new RecordingLogger();
         var childFile = Path.Combine(dir.Path, "kidshell.config.json");
-        var vault = new InMemoryProtectedPolicyStore();
+        var vault = new InMemoryProtectedStateStore();
 
         var store = new ProtectedConfigurationStore(
-            new JsonConfigurationStore(childFile, logger), vault, Production, logger);
+            new JsonConfigurationStore(childFile, logger), vault, vault, Production, logger);
 
         var state = new AppStateService(store, logger);
         state.Initialize();
@@ -48,12 +48,12 @@ public class OpsvIntegrationTests
         Assert.True(state.Commit(draft));
 
         // The decision went to the protected store.
-        Assert.NotNull(vault.Read(ProtectedConfigurationStore.PolicyDocumentName));
+        Assert.NotNull(vault.Read(ProtectedDocument.ParentPolicy));
 
         // And a reload gets it from there, not from the file the child owns.
         var reloaded = new AppStateService(
             new ProtectedConfigurationStore(
-                new JsonConfigurationStore(childFile, logger), vault, Production, logger),
+                new JsonConfigurationStore(childFile, logger), vault, vault, Production, logger),
             logger);
 
         reloaded.Initialize();
@@ -68,10 +68,10 @@ public class OpsvIntegrationTests
         using var dir = new TempDirectory();
         var logger = new RecordingLogger();
         var childFile = Path.Combine(dir.Path, "kidshell.config.json");
-        var vault = new InMemoryProtectedPolicyStore();
+        var vault = new InMemoryProtectedStateStore();
 
         ProtectedConfigurationStore Store() => new(
-            new JsonConfigurationStore(childFile, logger), vault, Production, logger);
+            new JsonConfigurationStore(childFile, logger), vault, vault, Production, logger);
 
         var state = new AppStateService(Store(), logger);
         state.Initialize();
@@ -144,11 +144,11 @@ public class OpsvIntegrationTests
     [Fact]
     public void The_counter_survives_a_restart_through_the_protected_store()
     {
-        var vault = new InMemoryProtectedPolicyStore();
+        var vault = new InMemoryProtectedStateStore();
         var logger = new RecordingLogger();
 
         IScreenTimeStateStore Store() => new ProtectedScreenTimeStateStore(
-            new InMemoryScreenTimeStateStore(), vault, Production, logger);
+            new InMemoryScreenTimeStateStore(), vault, vault, Production, logger);
 
         var configuration = KidShellConfiguration.CreateDefault();
         configuration.ScreenTime.IsEnabled = true;
@@ -168,6 +168,11 @@ public class OpsvIntegrationTests
         var used = first.State.UsedSeconds;
         Assert.True(used > 0);
 
+        // An ordinary shutdown. Without it the next start sees an unclosed
+        // session and fails closed, which is right for a crash and wrong for
+        // a restart.
+        first.CloseSession();
+
         var second = new ScreenTimeEngine(state, Store(), logger, time);
 
         Assert.Equal(used, second.State.UsedSeconds);
@@ -177,7 +182,7 @@ public class OpsvIntegrationTests
     [Fact]
     public void Deleting_the_protected_counter_does_not_hand_back_the_afternoon()
     {
-        var vault = new InMemoryProtectedPolicyStore();
+        var vault = new InMemoryProtectedStateStore();
         var logger = new RecordingLogger();
 
         var configuration = KidShellConfiguration.CreateDefault();
@@ -188,7 +193,7 @@ public class OpsvIntegrationTests
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 9, 28, 10, 0, 0, TimeSpan.Zero));
 
         var store = new ProtectedScreenTimeStateStore(
-            new InMemoryScreenTimeStateStore(), vault, Production, logger);
+            new InMemoryScreenTimeStateStore(), vault, vault, Production, logger);
 
         var engine = new ScreenTimeEngine(state, store, logger, time);
 
@@ -199,7 +204,7 @@ public class OpsvIntegrationTests
         }
 
         // Damage it the way a determined child would.
-        vault.Corrupt(ProtectedScreenTimeStateStore.DocumentName);
+        vault.Corrupt(ProtectedDocument.ScreenTimeState);
 
         var afterRestart = new ScreenTimeEngine(state, store, logger, time);
 

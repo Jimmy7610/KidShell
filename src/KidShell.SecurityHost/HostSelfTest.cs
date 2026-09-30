@@ -1,5 +1,5 @@
 using KidShell.Core.Diagnostics;
-using KidShell.WindowsIntegration.Broker;
+using KidShell.Core.Security.Broker;
 
 namespace KidShell.SecurityHost;
 

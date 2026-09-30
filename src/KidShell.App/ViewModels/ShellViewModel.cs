@@ -30,6 +30,7 @@ public sealed class ShellViewModel : ObservableObject
     private readonly IScreenTimeCoordinator _screenTime;
     private readonly IKidShellLogger _logger;
     private readonly IParentSession _parentSession;
+    private readonly IPeriodicScheduler _scheduler;
     private readonly IUiDispatcher _ui;
 
     private ShellMode _mode = ShellMode.Child;
@@ -41,6 +42,7 @@ public sealed class ShellViewModel : ObservableObject
         IDeveloperOptions developerOptions,
         IParentPinService pinService,
         IParentSession parentSession,
+        IPeriodicScheduler scheduler,
         IScreenTimeCoordinator screenTime,
         IUiDispatcher ui,
         IKidShellLogger logger,
@@ -54,6 +56,7 @@ public sealed class ShellViewModel : ObservableObject
         _developerOptions = developerOptions;
         _pinService = pinService;
         _parentSession = parentSession;
+        _scheduler = scheduler;
         _screenTime = screenTime;
         _ui = ui;
         _logger = logger;
@@ -77,15 +80,20 @@ public sealed class ShellViewModel : ObservableObject
             }
         };
 
-        // Evaluated on the screen-time tick rather than on a timer of its own.
-        // Something is already waking up every thirty seconds, and a second
-        // timer for the same job is a second thing to get wrong.
+        // Its own heartbeat, not the screen-time tick.
         //
-        // Marshalled, because that tick is a thread-pool callback and
-        // expiring the session leaves Parent Mode - which is a UI change. See
-        // IUiDispatcher; this is the same boundary, reached from a different
-        // direction.
-        _screenTime.Changed += (_, _) => _ui.Post(_parentSession.Evaluate);
+        // OPSV RETEST 2, FINDING 04. This used to hang off ScreenTime.Changed,
+        // which was convenient and wrong: that event fires when the remaining
+        // minutes change, so it is silent when screen time is disabled, when
+        // the allowance is unlimited, and when it has already run out. In
+        // exactly those states Parent Mode stayed unlocked indefinitely.
+        //
+        // A session lifetime cannot depend on a signal that is allowed to be
+        // silent.
+        //
+        // Marshalled, because the heartbeat is a thread-pool callback and
+        // expiring the session leaves Parent Mode, which is a UI change.
+        _scheduler.Start(ParentSession.HeartbeatInterval, () => _ui.Post(_parentSession.Evaluate));
         Pin.Cancelled += (_, _) => ClosePin();
         Parent.BackToChildRequested += (_, _) => ReturnToChild();
         Parent.ExitRequested += (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty);

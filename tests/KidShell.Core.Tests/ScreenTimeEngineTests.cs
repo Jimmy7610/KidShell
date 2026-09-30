@@ -253,6 +253,11 @@ public class ScreenTimeEngineTests
         first.Tick();
 
         // Restarting KidShell must not hand the child a fresh hour.
+        // An ordinary shutdown, which is what makes this an ordinary
+        // restart rather than a crash. Without it the next start fails
+        // closed, which is correct for a crash and wrong for this.
+        first.CloseSession();
+
         var second = new ScreenTimeEngine(state, store, logger, time);
 
         Assert.Equal(TimeSpan.FromMinutes(4), second.Evaluate().Used);

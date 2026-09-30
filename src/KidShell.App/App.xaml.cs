@@ -7,6 +7,7 @@ using KidShell.Core.Onboarding;
 using KidShell.Core.Security;
 using KidShell.Core.Runtime;
 using KidShell.Core.Security.Storage;
+using KidShell.Core.Security.Broker;
 using KidShell.Core.Security.Readiness;
 using KidShell.App.Services.Apps;
 using KidShell.App.Services.Security;
@@ -78,13 +79,34 @@ public partial class App : Application
         //
         // The two implementations are told apart by the BUILD, not by
         // configuration, for the same reason the runtime environment is.
-        services.AddSingleton<IProtectedPolicyStore>(sp =>
+        services.AddSingleton<IProtectedStateReader>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
 
             return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
-                ? new DevelopmentProtectedPolicyStore(AppPaths.DevelopmentPolicyDirectory, logger)
-                : new FileSystemProtectedPolicyStore(AppPaths.ProtectedPolicyDirectory, logger);
+                ? new DevelopmentProtectedStateReader(AppPaths.DevelopmentPolicyDirectory, logger)
+                : new FileSystemProtectedStateReader(AppPaths.ProtectedPolicyDirectory, logger);
+        });
+
+        // OPSV RETEST 2, FINDING 01. Reading and writing are different
+        // responsibilities with different privileges, so they are different
+        // registrations.
+        //
+        // The protected store is trustworthy only when the account KidShell
+        // runs as CANNOT write to it, which made a child-process writer a
+        // contradiction: Ready exactly when it could not be used. Production
+        // therefore asks the elevated helper through a typed request that
+        // names a DOCUMENT and never a path.
+        services.AddSingleton<IElevatedBrokerClient>(sp => new ProcessElevatedBrokerClient(
+            AppPaths.SecurityHostPath, sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton<IProtectedStateWriter>(sp =>
+        {
+            var logger = sp.GetRequiredService<IKidShellLogger>();
+
+            return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
+                ? new DirectProtectedStateWriter(AppPaths.DevelopmentPolicyDirectory, logger)
+                : new BrokeredProtectedStateWriter(sp.GetRequiredService<IElevatedBrokerClient>(), logger);
         });
 
         // Registered as the concrete type, so nothing can resolve the
@@ -95,7 +117,8 @@ public partial class App : Application
 
         services.AddSingleton<IConfigurationStore>(sp => new ProtectedConfigurationStore(
             sp.GetRequiredService<JsonConfigurationStore>(),
-            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>()));
 
@@ -124,11 +147,30 @@ public partial class App : Application
         services.AddSingleton<IApplicationScanner, PackagedApplicationScanner>();
         services.AddSingleton<IApplicationCatalog, ApplicationCatalog>();
 
-        services.AddSingleton<IParentPinService, ParentPinService>();
+        // The PIN throttle is security state and goes through the same
+        // privileged write path as everything else. It used to live only in
+        // memory, so restarting the shell returned the attempts a child had
+        // already spent.
+        services.AddSingleton(sp => new ProtectedPinThrottleStore(
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
+            sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton<IParentPinService>(sp => new ParentPinService(
+            sp.GetRequiredService<IAppStateService>(),
+            sp.GetRequiredService<IRuntimeEnvironment>(),
+            sp.GetRequiredService<IKidShellLogger>(),
+            time: null,
+            sp.GetRequiredService<ProtectedPinThrottleStore>()));
 
         // Parent Mode re-locks. Without this it stayed open until somebody
         // closed it, which on a machine the child also uses means it stayed
         // open. See ParentSession for the semantics.
+        // The parent session's own heartbeat. Deliberately not the screen-time
+        // timer: that one is allowed to be silent, and a session lifetime
+        // cannot depend on a signal that is allowed to be silent.
+        services.AddSingleton<IPeriodicScheduler, TimerPeriodicScheduler>();
+
         services.AddSingleton<IParentSession>(
             sp => new ParentSession(sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<IOnboardingService, OnboardingService>();
@@ -153,7 +195,8 @@ public partial class App : Application
         // the protected store too, with the same fall-back rules.
         services.AddSingleton<IScreenTimeStateStore>(sp => new ProtectedScreenTimeStateStore(
             new JsonScreenTimeStateStore(AppPaths.ScreenTimeStatePath, sp.GetRequiredService<IKidShellLogger>()),
-            sp.GetRequiredService<IProtectedPolicyStore>(),
+            sp.GetRequiredService<IProtectedStateReader>(),
+            sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>()));
         services.AddSingleton<ScreenTimeEngine>();

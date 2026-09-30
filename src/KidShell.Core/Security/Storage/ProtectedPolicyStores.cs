@@ -18,12 +18,12 @@ namespace KidShell.Core.Security.Storage;
 /// Applying the ACLs belongs to the elevated security operation described by
 /// <see cref="ProtectedStorePlan"/>, on a dedicated device.
 /// </summary>
-public sealed class FileSystemProtectedPolicyStore : IProtectedPolicyStore
+public sealed class FileSystemProtectedStateReader : IProtectedStateReader
 {
     private readonly string _directory;
     private readonly IKidShellLogger _logger;
 
-    public FileSystemProtectedPolicyStore(string directory, IKidShellLogger logger)
+    public FileSystemProtectedStateReader(string directory, IKidShellLogger logger)
     {
         _directory = directory;
         _logger = logger;
@@ -104,47 +104,25 @@ public sealed class FileSystemProtectedPolicyStore : IProtectedPolicyStore
         }
     }
 
-    public string? Read(string name)
+    public string? Read(ProtectedDocument document)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         try
         {
-            var path = System.IO.Path.Combine(_directory, name);
+            // The name comes from the enum, never from a caller.
+            var path = System.IO.Path.Combine(_directory, ProtectedDocumentNames.FileNameOf(document));
             return File.Exists(path) ? File.ReadAllText(path) : null;
         }
         catch (Exception ex)
         {
-            _logger.Warning("Storage", $"Protected document '{name}' could not be read.", ex);
+            _logger.Warning("Storage", $"Protected document {document} could not be read.", ex);
             return null;
         }
     }
 
-    public bool Write(string name, string content)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        try
-        {
-            var path = System.IO.Path.Combine(_directory, name);
-            var temp = path + ".tmp";
-
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // Expected without elevation, and not an error worth throwing
-            // over: writing policy is the parent's privilege, and KidShell
-            // normally runs as the child.
-            _logger.Warning("Storage",
-                $"Protected document '{name}' could not be written; this needs the parent's elevation.", ex);
-
-            return false;
-        }
-    }
+    // NO Write. That was OPSV retest 2 finding 01: this store is trustworthy
+    // only when the account KidShell runs as CANNOT write here, and the same
+    // process was then expected to write to it. Writing goes through
+    // IProtectedStateWriter and the privileged helper.
 }
 
 /// <summary>
@@ -155,12 +133,12 @@ public sealed class FileSystemProtectedPolicyStore : IProtectedPolicyStore
 /// nothing anywhere can mistake this for the real boundary -
 /// <see cref="ProtectedStoreGate"/> is what refuses it in a production build.
 /// </summary>
-public sealed class DevelopmentProtectedPolicyStore : IProtectedPolicyStore
+public sealed class DevelopmentProtectedStateReader : IProtectedStateReader
 {
     private readonly string _directory;
     private readonly IKidShellLogger _logger;
 
-    public DevelopmentProtectedPolicyStore(string directory, IKidShellLogger logger)
+    public DevelopmentProtectedStateReader(string directory, IKidShellLogger logger)
     {
         _directory = directory;
         _logger = logger;
@@ -172,44 +150,22 @@ public sealed class DevelopmentProtectedPolicyStore : IProtectedPolicyStore
         ProtectedStoreStatus.DevelopmentOnly,
         $"'{_directory}' is in the signed-in user's own profile and protects nothing.");
 
-    public string? Read(string name)
+    public string? Read(ProtectedDocument document)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
         try
         {
-            var path = System.IO.Path.Combine(_directory, name);
+            var path = System.IO.Path.Combine(_directory, ProtectedDocumentNames.FileNameOf(document));
             return File.Exists(path) ? File.ReadAllText(path) : null;
         }
         catch (Exception ex)
         {
-            _logger.Warning("Storage", $"Development policy document '{name}' could not be read.", ex);
+            _logger.Warning("Storage", $"Development policy document {document} could not be read.", ex);
             return null;
         }
     }
 
-    public bool Write(string name, string content)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        try
-        {
-            System.IO.Directory.CreateDirectory(_directory);
-
-            var path = System.IO.Path.Combine(_directory, name);
-            var temp = path + ".tmp";
-
-            File.WriteAllText(temp, content);
-            File.Move(temp, path, overwrite: true);
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning("Storage", $"Development policy document '{name}' could not be written.", ex);
-            return false;
-        }
-    }
+    // NO Write here either. A development build writes through
+    // DirectProtectedStateWriter, which is a writer and says so.
 }
 
 /// <summary>
@@ -218,11 +174,11 @@ public sealed class DevelopmentProtectedPolicyStore : IProtectedPolicyStore
 /// Its probe result is settable, because the interesting cases are all about
 /// what happens when the store is NOT ready.
 /// </summary>
-public sealed class InMemoryProtectedPolicyStore : IProtectedPolicyStore
+public sealed class InMemoryProtectedStateStore : IProtectedStateReader, IProtectedStateWriter
 {
     private readonly Dictionary<string, string> _documents = new(StringComparer.OrdinalIgnoreCase);
 
-    public InMemoryProtectedPolicyStore(ProtectedStoreStatus status = ProtectedStoreStatus.Ready) =>
+    public InMemoryProtectedStateStore(ProtectedStoreStatus status = ProtectedStoreStatus.Ready) =>
         State = new ProtectedStoreState(status, "(in memory)");
 
     public ProtectedStoreState State { get; set; }
@@ -234,21 +190,55 @@ public sealed class InMemoryProtectedPolicyStore : IProtectedPolicyStore
 
     public ProtectedStoreState Probe() => State;
 
-    public string? Read(string name) => _documents.GetValueOrDefault(name);
+    public string? Read(ProtectedDocument document) =>
+        _documents.GetValueOrDefault(ProtectedDocumentNames.FileNameOf(document));
 
-    public bool Write(string name, string content)
+    public bool IsAvailable { get; set; } = true;
+
+    public ProtectedWriteResult SaveParentPolicy(string json) =>
+        Write(ProtectedDocument.ParentPolicy, json);
+
+    public ProtectedWriteResult SaveScreenTimeState(string json) =>
+        Write(ProtectedDocument.ScreenTimeState, json);
+
+    public ProtectedWriteResult SavePinThrottleState(string json) =>
+        Write(ProtectedDocument.PinThrottleState, json);
+
+    public ProtectedWriteResult MarkProvisioned(string json) =>
+        Write(ProtectedDocument.ProvisioningMarker, json);
+
+    private ProtectedWriteResult Write(ProtectedDocument document, string json)
     {
         WriteCount++;
 
-        if (RefuseWrites)
+        if (!IsAvailable)
         {
-            return false;
+            return ProtectedWriteResult.Unavailable("(test) writer unavailable");
         }
 
-        _documents[name] = content;
-        return true;
+        if (RefuseWrites)
+        {
+            return ProtectedWriteResult.Fail("(test) refused");
+        }
+
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            return ProtectedWriteResult.Reject(problem);
+        }
+
+        _documents[ProtectedDocumentNames.FileNameOf(document)] = json;
+        return ProtectedWriteResult.Ok();
     }
 
+    /// <summary>Seeds a document without going through the writer.</summary>
+    public void Seed(ProtectedDocument document, string json) =>
+        _documents[ProtectedDocumentNames.FileNameOf(document)] = json;
+
     /// <summary>Replaces a document with something unparseable.</summary>
-    public void Corrupt(string name) => _documents[name] = "{ not json";
+    public void Corrupt(ProtectedDocument document) =>
+        _documents[ProtectedDocumentNames.FileNameOf(document)] = "{ not json";
+
+    /// <summary>Removes a document, the way a determined child would.</summary>
+    public void Delete(ProtectedDocument document) =>
+        _documents.Remove(ProtectedDocumentNames.FileNameOf(document));
 }

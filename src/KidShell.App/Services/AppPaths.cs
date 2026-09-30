@@ -68,6 +68,17 @@ public static class AppPaths
     public static string DevelopmentPolicyDirectory => Path.Combine(DataDirectory, "policy");
 
     /// <summary>
+    /// The elevated helper, beside KidShell in the package.
+    ///
+    /// Nothing starts it unless a protected write is attempted, and Windows
+    /// will not elevate it without a prompt. On a machine where it is absent
+    /// the broker reports itself unavailable and a production build fails
+    /// closed, which is the correct behaviour rather than a degraded one.
+    /// </summary>
+    public static string SecurityHostPath => Path.Combine(
+        AppContext.BaseDirectory, "KidShell.SecurityHost.exe");
+
+    /// <summary>
     /// Where generated policy artifacts are written for review. Nothing here
     /// is ever applied; it exists so a parent can read what KidShell would do.
     /// </summary>

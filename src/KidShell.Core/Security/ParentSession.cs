@@ -84,6 +84,16 @@ public sealed class ParentSession : IParentSession
     /// <summary>How long Parent Mode may sit untouched before it re-locks.</summary>
     public static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// How often the session is asked whether it has expired.
+    ///
+    /// Thirty seconds, so the worst case is half a minute of Parent Mode
+    /// staying open past its timeout. Finer would cost wake-ups for no benefit
+    /// a person could perceive; coarser would make the fifteen minutes a
+    /// suggestion rather than a limit.
+    /// </summary>
+    public static readonly TimeSpan HeartbeatInterval = TimeSpan.FromSeconds(30);
+
     private readonly TimeProvider _time;
     private readonly IKidShellLogger _logger;
 
