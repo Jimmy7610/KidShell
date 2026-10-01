@@ -62,3 +62,14 @@ $RECYCLE.BIN/
 
 ## Release artifacts (produced by tools/build-release.ps1, never committed)
 release-artifacts/
+
+## Device-validation evidence (produced by tools/device-validation, never committed)
+##
+## A run records what one specific machine did, including its name and its
+## accounts' SIDs. It is redacted of secrets by construction, and it still
+## belongs to the operator who produced it rather than to the repository.
+validation-results/
+
+## The operator's own validation config, which names a real machine and real
+## accounts. device-validation.example.json is the one that is committed.
+tools/device-validation/device-validation.json
