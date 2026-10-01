@@ -47,7 +47,56 @@ public enum ElevatedOperationKind
     SaveParentPolicy = 9,
     SaveScreenTimeState = 10,
     SavePinThrottleState = 11,
-    MarkProvisioned = 12
+    MarkProvisioned = 12,
+
+    // -------------------------------------------- authority-split additions
+    //
+    // PRIVILEGED BROKER HARDENING. The four members above were written as
+    // though "the request came from KidShell.App" were an authority. It is
+    // not: KidShell.App runs as the child, in the child's session, under the
+    // child's token, and a modified copy of it is indistinguishable from the
+    // real one without code signing that does not exist yet.
+    //
+    // So the operations are split by the authority they actually need. The
+    // child's session may advance enforcement state in the stricter
+    // direction and may STAGE a policy change. Turning a staged change into
+    // the live policy needs an administrator.
+
+    /// <summary>
+    /// Offers a parent policy for approval. Does not change the live one.
+    ///
+    /// Writes to a slot the service owns, which nothing reads for
+    /// enforcement. The child's authority extends to proposing.
+    /// </summary>
+    StageParentPolicy = 13,
+
+    /// <summary>
+    /// Makes the staged policy live. Administrator only.
+    ///
+    /// Carries the digest the approver saw, so the staged document cannot be
+    /// swapped between the moment a parent reviews it and the moment the
+    /// prompt is answered.
+    /// </summary>
+    CommitStagedParentPolicy = 14,
+
+    /// <summary>
+    /// Checks a parent's PIN on the privileged side and issues a capability.
+    ///
+    /// The verification has to happen here. A throttle enforced by the
+    /// process being throttled is a suggestion, and a comparison performed by
+    /// the child's process is one the child's process can decide the answer
+    /// to.
+    /// </summary>
+    VerifyParentPin = 15,
+
+    /// <summary>Grants bonus minutes or the rest of today. Needs a capability.</summary>
+    GrantScreenTime = 16,
+
+    /// <summary>Clears today's counter. Needs a capability.</summary>
+    ResetScreenTimeToday = 17,
+
+    /// <summary>Installs or repairs the broker service itself. Administrator only.</summary>
+    InstallSecurityHostService = 18
 }
 
 /// <summary>
@@ -58,6 +107,15 @@ public enum ElevatedOperationKind
 /// </summary>
 public sealed record ElevatedRequest
 {
+    /// <summary>
+    /// The protocol this message is written in.
+    ///
+    /// Checked before anything else. A LocalSystem service that reads an
+    /// unfamiliar message shape and does its best with it is no longer a
+    /// boundary, so a mismatch is a refusal.
+    /// </summary>
+    public int ProtocolVersion { get; init; } = BrokerEndpoint.ProtocolVersion;
+
     public required ElevatedOperationKind Kind { get; init; }
 
     /// <summary>Correlates the response, and appears in the audit log.</summary>
@@ -108,13 +166,124 @@ public sealed record ElevatedRequest
     /// </summary>
     public string? ProtectedPayload { get; init; }
 
+    // --------------------------------------------------- parent authority
+
+    /// <summary>
+    /// A capability the service issued after it verified a parent's PIN.
+    ///
+    /// An opaque value the SERVICE generated, holds, and matches against the
+    /// caller's SID and session. It is not a claim: a caller cannot make one
+    /// up, because the service compares it against what it issued rather
+    /// than inspecting it.
+    /// </summary>
+    public string? ParentCapability { get; init; }
+
+    /// <summary>
+    /// A parent's PIN, on its way to the only side that may check it.
+    ///
+    /// WHY A SECRET IS IN THIS RECORD AT ALL
+    /// -------------------------------------
+    /// The sibling comment on <see cref="Sid"/> says a credential must not
+    /// travel through this channel, and for an account password that is
+    /// still right - the helper prompts for one itself.
+    ///
+    /// The parent's PIN is different, and the difference is who must do the
+    /// comparing. A throttle that the throttled process enforces is a
+    /// suggestion; a hash comparison the child's process performs is one the
+    /// child's process can decide the answer to. For the PIN to mean
+    /// anything the verifier has to be the privileged side, so the PIN has to
+    /// reach it.
+    ///
+    /// It costs nothing that was not already exposed: the parent typed it
+    /// into this process. It is never logged, never written to the protected
+    /// store, never echoed in a response, and never kept after the
+    /// comparison.
+    /// </summary>
+    [JsonPropertyName("pin")]
+    public string? ParentPinAttempt { get; init; }
+
+    /// <summary>Bonus minutes to grant. Zero when granting the rest of today.</summary>
+    public int GrantMinutes { get; init; }
+
+    /// <summary>Whether the grant lifts today's limit entirely.</summary>
+    public bool GrantRestOfDay { get; init; }
+
+    /// <summary>
+    /// The SHA-256 of the staged document the approver was shown.
+    ///
+    /// Carried on a commit so that what an administrator approved and what
+    /// becomes live are provably the same bytes.
+    /// </summary>
+    public string? ExpectedDigest { get; init; }
+
     /// <summary>Whether the helper should apply, or only report what it would do.</summary>
     public bool DryRun { get; init; } = true;
+
+    /// <summary>
+    /// The request with every secret removed.
+    ///
+    /// Used wherever a request is logged. There is no code path that writes
+    /// an <see cref="ElevatedRequest"/> to a log without going through this,
+    /// and a test asserts the PIN does not survive it.
+    /// </summary>
+    public ElevatedRequest Redacted() => this with
+    {
+        ParentPinAttempt = null,
+        ParentCapability = null,
+        ProtectedPayload = ProtectedPayload is null ? null : "<redacted>"
+    };
+}
+
+/// <summary>
+/// Why a request was refused, as a value the unprivileged side may see.
+///
+/// A CLOSED SET, NOT A STRING FROM THE PRIVILEGED SIDE
+/// ---------------------------------------------------
+/// Everything the service knows that the child does not is a thing the child
+/// would like to learn: a path that exists, an exception type that reveals
+/// which call failed, the state of a document it cannot read. So the reason
+/// crossing back is chosen from this list, and the detail stays in the
+/// service's own log.
+/// </summary>
+public enum BrokerFailureReason
+{
+    None = 0,
+    MalformedRequest = 1,
+    UnsupportedProtocol = 2,
+    UnknownOperation = 3,
+    PayloadTooLarge = 4,
+    PayloadInvalid = 5,
+
+    /// <summary>The caller's Windows identity does not permit this operation.</summary>
+    NotAuthorized = 6,
+
+    /// <summary>The operation needs a parent capability and none was valid.</summary>
+    ParentAuthorizationRequired = 7,
+
+    /// <summary>The proposed state would weaken what is already recorded.</summary>
+    TransitionRejected = 8,
+
+    /// <summary>The PIN was wrong.</summary>
+    PinIncorrect = 9,
+
+    /// <summary>Too many failures. The service is holding the caller off.</summary>
+    PinThrottled = 10,
+
+    /// <summary>Nothing is staged, or what is staged is not what was approved.</summary>
+    NothingStaged = 11,
+
+    /// <summary>The write itself failed on the privileged side.</summary>
+    StorageFailed = 12,
+
+    /// <summary>The service could not be reached at all.</summary>
+    ServiceUnavailable = 13
 }
 
 /// <summary>What the helper did, or refused to do.</summary>
 public sealed record ElevatedResponse
 {
+    public int ProtocolVersion { get; init; } = BrokerEndpoint.ProtocolVersion;
+
     public required string RequestId { get; init; }
 
     public required bool Success { get; init; }
@@ -122,11 +291,38 @@ public sealed record ElevatedResponse
     /// <summary>Parent-facing, Swedish, never an HRESULT.</summary>
     public string Message { get; init; } = string.Empty;
 
-    /// <summary>Technical detail for the log. Never shown to a child.</summary>
+    /// <summary>
+    /// Technical detail for the log. Never shown to a child.
+    ///
+    /// Populated by the UNPRIVILEGED side's own logging only. The service
+    /// leaves it null on anything it sends across the pipe - see
+    /// <see cref="BrokerFailureReason"/>.
+    /// </summary>
     public string? Detail { get; init; }
 
     /// <summary>Set when the request was rejected before anything ran.</summary>
     public bool Rejected { get; init; }
+
+    /// <summary>Which closed reason applies, when the request did not succeed.</summary>
+    public BrokerFailureReason Reason { get; init; } = BrokerFailureReason.None;
+
+    /// <summary>
+    /// A capability, when the service has just verified a parent's PIN.
+    ///
+    /// The only response field that carries authority, and the service
+    /// issues it only to the caller it verified, bound to that caller's SID
+    /// and session.
+    /// </summary>
+    public string? ParentCapability { get; init; }
+
+    /// <summary>How long the capability lasts, in seconds.</summary>
+    public int CapabilitySeconds { get; init; }
+
+    /// <summary>The SHA-256 of what is currently staged, after a stage.</summary>
+    public string? StagedDigest { get; init; }
+
+    /// <summary>How long the caller must wait, when it is being throttled.</summary>
+    public int RetryAfterSeconds { get; init; }
 
     /// <summary>Serialised snapshot, so the caller can build the recovery manifest.</summary>
     public string? SnapshotJson { get; init; }
@@ -136,6 +332,16 @@ public sealed record ElevatedResponse
         RequestId = requestId,
         Success = false,
         Rejected = true,
+        Message = message
+    };
+
+    public static ElevatedResponse Reject(
+        string requestId, BrokerFailureReason reason, string message) => new()
+    {
+        RequestId = requestId,
+        Success = false,
+        Rejected = true,
+        Reason = reason,
         Message = message
     };
 }
@@ -170,9 +376,23 @@ public static class ElevatedRequestValidator
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (request.ProtocolVersion != BrokerEndpoint.ProtocolVersion)
+        {
+            // First, and without looking at anything else. A message in an
+            // unknown protocol has no fields this build can reason about.
+            return "Begäran använder ett protokoll som inte stöds.";
+        }
+
         if (string.IsNullOrWhiteSpace(request.RequestId))
         {
             return "Begäran saknar id.";
+        }
+
+        if (request.RequestId.Length > MaxRequestIdLength || request.RequestId.Any(char.IsControl))
+        {
+            // It reaches the audit log. A caller does not get to write
+            // arbitrary length or control characters into it.
+            return "Begäran har ett ogiltigt id.";
         }
 
         if (!Enum.IsDefined(request.Kind))
@@ -213,12 +433,96 @@ public static class ElevatedRequestValidator
             ElevatedOperationKind.SaveParentPolicy or
             ElevatedOperationKind.SaveScreenTimeState or
             ElevatedOperationKind.SavePinThrottleState or
-            ElevatedOperationKind.MarkProvisioned =>
+            ElevatedOperationKind.MarkProvisioned or
+            ElevatedOperationKind.StageParentPolicy =>
                 ValidateProtectedPayload(request),
+
+            ElevatedOperationKind.CommitStagedParentPolicy =>
+                ValidateDigest(request.ExpectedDigest),
+
+            ElevatedOperationKind.VerifyParentPin =>
+                ValidatePinAttempt(request.ParentPinAttempt),
+
+            ElevatedOperationKind.GrantScreenTime =>
+                ValidateGrant(request),
+
+            ElevatedOperationKind.ResetScreenTimeToday => null,
+
+            ElevatedOperationKind.InstallSecurityHostService =>
+                ValidateExecutablePath(request.ExecutablePath),
 
             _ => "Okänd åtgärd."
         };
     }
+
+    /// <summary>A request id is a correlation value, not a free-text field.</summary>
+    private const int MaxRequestIdLength = 64;
+
+    /// <summary>
+    /// A PIN attempt, bounded before it is hashed.
+    ///
+    /// The length cap is the point: PBKDF2 at 210,000 iterations over a
+    /// megabyte supplied by a caller is a way to make a LocalSystem service
+    /// burn a core on request. The real PIN policy is checked by the
+    /// comparison, not here - this only decides whether the comparison is
+    /// worth doing.
+    /// </summary>
+    private static string? ValidatePinAttempt(string? pin)
+    {
+        if (string.IsNullOrEmpty(pin))
+        {
+            return "Koden saknas.";
+        }
+
+        if (pin.Length > MaxPinAttemptLength)
+        {
+            return "Koden är för lång.";
+        }
+
+        return pin.All(char.IsAsciiDigit) ? null : "Koden får bara innehålla siffror.";
+    }
+
+    /// <summary>
+    /// Generous next to the six digits a PIN actually is.
+    ///
+    /// Deliberately not the PIN policy's own length. The privileged side's
+    /// job here is to bound the work, not to re-decide what a valid PIN
+    /// looks like - that belongs in one place, and a second copy of it here
+    /// would be a second place to change it.
+    /// </summary>
+    private const int MaxPinAttemptLength = 64;
+
+    private static string? ValidateDigest(string? digest)
+    {
+        if (string.IsNullOrWhiteSpace(digest))
+        {
+            return "Begäran saknar kontrollsumma.";
+        }
+
+        // Lowercase hexadecimal SHA-256, exactly. It is compared, never
+        // parsed into anything, and a fixed shape keeps it that way.
+        return digest.Length == 64 && digest.All(c => char.IsAsciiDigit(c) || (c >= 'a' && c <= 'f'))
+            ? null
+            : "Kontrollsumman har fel format.";
+    }
+
+    private static string? ValidateGrant(ElevatedRequest request)
+    {
+        if (request.GrantRestOfDay)
+        {
+            return null;
+        }
+
+        // A grant is minutes a parent chose from a small set of buttons. An
+        // unbounded one would make "extra time" a way to disable the limit
+        // permanently while looking like an ordinary grant.
+        return request.GrantMinutes is > 0 and <= MaxGrantMinutes
+            ? null
+            : "Antalet extraminuter är utanför det tillåtna intervallet.";
+    }
+
+    /// <summary>Four hours. More than that is "the rest of today", which is its own flag.</summary>
+    public const int MaxGrantMinutes = 240;
 
     /// <summary>
     /// A protected-state write, checked before the helper looks at its meaning.
