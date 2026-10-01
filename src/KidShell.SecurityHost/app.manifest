@@ -6,16 +6,40 @@
   <!--
     asInvoker, with the elevation requirement enforced in code instead.
 
-    The obvious choice here is requireAdministrator, and it was the first one.
-    It has a practical problem: a binary that cannot start unelevated cannot run
-    its own self-test on a build agent, so the check that proves the helper
-    parses and rejects hostile input would be the one check nobody could run.
+    THE COMMENT THAT USED TO BE HERE WAS WRONG.
 
-    The security property is unchanged. KidShell launches this helper with the
-    "runas" verb, which raises the UAC prompt regardless of what the manifest
-    says, and Program.cs refuses to enter the request loop unless the process is
-    genuinely elevated - so an unelevated helper does nothing except exit. The
-    enforcement moved from a declaration to a runtime check that has a test.
+    It said KidShell launched this binary with the "runas" verb, so the
+    manifest did not need to ask. KidShell did not. The production client
+    started it with UseShellExecute off and the standard streams redirected,
+    which ignores a verb and cannot carry one. The security property the
+    comment claimed therefore did not exist, and the helper refused every
+    request on every child account. See BrokerTransportDefectTests.
+
+    The manifest still says asInvoker, now for reasons that are true of this
+    build:
+
+      * its normal mode is a Windows SERVICE. The service control manager
+        starts it as LocalSystem, and requireAdministrator means nothing to
+        the SCM;
+
+      * the self-test mode must run unelevated on a build agent, or the check
+        that proves the broker rejects hostile input would be the one check
+        nobody could run;
+
+      * the policy approval mode is launched WITH the runas verb, by
+        ElevatedCommitApprovalChannel, which raises the prompt regardless of
+        what the manifest says, and redirects nothing, so the verb is
+        honoured. That is the one place in this product where a consent
+        prompt belongs.
+
+    Every mode that needs privilege checks for it at runtime and exits if it
+    does not have it.
+
+    (Two hyphens in a row are not legal inside an XML comment. A manifest
+    that contains a pair does not parse, the binary will not start at all,
+    and Windows reports it as a side-by-side configuration error that says
+    nothing about manifests. The option names are therefore spelled out in
+    prose above rather than written with their flags.)
   -->
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>

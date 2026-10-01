@@ -35,7 +35,7 @@ public interface IPrivilegedProtectedStateStore
 /// A write is temp-then-replace, so an interruption leaves the old document
 /// rather than half of the new one.
 /// </summary>
-public sealed class PrivilegedProtectedStateStore : IPrivilegedProtectedStateStore
+public sealed class PrivilegedProtectedStateStore : IPrivilegedProtectedStateStore, IPrivilegedProtectedStore
 {
     private readonly string _directory;
     private readonly IKidShellLogger _logger;
@@ -51,6 +51,80 @@ public sealed class PrivilegedProtectedStateStore : IPrivilegedProtectedStateSto
     {
         _directory = directory;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Reads a document back.
+    ///
+    /// PRIVILEGED BROKER HARDENING. The service has to know what it already
+    /// holds, because every monotonic rule compares a proposal against the
+    /// current value. A privileged writer that cannot read can only write
+    /// what it is told, which is what made routing the screen-time counter
+    /// through LocalSystem achieve nothing: the child would simply have asked
+    /// SYSTEM to write a zero.
+    /// </summary>
+    public string? Read(ProtectedDocument document)
+    {
+        if (!Enum.IsDefined(document))
+        {
+            return null;
+        }
+
+        return ReadFile(Path.Combine(_directory, ProtectedDocumentNames.FileNameOf(document)));
+    }
+
+    /// <summary>
+    /// The policy a child's session has proposed.
+    ///
+    /// Stored next to the authoritative documents and treated as none of
+    /// them. Nothing reads this for enforcement - that is the property that
+    /// makes it safe for the unprivileged side to fill.
+    /// </summary>
+    public string? ReadStaged() =>
+        ReadFile(Path.Combine(_directory, ProtectedDocumentNames.StagedParentPolicyFileName));
+
+    public ProtectedWriteResult WriteStaged(string json)
+    {
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            _logger.Warning("Storage", $"Refused a staged policy: {problem}");
+            return ProtectedWriteResult.Reject(problem);
+        }
+
+        return WriteFile(ProtectedDocumentNames.StagedParentPolicyFileName, json, "staged parent policy");
+    }
+
+    public ProtectedWriteResult ClearStaged()
+    {
+        try
+        {
+            var path = Path.Combine(_directory, ProtectedDocumentNames.StagedParentPolicyFileName);
+
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+
+            return ProtectedWriteResult.Ok();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Storage", "The staged parent policy could not be removed.", ex);
+            return ProtectedWriteResult.Fail(ex.GetType().Name);
+        }
+    }
+
+    private string? ReadFile(string path)
+    {
+        try
+        {
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Storage", "A protected document could not be read.", ex);
+            return null;
+        }
     }
 
     public ProtectedWriteResult Write(ProtectedDocument document, string json)
@@ -72,11 +146,24 @@ public sealed class PrivilegedProtectedStateStore : IPrivilegedProtectedStateSto
             return ProtectedWriteResult.Reject("Okänt dokument.");
         }
 
+        return WriteFile(ProtectedDocumentNames.FileNameOf(document), json, document.ToString());
+    }
+
+    /// <summary>
+    /// The one place bytes reach the disk.
+    ///
+    /// <paramref name="fileName"/> is always a compile-time constant from
+    /// this assembly or a total switch over the document enum. It is never
+    /// anything a caller supplied, which is why there is no traversal check:
+    /// there is nothing here for a caller to traverse with.
+    /// </summary>
+    private ProtectedWriteResult WriteFile(string fileName, string json, string what)
+    {
         try
         {
             Directory.CreateDirectory(_directory);
 
-            var path = Path.Combine(_directory, ProtectedDocumentNames.FileNameOf(document));
+            var path = Path.Combine(_directory, fileName);
             var temp = path + ".tmp";
 
             File.WriteAllText(temp, json);
@@ -86,13 +173,13 @@ public sealed class PrivilegedProtectedStateStore : IPrivilegedProtectedStateSto
             // the contents, which for the policy document include the PIN
             // hash and for the throttle include a cooldown a log reader has no
             // business correlating.
-            _logger.Info("Storage", $"Protected document {document} written ({json.Length} characters).");
+            _logger.Info("Storage", $"Protected document {what} written ({json.Length} characters).");
 
             return ProtectedWriteResult.Ok();
         }
         catch (Exception ex)
         {
-            _logger.Error("Storage", $"Protected write of {document} failed.", ex);
+            _logger.Error("Storage", $"Protected write of {what} failed.", ex);
             return ProtectedWriteResult.Fail(ex.GetType().Name);
         }
     }

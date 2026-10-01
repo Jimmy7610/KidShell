@@ -97,17 +97,59 @@ public partial class App : Application
         // contradiction: Ready exactly when it could not be used. Production
         // therefore asks the elevated helper through a typed request that
         // names a DOCUMENT and never a path.
-        services.AddSingleton<IElevatedBrokerClient>(sp => new ProcessElevatedBrokerClient(
-            AppPaths.SecurityHostPath, sp.GetRequiredService<IKidShellLogger>()));
+        // PRIVILEGED BROKER HARDENING. The transport is a named pipe to a
+        // service that is already running as LocalSystem, not a process
+        // started per request.
+        //
+        // The old one started KidShell.SecurityHost with the streams
+        // redirected and nothing elevating it, so the helper refused every
+        // request on every real child account - and adding a UAC prompt
+        // would not have repaired it, because screen time is written on a
+        // timer and a shell a child operates cannot prompt on a timer.
+        services.AddSingleton<IElevatedBrokerClient>(sp => new NamedPipeElevatedBrokerClient(
+            BrokerEndpoint.PipeName, sp.GetRequiredService<IKidShellLogger>()));
+
+        // Kept as one object so the development approval channel can commit
+        // what the development writer staged.
+        services.AddSingleton(sp => new DirectProtectedStateWriter(
+            AppPaths.DevelopmentPolicyDirectory, sp.GetRequiredService<IKidShellLogger>()));
 
         services.AddSingleton<IProtectedStateWriter>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
 
             return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
-                ? new DirectProtectedStateWriter(AppPaths.DevelopmentPolicyDirectory, logger)
+                ? sp.GetRequiredService<DirectProtectedStateWriter>()
                 : new BrokeredProtectedStateWriter(sp.GetRequiredService<IElevatedBrokerClient>(), logger);
         });
+
+        // Who may turn a proposed policy into the live one.
+        //
+        // Not this process. KidShell runs as the child, and a modified copy
+        // of it running as the child is indistinguishable from the real one
+        // without code signing that does not exist yet - so the authority
+        // for a policy change is a Windows one, and a parent saving settings
+        // answers a consent prompt. Exactly once, for an action they took
+        // deliberately; never for the writes that happen during ordinary
+        // use. See ParentPolicyApproval.cs.
+        services.AddSingleton<IParentPolicyApprovalChannel>(sp =>
+        {
+            var logger = sp.GetRequiredService<IKidShellLogger>();
+
+            if (sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment)
+            {
+                return new LocalParentPolicyApprovalChannel(
+                    sp.GetRequiredService<DirectProtectedStateWriter>(), logger);
+            }
+
+            return File.Exists(AppPaths.SecurityHostPath)
+                ? new ElevatedCommitApprovalChannel(AppPaths.SecurityHostPath, logger)
+                : new UnavailableParentPolicyApprovalChannel();
+        });
+
+        // The capability the security service issues when IT has verified a
+        // parent's PIN. In memory, for the length of a parent session.
+        services.AddSingleton<ParentCapabilityHolder>();
 
         // Registered as the concrete type, so nothing can resolve the
         // unprotected store by asking for IConfigurationStore - which is
@@ -120,7 +162,9 @@ public partial class App : Application
             sp.GetRequiredService<IProtectedStateReader>(),
             sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
-            sp.GetRequiredService<IKidShellLogger>()));
+            sp.GetRequiredService<IKidShellLogger>(),
+            time: null,
+            sp.GetRequiredService<IParentPolicyApprovalChannel>()));
 
         services.AddSingleton<IAppStateService, AppStateService>();
 
@@ -156,12 +200,25 @@ public partial class App : Application
             sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IKidShellLogger>()));
 
+        // The comparison happens on the privileged side when there is one.
+        //
+        // A throttle enforced by the process being throttled is a
+        // suggestion, and a hash comparison performed by a program running
+        // as the child is one a modified copy of that program can return
+        // true from. Neither could be fixed by writing this class more
+        // carefully: the problem was where the code ran.
+        services.AddSingleton<IParentAuthenticator>(sp => new BrokeredParentAuthenticator(
+            sp.GetRequiredService<IElevatedBrokerClient>(),
+            sp.GetRequiredService<IKidShellLogger>()));
+
         services.AddSingleton<IParentPinService>(sp => new ParentPinService(
             sp.GetRequiredService<IAppStateService>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>(),
             time: null,
-            sp.GetRequiredService<ProtectedPinThrottleStore>()));
+            sp.GetRequiredService<ProtectedPinThrottleStore>(),
+            sp.GetRequiredService<IParentAuthenticator>(),
+            sp.GetRequiredService<ParentCapabilityHolder>()));
 
         // Parent Mode re-locks. Without this it stayed open until somebody
         // closed it, which on a machine the child also uses means it stayed
@@ -199,7 +256,24 @@ public partial class App : Application
             sp.GetRequiredService<IProtectedStateWriter>(),
             sp.GetRequiredService<IRuntimeEnvironment>(),
             sp.GetRequiredService<IKidShellLogger>()));
-        services.AddSingleton<ScreenTimeEngine>();
+
+        // The three screen-time changes that make the child's situation
+        // LOOSER - bonus minutes, an unlimited day, a reset - do not travel
+        // as a state this process composed. The privileged side applies them
+        // to the counter it holds, because "here is the new state" from a
+        // process running as the child is "used seconds: 0" waiting to
+        // happen.
+        services.AddSingleton<IScreenTimeParentAuthority>(sp => new BrokeredScreenTimeParentAuthority(
+            sp.GetRequiredService<IElevatedBrokerClient>(),
+            sp.GetRequiredService<ParentCapabilityHolder>(),
+            sp.GetRequiredService<IKidShellLogger>()));
+
+        services.AddSingleton(sp => new ScreenTimeEngine(
+            sp.GetRequiredService<IAppStateService>(),
+            sp.GetRequiredService<IScreenTimeStateStore>(),
+            sp.GetRequiredService<IKidShellLogger>(),
+            time: null,
+            sp.GetRequiredService<IScreenTimeParentAuthority>()));
 
         // Something has to tick the engine and notice when a warning threshold
         // is crossed. Without this the engine is a tested calculator nobody

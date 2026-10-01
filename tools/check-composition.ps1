@@ -81,6 +81,28 @@ $required = @(
     @{
         Pattern = 'AddSingleton<IAppLauncher>\(sp => new ScreenTimeGuardedLauncher'
         Reason  = 'launches would skip the screen-time gate'
+    },
+
+    # ------------------------------------------- privileged broker hardening
+    @{
+        Pattern = 'AddSingleton<IElevatedBrokerClient>\(sp => new NamedPipeElevatedBrokerClient'
+        Reason  = 'the broker would go back to a per-request process launch that never elevates anything, so every protected write would fail on a real child account (broker hardening)'
+    },
+    @{
+        Pattern = 'AddSingleton<IParentPolicyApprovalChannel>'
+        Reason  = 'a policy change would be written on the child session''s own authority, which is no authority at all (broker hardening)'
+    },
+    @{
+        Pattern = 'AddSingleton<ParentCapabilityHolder>'
+        Reason  = 'nothing would hold the capability the service issues, so every parent grant would be refused (broker hardening)'
+    },
+    @{
+        Pattern = 'AddSingleton<IParentAuthenticator>\(sp => new BrokeredParentAuthenticator'
+        Reason  = 'the PIN would be compared by the process being throttled, which can decide the answer (broker hardening)'
+    },
+    @{
+        Pattern = 'AddSingleton<IScreenTimeParentAuthority>\(sp => new BrokeredScreenTimeParentAuthority'
+        Reason  = 'a parent grant would be a state the child''s process composed, and "used seconds: 0" is a well-formed one (broker hardening)'
     }
 )
 
@@ -113,6 +135,20 @@ $forbidden = @(
     @{
         Pattern = 'AddSingleton<IProtectedStateWriter>\(sp => new FileSystemProtectedStateReader'
         Reason  = 'would put a direct protected file writer back in the child process (OPSV2 01)'
+    },
+
+    # ------------------------------------------- privileged broker hardening
+    @{
+        Pattern = 'AddSingleton<IElevatedBrokerClient>\(sp => new ProcessElevatedBrokerClient'
+        Reason  = 'is the transport this pass removed: it starts the helper unelevated, so the helper exits and every protected write fails on a real child account'
+    },
+    @{
+        Pattern = 'AddSingleton<IProtectedStateWriter>\(sp => new DirectProtectedStateWriter'
+        Reason  = 'would write the protected store from the child''s own process unconditionally, with no development gate in front of it'
+    },
+    @{
+        Pattern = 'AddSingleton<IParentPolicyApprovalChannel,\s*LocalParentPolicyApprovalChannel>'
+        Reason  = 'would approve every policy change locally, in a production build as well as a development one'
     }
 )
 

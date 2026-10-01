@@ -198,6 +198,50 @@ public sealed class InMemoryProtectedStateStore : IProtectedStateReader, IProtec
     public ProtectedWriteResult SaveParentPolicy(string json) =>
         Write(ProtectedDocument.ParentPolicy, json);
 
+    /// <summary>What was staged, and never read for enforcement.</summary>
+    public string? Staged { get; private set; }
+
+    public ProtectedStageResult StageParentPolicy(string json)
+    {
+        WriteCount++;
+
+        if (!IsAvailable)
+        {
+            return ProtectedStageResult.Unavailable("(test) writer unavailable");
+        }
+
+        if (RefuseWrites)
+        {
+            return ProtectedStageResult.Fail("(test) refused");
+        }
+
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            return ProtectedStageResult.Reject(problem);
+        }
+
+        Staged = json;
+        return ProtectedStageResult.Staged(ProtectedDocumentNames.DigestOf(json));
+    }
+
+    /// <summary>Approves whatever is staged, the way an administrator would.</summary>
+    public ProtectedWriteResult ApproveStaged(string digest)
+    {
+        if (Staged is null || !string.Equals(ProtectedDocumentNames.DigestOf(Staged), digest, StringComparison.Ordinal))
+        {
+            return ProtectedWriteResult.Reject("(test) nothing staged under that digest");
+        }
+
+        var result = Write(ProtectedDocument.ParentPolicy, Staged);
+
+        if (result.Success)
+        {
+            Staged = null;
+        }
+
+        return result;
+    }
+
     public ProtectedWriteResult SaveScreenTimeState(string json) =>
         Write(ProtectedDocument.ScreenTimeState, json);
 
@@ -241,4 +285,75 @@ public sealed class InMemoryProtectedStateStore : IProtectedStateReader, IProtec
     /// <summary>Removes a document, the way a determined child would.</summary>
     public void Delete(ProtectedDocument document) =>
         _documents.Remove(ProtectedDocumentNames.FileNameOf(document));
+}
+
+/// <summary>
+/// The privileged side of the store, in memory.
+///
+/// Stands in for the directory under %ProgramData% that only a LocalSystem
+/// service can write. Everything the broker decides - the monotonic rules,
+/// the authorization matrix, the staging slot - is decided against a store
+/// like this one in the tests, because none of those decisions needs a real
+/// access control list to be wrong.
+/// </summary>
+public sealed class InMemoryPrivilegedStore : KidShell.Core.Security.Broker.IPrivilegedProtectedStore
+{
+    private readonly Dictionary<ProtectedDocument, string> _documents = [];
+
+    /// <summary>Makes every write fail, the way a full disk would.</summary>
+    public bool RefuseWrites { get; set; }
+
+    public string? Staged { get; private set; }
+
+    public int WriteCount { get; private set; }
+
+    public string? Read(ProtectedDocument document) => _documents.GetValueOrDefault(document);
+
+    public ProtectedWriteResult Write(ProtectedDocument document, string json)
+    {
+        WriteCount++;
+
+        if (RefuseWrites)
+        {
+            return ProtectedWriteResult.Fail("(test) refused");
+        }
+
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            return ProtectedWriteResult.Reject(problem);
+        }
+
+        _documents[document] = json;
+        return ProtectedWriteResult.Ok();
+    }
+
+    public string? ReadStaged() => Staged;
+
+    public ProtectedWriteResult WriteStaged(string json)
+    {
+        if (RefuseWrites)
+        {
+            return ProtectedWriteResult.Fail("(test) refused");
+        }
+
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            return ProtectedWriteResult.Reject(problem);
+        }
+
+        Staged = json;
+        return ProtectedWriteResult.Ok();
+    }
+
+    public ProtectedWriteResult ClearStaged()
+    {
+        Staged = null;
+        return ProtectedWriteResult.Ok();
+    }
+
+    /// <summary>Puts a document in place without going through a write.</summary>
+    public void Seed(ProtectedDocument document, string json) => _documents[document] = json;
+
+    /// <summary>Replaces the staged slot behind the approver's back.</summary>
+    public void TamperStaged(string json) => Staged = json;
 }

@@ -1,6 +1,7 @@
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Runtime;
+using KidShell.Core.Security.Broker;
 
 namespace KidShell.Core.Security;
 
@@ -21,19 +22,25 @@ public sealed class ParentPinService : IParentPinService
     private readonly IKidShellLogger _logger;
     private readonly PinAttemptThrottle _throttle;
     private readonly ProtectedPinThrottleStore? _throttleStore;
+    private readonly IParentAuthenticator? _authenticator;
+    private readonly ParentCapabilityHolder? _capability;
 
     public ParentPinService(
         IAppStateService state,
         IRuntimeEnvironment environment,
         IKidShellLogger logger,
         TimeProvider? time = null,
-        ProtectedPinThrottleStore? throttleStore = null)
+        ProtectedPinThrottleStore? throttleStore = null,
+        IParentAuthenticator? authenticator = null,
+        ParentCapabilityHolder? capability = null)
     {
         _state = state;
         _environment = environment;
         _logger = logger;
         _throttle = new PinAttemptThrottle(time);
         _throttleStore = throttleStore;
+        _authenticator = authenticator;
+        _capability = capability;
 
         // OPSV RETEST 2, ADDITIONAL FINDING. The throttle used to start empty
         // in every process, so restarting the shell returned the attempts a
@@ -101,6 +108,52 @@ public sealed class ParentPinService : IParentPinService
         if (string.IsNullOrWhiteSpace(pin) || pin.Length != PinLength || !pin.All(char.IsAsciiDigit))
         {
             return PinVerificationResult.Malformed;
+        }
+
+        // ------------------------------------------- the privileged verifier
+        //
+        // PRIVILEGED BROKER HARDENING. When the security service is there it
+        // does the comparison, counts the failures and owns the cooldown.
+        // Everything below this point runs in the child's process, which is
+        // the same process a child could replace - so where the service
+        // exists, this is not the code that decides.
+        if (_authenticator is { IsAvailable: true })
+        {
+            var answer = _authenticator.Verify(pin);
+
+            if (answer.Result == PinVerificationResult.Correct)
+            {
+                // The local throttle is kept in step so the UI's countdown
+                // and the service's cooldown do not disagree. It is a mirror,
+                // not the authority.
+                _throttle.RecordSuccess();
+                _capability?.Hold(answer.Capability);
+
+                _logger.Info("Pin", "Parent PIN accepted by the security service.");
+                return PinVerificationResult.Correct;
+            }
+
+            if (answer.Result == PinVerificationResult.Incorrect)
+            {
+                _throttle.RecordFailure();
+            }
+
+            _logger.Info("Pin", $"The security service answered {answer.Result}.");
+            return answer.Result;
+        }
+
+        if (_authenticator is not null && _environment.IsProduction)
+        {
+            // A production build has a verifier and cannot reach it. Falling
+            // through to the comparison below would quietly move the check
+            // back into the process the check exists to constrain - the
+            // strictly worse option dressed as resilience. Parent Mode stays
+            // shut, which is the same answer this build already gives when
+            // the protected policy cannot be read.
+            _logger.Error("Pin",
+                "The security service is not available; Parent Mode stays closed.");
+
+            return PinVerificationResult.Incorrect;
         }
 
         var settings = _state.Current.ParentPin;

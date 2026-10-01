@@ -159,4 +159,58 @@ public static class ProtectedPolicyTrustEvaluator
     /// <summary>The marker's contents. Small on purpose: it records a fact, not a state.</summary>
     public static string MarkerDocument(DateTimeOffset whenUtc) =>
         $$"""{"schemaVersion":{{MarkerSchemaVersion}},"provisioned":true,"provisionedUtc":"{{whenUtc:O}}"}""";
+
+    /// <summary>
+    /// The marker, naming the account KidShell runs as.
+    ///
+    /// PRIVILEGED BROKER HARDENING. The security service scopes its pipe to
+    /// one SID, and it has to learn that SID from somewhere the child cannot
+    /// write. The marker is already protected and already written exactly
+    /// once at provisioning, which is when the account is known.
+    /// </summary>
+    public static string MarkerDocument(DateTimeOffset whenUtc, string childSid) =>
+        string.IsNullOrWhiteSpace(childSid)
+            ? MarkerDocument(whenUtc)
+            : $$"""
+              {"schemaVersion":{{MarkerSchemaVersion}},"provisioned":true,"provisionedUtc":"{{whenUtc:O}}","childSid":"{{childSid}}"}
+              """.Trim();
+
+    /// <summary>
+    /// The account the marker names, or empty when it names none.
+    ///
+    /// Empty is the honest answer for a device provisioned by an older build
+    /// or not provisioned at all, and the service treats it as "scope the
+    /// pipe no further than authenticated users" rather than guessing.
+    /// </summary>
+    public static string ChildSidFrom(string? marker)
+    {
+        if (string.IsNullOrWhiteSpace(marker))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(marker);
+
+            if (!document.RootElement.TryGetProperty("childSid", out var value) ||
+                value.ValueKind != JsonValueKind.String)
+            {
+                return string.Empty;
+            }
+
+            var sid = value.GetString() ?? string.Empty;
+
+            // It becomes a SecurityIdentifier, so it is matched against the
+            // SID grammar rather than trusted. The marker is protected, but
+            // "protected" is a claim about permissions, not about contents.
+            return KidShell.Core.Security.Broker.ElevatedRequestValidator.ValidateSid(sid) is null
+                ? sid
+                : string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
 }

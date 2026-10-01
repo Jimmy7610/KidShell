@@ -176,9 +176,34 @@ That sounds obvious and was not. The store is trustworthy precisely when the
 account KidShell runs as *cannot* write to it, so a child-process writer was a
 contradiction: Ready exactly when it could not be used. Reading and writing are
 different responsibilities with different privileges, so they are different
-interfaces. The child reads; the elevated helper writes; the request names a
+interfaces. The child reads; the privileged side writes; the request names a
 **document** and never a path, so there is no destination for a caller to get
 wrong and none to attack.
+
+The privileged side is a Windows service. It was a process started per request,
+and that transport could never have worked: nothing elevated it, so on a real
+child account the helper exited and every protected write failed. Adding a
+consent prompt would not have repaired it either - the screen-time counter is
+written on a timer, and a shell a child operates cannot prompt on a timer.
+
+Being able to write is not the same as being allowed to. A modified KidShell,
+running as the child, sends well-formed requests that look exactly like the
+real ones, so the service decides what a caller may do from the **Windows token
+on the connection** and not from anything in the message. The child's session
+may advance enforcement state in the stricter direction and may propose a
+policy; changing what the rules are needs an elevated administrator, which is
+one consent prompt when a parent saves settings.
+
+The service also refuses enforcement writes that would loosen anything: a
+screen-time counter that goes down, a sequence that rolls back, a PIN throttle
+that forgives its own failures. Without those rules, routing the counter
+through a LocalSystem service would have achieved nothing - the child would
+have asked SYSTEM for a zero and got one.
+
+See [PRIVILEGED-BROKER-SERVICE-2026-09-30.md](PRIVILEGED-BROKER-SERVICE-2026-09-30.md)
+for the pipe, the authorization matrix and what it still does not prove, and
+[OPSV-RETEST3-INTERNAL-2026-09-30.md](OPSV-RETEST3-INTERNAL-2026-09-30.md) for
+the six earlier findings re-attacked through it.
 
 Each part of the configuration goes to the store its trust class requires:
 

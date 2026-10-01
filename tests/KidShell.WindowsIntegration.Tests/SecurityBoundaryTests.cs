@@ -152,16 +152,72 @@ public class ElevatedRequestValidationTests
     }
 
     [Fact]
-    public void The_request_contract_carries_no_password()
+    public void The_request_contract_carries_no_account_password()
     {
-        // A credential must not travel through IPC, reach a log, or land in the
-        // recovery manifest.
+        // An account password must not travel through IPC, reach a log, or
+        // land in the recovery manifest. The helper prompts for one itself
+        // where a password is genuinely required.
         var properties = typeof(ElevatedRequest).GetProperties().Select(p => p.Name.ToLowerInvariant());
 
-        foreach (var forbidden in new[] { "password", "secret", "credential", "pin", "token" })
+        foreach (var forbidden in new[] { "password", "secret", "credential" })
         {
             Assert.DoesNotContain(properties, p => p.Contains(forbidden, StringComparison.Ordinal));
         }
+    }
+
+    [Fact]
+    public void The_two_secrets_the_contract_does_carry_are_redacted_before_logging()
+    {
+        // PRIVILEGED BROKER HARDENING. This test used to forbid "pin" and
+        // "token" outright, and the rule was right until the comparison
+        // moved.
+        //
+        // A throttle enforced by the process being throttled is a
+        // suggestion, and a hash comparison performed by a program running
+        // as the child is one a modified copy of that program can return
+        // true from. For the PIN to mean anything the verifier has to be the
+        // privileged side, so the PIN has to reach it - and it costs nothing
+        // that was not already exposed, because the parent typed it into
+        // that process.
+        //
+        // What replaces the old rule is the obligation that came with the
+        // change: neither value survives Redacted(), which is what every
+        // logging path goes through.
+        var request = new ElevatedRequest
+        {
+            Kind = ElevatedOperationKind.VerifyParentPin,
+            RequestId = "boundary",
+            ParentPinAttempt = "135790",
+            ParentCapability = "0123456789abcdef",
+            ProtectedPayload = """{"parentPin":{"hash":"secret"}}"""
+        };
+
+        var redacted = request.Redacted();
+
+        Assert.Null(redacted.ParentPinAttempt);
+        Assert.Null(redacted.ParentCapability);
+        Assert.DoesNotContain("135790", ElevatedProtocol.Serialize(redacted), StringComparison.Ordinal);
+        Assert.DoesNotContain("0123456789abcdef", ElevatedProtocol.Serialize(redacted), StringComparison.Ordinal);
+
+        // The payload goes too. For the policy document it contains the PIN
+        // hash, and for the throttle a cooldown a log reader has no business
+        // correlating.
+        Assert.DoesNotContain("secret", ElevatedProtocol.Serialize(redacted), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_pin_attempt_is_bounded_before_it_is_hashed()
+    {
+        // PBKDF2 at 210,000 iterations over a megabyte supplied by a caller
+        // is a way to make a LocalSystem service burn a core on request.
+        var huge = new ElevatedRequest
+        {
+            Kind = ElevatedOperationKind.VerifyParentPin,
+            RequestId = "boundary",
+            ParentPinAttempt = new string('1', 100_000)
+        };
+
+        Assert.NotNull(ElevatedRequestValidator.Validate(huge));
     }
 }
 

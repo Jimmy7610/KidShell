@@ -49,6 +49,28 @@ public sealed class ProcessElevatedBrokerClient : IElevatedBrokerClient
 
     public bool IsAvailable => File.Exists(_hostPath);
 
+    /// <summary>
+    /// Exactly what this client does to reach the helper.
+    ///
+    /// Not a description of it - the value <see cref="Send"/> builds its
+    /// <see cref="ProcessStartInfo"/> from, so a test that reads this is
+    /// reading the production path rather than a second copy of it that can
+    /// drift. See <see cref="BrokerLaunchPlan"/> for why that matters.
+    /// </summary>
+    public BrokerLaunchPlan LaunchPlan => new()
+    {
+        FileName = _hostPath,
+        Verb = string.Empty,
+        UseShellExecute = false,
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+
+        // The helper refuses to enter its request loop unless the token is
+        // elevated, and its manifest asks for nothing.
+        Requires = BrokerElevationRequirement.Administrator,
+        Manifest = BrokerManifestElevation.AsInvoker
+    };
+
     public ElevatedResponse Send(ElevatedRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -60,15 +82,22 @@ public sealed class ProcessElevatedBrokerClient : IElevatedBrokerClient
 
         try
         {
+            var plan = LaunchPlan;
+
             var start = new ProcessStartInfo
             {
-                FileName = _hostPath,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
+                FileName = plan.FileName,
+                RedirectStandardInput = plan.RedirectStandardInput,
+                RedirectStandardOutput = plan.RedirectStandardOutput,
                 RedirectStandardError = true,
-                UseShellExecute = false,
+                UseShellExecute = plan.UseShellExecute,
                 CreateNoWindow = true
             };
+
+            if (plan.Verb.Length > 0)
+            {
+                start.Verb = plan.Verb;
+            }
 
             using var process = Process.Start(start);
 
@@ -126,6 +155,51 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
     public ProtectedWriteResult SaveParentPolicy(string json) =>
         Send(ElevatedOperationKind.SaveParentPolicy, json);
 
+    /// <summary>
+    /// Offers a policy for approval.
+    ///
+    /// The digest comes back from the SERVICE, computed over what the service
+    /// actually stored. Returning a digest this side computed would prove
+    /// only that this side can hash, and the whole purpose of carrying one is
+    /// that the approver and the stager might disagree.
+    /// </summary>
+    public ProtectedStageResult StageParentPolicy(string json)
+    {
+        if (ProtectedPayloadPolicy.Validate(json) is { } problem)
+        {
+            return ProtectedStageResult.Reject(problem);
+        }
+
+        // Staging happens when a parent saves settings: once, deliberately,
+        // not on a timer. The pre-check is kept here because a clear "the
+        // service is not installed" is worth more on that path than one
+        // avoided connection.
+        if (!_broker.IsAvailable)
+        {
+            return ProtectedStageResult.Unavailable("Rättighetstjänsten är inte tillgänglig.");
+        }
+
+        var response = _broker.Send(new ElevatedRequest
+        {
+            Kind = ElevatedOperationKind.StageParentPolicy,
+            RequestId = Guid.NewGuid().ToString("n"),
+            ProtectedPayload = json,
+            DryRun = false
+        });
+
+        if (!response.Success || string.IsNullOrWhiteSpace(response.StagedDigest))
+        {
+            _logger.Warning(BrokerAudit.Category,
+                $"The parent policy could not be staged: {response.Message}");
+
+            return response.Rejected
+                ? ProtectedStageResult.Reject(response.Message)
+                : ProtectedStageResult.Fail(response.Message);
+        }
+
+        return ProtectedStageResult.Staged(response.StagedDigest);
+    }
+
     public ProtectedWriteResult SaveScreenTimeState(string json) =>
         Send(ElevatedOperationKind.SaveScreenTimeState, json);
 
@@ -144,11 +218,12 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
             return ProtectedWriteResult.Reject(problem);
         }
 
-        if (!_broker.IsAvailable)
-        {
-            return ProtectedWriteResult.Unavailable("Rättighetshjälparen är inte tillgänglig.");
-        }
-
+        // NO AVAILABILITY PRE-CHECK. The send is the check.
+        //
+        // Asking first meant opening the pipe twice for every write, and on
+        // a machine with no service that is two connect timeouts per
+        // screen-time tick - seconds of stall, on a timer, on exactly the
+        // machines where the product is already in trouble.
         var response = _broker.Send(new ElevatedRequest
         {
             Kind = kind,
@@ -163,6 +238,15 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
         }
 
         _logger.Warning("Storage", $"Protected write {kind} was not completed: {response.Message}");
+
+        if (response.Reason == BrokerFailureReason.ServiceUnavailable)
+        {
+            // Kept distinct from a refusal. "There is nowhere to write this"
+            // and "what you asked for is not allowed" lead to different
+            // product behaviour: the first makes enforcement unavailable,
+            // the second is a bug or an attack.
+            return ProtectedWriteResult.Unavailable(response.Message);
+        }
 
         return response.Rejected
             ? ProtectedWriteResult.Reject(response.Message)
