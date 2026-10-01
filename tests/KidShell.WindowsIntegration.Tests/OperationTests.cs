@@ -65,6 +65,10 @@ public class EveryOperationTests
             new AppLockerDeploymentOperation(tools, files, "<AppLockerPolicy/>", @"C:\temp", logger),
             new ApplicationIdentityServiceOperation(services, tools, files, @"C:\temp", logger),
             new WatchdogServiceOperation(services, files, @"C:\KidShell\watchdog.exe", logger),
+            new SecurityHostServiceOperation(
+                services, files,
+                @"C:\Program Files\KidShell\KidShell.SecurityHost.exe",
+                @"C:\Program Files", logger),
             new ChildSessionLogoutOperation(new FakeSessionControl(), logger)
         ];
     }

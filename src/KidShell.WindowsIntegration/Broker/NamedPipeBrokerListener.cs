@@ -79,6 +79,20 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
                 // broker that stops listening after a malformed message is a
                 // broker a child can switch off.
                 _logger.Error(BrokerAudit.Category, "A broker connection failed.", ex);
+
+                // But a failure that repeats - the pipe name taken, the
+                // descriptor refused - must not become a spin. Without this
+                // pause a service that cannot create its endpoint would burn
+                // a core logging the same line, which is a worse failure
+                // than not starting.
+                try
+                {
+                    await Task.Delay(RetryPauseMilliseconds, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
         }
 
@@ -93,8 +107,6 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
 
         try
         {
-            var caller = Resolve(pipe);
-
             // The timeout is on the exchange, not on the service. A caller
             // that connects and says nothing holds one instance for ten
             // seconds and then stops being this service's problem.
@@ -105,6 +117,19 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
 
             try
             {
+                // READ FIRST, THEN IDENTIFY.
+                //
+                // Not a preference. ImpersonateNamedPipeClient cannot
+                // establish who the caller is until the caller has written
+                // something, so a server that identifies before reading
+                // either fails to identify or - with a small pipe buffer -
+                // waits for a write that is itself waiting for this read.
+                //
+                // Reading first costs nothing in safety. The length prefix
+                // is checked against the protocol limit before a byte is
+                // allocated, and the access list has already decided who
+                // may be on the other end at all. What the message MEANS is
+                // not looked at until the caller is known.
                 line = await BrokerFraming
                     .ReadAsync(pipe, BrokerEndpoint.MaxRequestBytes, deadline.Token)
                     .ConfigureAwait(false);
@@ -124,6 +149,7 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
                 return;
             }
 
+            var caller = Resolve(pipe);
             var response = _server.Handle(line, caller);
 
             await BrokerFraming
@@ -155,9 +181,18 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
             MaxInstances,
             PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.WriteThrough,
-            inBufferSize: 0,
-            outBufferSize: 0,
+            // Bounded, and not zero. A zero-byte buffer makes every write
+            // block until the other side reads, which turns an ordinary
+            // request into a lock-step exchange and leaves no room for the
+            // two sides to be wrong about the order. Bounded because the
+            // memory belongs to a LocalSystem service and the number of
+            // instances is small.
+            inBufferSize: BufferBytes,
+            outBufferSize: BufferBytes,
             Describe(_plan));
+
+    /// <summary>Comfortably more than any message this protocol sends.</summary>
+    private const int BufferBytes = 64 * 1024;
 
     /// <summary>
     /// Turns the plan into a Windows security descriptor.
@@ -186,10 +221,21 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
                 new PipeAccessRule(identity, RightsOf(entry.Rights), AccessControlType.Allow));
         }
 
-        // The owner is SYSTEM, so nothing short of SYSTEM or an administrator
-        // can take ownership and rewrite the list.
-        security.SetOwner(new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null));
-
+        // THE OWNER IS NOT SET HERE, AND THAT IS NOT AN OVERSIGHT.
+        //
+        // The first version did set it, to LocalSystem, on the reasoning
+        // that an owner can always rewrite the access list. Windows refuses:
+        // a process may only name an owner it is entitled to, so any creator
+        // that is not already SYSTEM gets "this security ID may not be
+        // assigned as the owner of this object" and the pipe is never
+        // created at all. The listener would have caught that exception and
+        // retried forever, so the service would have started, logged, and
+        // served nothing.
+        //
+        // The creator owns the object by default, and in production the
+        // creator is the LocalSystem service. The property is therefore
+        // true by construction rather than by assertion, which is the only
+        // way it can be true at all.
         return security;
     }
 
@@ -357,6 +403,9 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
     /// more than one shell and an approval prompt ever need together.
     /// </summary>
     private const int MaxInstances = 4;
+
+    /// <summary>How long to wait before trying again after a failed accept.</summary>
+    private const int RetryPauseMilliseconds = 1_000;
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }
