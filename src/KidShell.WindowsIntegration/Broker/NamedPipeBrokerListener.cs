@@ -1,10 +1,10 @@
 using System.IO.Pipes;
-using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Security.Broker;
+using KidShell.WindowsIntegration.Platform;
 
 namespace KidShell.WindowsIntegration.Broker;
 
@@ -385,15 +385,7 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
     /// zero.
     /// </summary>
     private static int SessionIdOf(NamedPipeServerStream pipe) =>
-        GetNamedPipeClientSessionId(pipe.SafePipeHandle, out var session) ? (int)session : 0;
-
-    // DllImport rather than LibraryImport, matching the rest of this
-    // assembly. The generated marshalling that LibraryImport produces needs
-    // unsafe code, and turning that on for the whole project to read one
-    // integer is not a trade worth making.
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetNamedPipeClientSessionId(SafeHandle pipe, out uint clientSessionId);
+        NamedPipeClientFacts.SessionIdOf(pipe.SafePipeHandle);
 
     /// <summary>
     /// How many clients may be connected at once.
