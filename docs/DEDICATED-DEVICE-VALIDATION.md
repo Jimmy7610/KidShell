@@ -125,6 +125,63 @@ surprises you, stop and work out why.
       `machine.recoveryAdministrator`.
 - [ ] It contains **no** PIN, hash, salt or password. Search it.
 
+### 5b. The privileged broker
+
+Everything in
+[PRIVILEGED-BROKER-SERVICE-2026-09-30.md](PRIVILEGED-BROKER-SERVICE-2026-09-30.md)
+is implemented, unit-tested and **unverified against real permissions**. One
+administrator account on a development machine cannot show any of it. This is
+the step where it either works or the design was wrong.
+
+As the administrator:
+
+```powershell
+sc.exe qc KidShellSecurityHost
+icacls "C:\ProgramData\KidShell\policy"
+```
+
+**Check, as the administrator:**
+
+- [ ] The service exists, runs as `LocalSystem`, and its start type is
+      `AUTO_START`.
+- [ ] Its image is under `C:\Program Files\KidShell`.
+- [ ] `C:\ProgramData\KidShell\policy` grants the child **read** and not write,
+      and inheritance is off.
+
+**Check, signed in as the child:**
+
+- [ ] KidShell starts and loads the policy. (If it cannot read the store, the
+      ACL is too tight.)
+- [ ] `echo x > C:\ProgramData\KidShell\policy\parent-policy.json` is
+      **denied**.
+- [ ] Screen time accumulates across a restart of the shell, and the counter
+      in the protected store goes up.
+- [ ] Enter the PIN wrong four times, close KidShell, reopen it. It is **still**
+      throttled.
+- [ ] Enter the PIN correctly. Parent Mode opens. Grant fifteen extra minutes;
+      the allowance changes and **no consent prompt appears**.
+- [ ] Change something in Föräldraläge → Appar and save. Exactly **one**
+      consent prompt appears. Cancel it: nothing is saved, and the previous
+      settings are intact.
+- [ ] Save again and approve it. The change takes effect.
+- [ ] Try to create the pipe from the child's session and confirm it is
+      refused:
+
+      ```powershell
+      [System.IO.Pipes.NamedPipeServerStream]::new('KidShell.Security.v1')
+      ```
+
+- [ ] Reboot and confirm the service is listening **before** the child signs
+      in: the shell's first protected write at logon succeeds.
+- [ ] `sc.exe stop KidShellSecurityHost` from the child's session is
+      **denied**.
+- [ ] The same command as the administrator succeeds, and with the service
+      stopped KidShell refuses rather than carrying on — screen time reports
+      that enforcement is unavailable, and settings cannot be saved.
+
+Write down anything that did not behave as described. A step that only
+*almost* worked is the one worth reporting.
+
 ### 6. Test recovery before you need it
 
 This is the step people skip and regret.
