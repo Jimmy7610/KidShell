@@ -48,6 +48,32 @@ jobs:
         # machine to change.
         run: dotnet test KidShell.sln -p:Platform=x64 --configuration Release --no-build --verbosity normal
 
+      - name: Named-pipe broker tests, in a process of their own
+        shell: pwsh
+        run: |
+          # The step above already ran these. This runs them again, alone, and
+          # that is the point.
+          #
+          # The broker reads the caller's identity while impersonating the
+          # caller at identification level, and such a token cannot be used
+          # for file access - so an assembly the runtime has not loaded YET
+          # cannot be loaded there. WindowsIdentity pulls in
+          # System.Security.Claims, which means the very first identity
+          # resolution in a process fails unless something has already touched
+          # one. Inside the full suite something always has, so the defect is
+          # invisible; alone, it is not.
+          #
+          # That is how it reached a pull request green locally: a difference
+          # in which tests happened to run first.
+          dotnet test tests/KidShell.WindowsIntegration.Tests/KidShell.WindowsIntegration.Tests.csproj `
+            -p:Platform=x64 --configuration Release --no-build `
+            --filter 'FullyQualifiedName~NamedPipeBrokerTests'
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::error::The named-pipe broker tests fail when run on their own.'
+            exit 1
+          }
+
       - name: Component self-tests
         shell: pwsh
         run: |

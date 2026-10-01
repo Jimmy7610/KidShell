@@ -57,8 +57,37 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
     /// held open to keep an identity alive after the caller's token has
     /// changed.
     /// </summary>
+    private readonly TaskCompletionSource _ready =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Completes once a pipe instance exists and is waiting for a caller.
+    ///
+    /// LIFECYCLE INFORMATION, NOT A SECURITY DECISION
+    /// ----------------------------------------------
+    /// Nothing in the broker consults this. It does not gate a request, relax
+    /// a check or stand in for one: it answers "is the endpoint up", which a
+    /// test needs to know and an attacker gains nothing from.
+    ///
+    /// It completes only AFTER <see cref="Create"/> has returned a pipe. If
+    /// creation throws - the name taken, the descriptor refused - it does not
+    /// complete, because reporting readiness for an endpoint that does not
+    /// exist is the failure mode the first version of this listener actually
+    /// had: it caught the creation exception, retried forever, and would have
+    /// looked like a running service that served nothing.
+    ///
+    /// On a clean shutdown it is cancelled rather than left hanging, so a
+    /// caller awaiting it is not stuck once the listener has stopped.
+    /// </summary>
+    public Task Ready => _ready.Task;
+
     public async Task RunAsync(CancellationToken cancellationToken)
     {
+        // Before the first connection rather than during it, so the first
+        // caller after a service start is not the one that pays for it - and
+        // is not the one that gets refused if it goes wrong.
+        WarmUpIdentity();
+
         _logger.Info(BrokerAudit.Category,
             $"The security broker is listening on {_pipeName} " +
             $"({(_plan.IsChildScoped ? "scoped to the child account" : "unprovisioned access list")}).");
@@ -69,8 +98,17 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
             {
                 await ServeOnceAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                // Only OUR cancellation ends the loop.
+                //
+                // This used to catch every OperationCanceledException,
+                // including the per-exchange deadline - so a caller that
+                // connected and said nothing for ten seconds stopped the
+                // broker permanently. One connect, and the parent's policy
+                // could not be written again until the service restarted.
+                // The product fails closed on that, which is the only reason
+                // it was not worse.
                 break;
             }
             catch (Exception ex)
@@ -96,6 +134,10 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
             }
         }
 
+        // Nobody is going to become ready now. A test or a caller awaiting
+        // readiness gets an answer rather than hanging until its own timeout.
+        _ready.TrySetCanceled(CancellationToken.None);
+
         _logger.Info(BrokerAudit.Category, "The security broker has stopped listening.");
     }
 
@@ -103,67 +145,88 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
     {
         using var pipe = Create();
 
+        // Signalled here and not a line earlier. The pipe object exists, so a
+        // client can open it; the first caller of RunAsync is therefore safe
+        // to proceed. Deliberately after Create and before the wait, because
+        // "ready" means the endpoint is there, and a server that has not yet
+        // reached WaitForConnectionAsync still accepts a connection - Windows
+        // leaves it pending.
+        _ready.TrySetResult();
+
         await pipe.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+
+        // The timeout is on the exchange, not on the service. A caller that
+        // connects and says nothing holds one instance for ten seconds and
+        // then stops being this service's problem.
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(BrokerEndpoint.IoTimeoutMilliseconds);
+
+        string? line;
 
         try
         {
-            // The timeout is on the exchange, not on the service. A caller
-            // that connects and says nothing holds one instance for ten
-            // seconds and then stops being this service's problem.
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            deadline.CancelAfter(BrokerEndpoint.IoTimeoutMilliseconds);
-
-            string? line;
-
-            try
-            {
-                // READ FIRST, THEN IDENTIFY.
-                //
-                // Not a preference. ImpersonateNamedPipeClient cannot
-                // establish who the caller is until the caller has written
-                // something, so a server that identifies before reading
-                // either fails to identify or - with a small pipe buffer -
-                // waits for a write that is itself waiting for this read.
-                //
-                // Reading first costs nothing in safety. The length prefix
-                // is checked against the protocol limit before a byte is
-                // allocated, and the access list has already decided who
-                // may be on the other end at all. What the message MEANS is
-                // not looked at until the caller is known.
-                line = await BrokerFraming
-                    .ReadAsync(pipe, BrokerEndpoint.MaxRequestBytes, deadline.Token)
-                    .ConfigureAwait(false);
-            }
-            catch (BrokerFrameException ex)
-            {
-                // Logged here and not answered. The framing was wrong, so
-                // there is no request id to answer against and nothing the
-                // caller could usefully be told.
-                _logger.Warning(BrokerAudit.Category,
-                    $"A caller broke the framing rules: {ex.Message}");
-                return;
-            }
-
-            if (line is null)
-            {
-                return;
-            }
-
-            var caller = Resolve(pipe);
-            var response = _server.Handle(line, caller);
-
-            await BrokerFraming
-                .WriteAsync(pipe, ElevatedProtocol.Serialize(response),
-                    BrokerEndpoint.MaxResponseBytes, deadline.Token)
+            // READ FIRST, THEN IDENTIFY.
+            //
+            // Not a preference. ImpersonateNamedPipeClient cannot establish
+            // who the caller is until the caller has written something, so a
+            // server that identifies before reading either fails to identify
+            // or - with a small pipe buffer - waits for a write that is
+            // itself waiting for this read.
+            //
+            // Reading first costs nothing in safety. The length prefix is
+            // checked against the protocol limit before a byte is allocated,
+            // and the access list has already decided who may be on the
+            // other end at all. What the message MEANS is not looked at
+            // until the caller is known.
+            line = await BrokerFraming
+                .ReadAsync(pipe, BrokerEndpoint.MaxRequestBytes, deadline.Token)
                 .ConfigureAwait(false);
         }
-        finally
+        catch (BrokerFrameException ex)
         {
-            if (pipe.IsConnected)
-            {
-                pipe.Disconnect();
-            }
+            // Logged here and not answered. The framing was wrong, so there
+            // is no request id to answer against and nothing the caller
+            // could usefully be told.
+            _logger.Warning(BrokerAudit.Category,
+                $"A caller broke the framing rules: {ex.Message}");
+            return;
         }
+
+        if (line is null)
+        {
+            return;
+        }
+
+        var caller = Resolve(pipe);
+        var response = _server.Handle(line, caller);
+
+        await BrokerFraming
+            .WriteAsync(pipe, ElevatedProtocol.Serialize(response),
+                BrokerEndpoint.MaxResponseBytes, deadline.Token)
+            .ConfigureAwait(false);
+
+        // NO Disconnect(). THIS WAS THE CI FAILURE.
+        //
+        // DisconnectNamedPipe forces the client off and DISCARDS anything in
+        // the pipe the client has not read yet. The reply had just been
+        // written, so on a machine where the client's read continuation was
+        // slower than this line - a two-core runner with a contended thread
+        // pool - the answer was thrown away and the client saw a clean
+        // end-of-stream. It reported "the service did not respond", which is
+        // indistinguishable from the service not being there, so a refusal
+        // the broker had correctly decided came back as ServiceUnavailable.
+        //
+        // Measured, not guessed: with Disconnect() and a 50ms delay before
+        // the client reads, the reply is lost every time; with the handle
+        // simply closed, it arrives every time. Closing is the graceful path
+        // - the client drains what is buffered and then sees the end - and
+        // the loop creates a fresh instance for the next caller anyway, so
+        // Disconnect bought nothing to begin with.
+        //
+        // WaitForPipeDrain would be the other way to be sure, and is worse
+        // here: it blocks until the client reads, it takes no cancellation
+        // token, and a caller that connects and never reads would hold the
+        // serve loop.
     }
 
     /// <summary>
@@ -282,6 +345,58 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
     }
 
     /// <summary>
+    /// Forces the identity types to load BEFORE anyone impersonates.
+    ///
+    /// WHY THIS IS NOT SUPERSTITION
+    /// ----------------------------
+    /// <c>RunAsClient</c> impersonates the caller, and the caller connects at
+    /// <see cref="TokenImpersonationLevel.Identification"/> - deliberately,
+    /// because the service must be able to read who is calling and must not
+    /// be able to act as them. An identification-level token cannot be used
+    /// for file access at all, so any assembly the runtime has not loaded YET
+    /// cannot be loaded while that impersonation is in effect.
+    ///
+    /// <c>WindowsIdentity</c> derives from <c>ClaimsIdentity</c>, so the
+    /// first call to <c>WindowsIdentity.GetCurrent()</c> pulls in
+    /// System.Security.Claims. Inside the impersonated block that load fails,
+    /// and the failure arrives as a bare FileNotFoundException naming an
+    /// assembly that is plainly present - so the caller cannot be identified
+    /// and the request is refused.
+    ///
+    /// It is invisible most of the time: anything else that has already
+    /// touched a Windows identity has loaded the assembly, and then the
+    /// service works. Which means it would have failed on the FIRST request
+    /// after a service start, every boot, and worked on every one after it.
+    /// A security boundary that refuses the first caller and then stops
+    /// refusing is the worst kind of intermittent.
+    ///
+    /// Running the same calls once, unimpersonated, loads what is needed and
+    /// makes the impersonated path allocation-only.
+    /// </summary>
+    private static void WarmUpIdentity()
+    {
+        if (Volatile.Read(ref _identityWarm))
+        {
+            return;
+        }
+
+        using var current = WindowsIdentity.GetCurrent();
+
+        // Exactly what Classify does, so exactly the same code paths are
+        // loaded and jitted: the identity, the principal, the role check and
+        // a well-known SID.
+        _ = current.User?.Value;
+        _ = current.IsSystem;
+        _ = current.IsAuthenticated;
+        _ = new WindowsPrincipal(current).IsInRole(WindowsBuiltInRole.Administrator);
+        _ = new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null).Value;
+
+        Volatile.Write(ref _identityWarm, true);
+    }
+
+    private static bool _identityWarm;
+
+    /// <summary>
     /// Establishes who connected, from Windows rather than from the message.
     ///
     /// The SID comes out of the impersonation token on the pipe. Nothing the
@@ -299,6 +414,9 @@ public sealed class NamedPipeBrokerListener : IAsyncDisposable
         try
         {
             BrokerCaller resolved = BrokerCaller.Unknown;
+
+            // Everything this needs is already loaded. See WarmUpIdentity.
+            WarmUpIdentity();
 
             pipe.RunAsClient(() =>
             {

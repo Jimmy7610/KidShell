@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -160,116 +161,325 @@ public class NamedPipeBrokerTests
         Assert.Equal("KidShell.Security.v1", BrokerEndpoint.PipeName);
         Assert.DoesNotContain('\\', BrokerEndpoint.PipeName);
     }
-
     // ------------------------------------------------------- a round trip
+    //
+    // THE CI FAILURE THESE ARE WRITTEN AROUND
+    //
+    // Three of these tests failed on GitHub Actions and passed on every
+    // developer machine. The listener wrote its reply and then called
+    // Disconnect(), which forces the client off and DISCARDS anything the
+    // client has not read yet - so on a two-core runner with a contended
+    // thread pool the answer was thrown away and the client saw a clean
+    // end of stream. It reported "the service did not respond", which is
+    // indistinguishable from the service not being there: a refusal the
+    // broker had correctly decided came back as ServiceUnavailable.
+    //
+    // It was NOT a startup race. The listener creates its pipe synchronously
+    // before RunAsync reaches its first await, and the failing client had
+    // plainly connected - a pipe that did not exist yet would have produced a
+    // connect timeout, not a reply that went missing. Readiness is now
+    // explicit anyway, because an implicit guarantee that depends on where
+    // the first await happens is one refactoring away from being untrue.
+
+    /// <summary>
+    /// A listener and a client on a pipe name unique to the test, with no
+    /// sleeps anywhere: start-up waits on <see cref="NamedPipeBrokerListener.Ready"/>.
+    /// </summary>
+    private sealed class Harness : IAsyncDisposable
+    {
+        private readonly NamedPipeBrokerListener _listener;
+        private readonly CancellationTokenSource _stopping;
+        private readonly Task _serving;
+
+        private Harness(
+            string pipeName,
+            InMemoryPrivilegedStore store,
+            RecordingLogger logger,
+            NamedPipeBrokerListener listener,
+            CancellationTokenSource stopping)
+        {
+            PipeName = pipeName;
+            Store = store;
+            Logger = logger;
+            _listener = listener;
+            _stopping = stopping;
+            _serving = listener.RunAsync(stopping.Token);
+        }
+
+        public string PipeName { get; }
+
+        public InMemoryPrivilegedStore Store { get; }
+
+        public RecordingLogger Logger { get; }
+
+        public NamedPipeElevatedBrokerClient Client => new(PipeName, Logger);
+
+        public static async Task<Harness> StartAsync(
+            InMemoryPrivilegedStore? store = null, string? pipeName = null)
+        {
+            var name = pipeName ?? $"KidShell.Test.{Guid.NewGuid():n}";
+            var vault = store ?? new InMemoryPrivilegedStore();
+            var logger = new RecordingLogger();
+
+            var harness = new Harness(
+                name, vault, logger,
+                new NamedPipeBrokerListener(
+                    name, BrokerPipeAccessPlan.Unprovisioned(),
+                    new ElevatedBrokerServer(vault, new ParentCapabilityRegistry(), logger),
+                    logger),
+                new CancellationTokenSource(TimeSpan.FromSeconds(30)));
+
+            // The whole point of the readiness signal. No delay, no retry
+            // loop, no "it is probably up by now".
+            await harness._listener.Ready.ConfigureAwait(false);
+
+            return harness;
+        }
+
+        /// <summary>
+        /// Sends one request off the test's own thread.
+        ///
+        /// Send blocks, and blocking the thread xUnit handed this test would
+        /// make the suite's own concurrency limit part of what is being
+        /// measured.
+        /// </summary>
+        public Task<ElevatedResponse> SendAsync(ElevatedRequest request) =>
+            Task.Run(() => Client.Send(request));
+
+        /// <summary>
+        /// A response plus what the broker said about it.
+        ///
+        /// The broker deliberately tells the caller a closed reason and a
+        /// sentence, and keeps the detail in its own log. That is right in
+        /// production and useless in a failing test, so the assertion message
+        /// carries the log.
+        /// </summary>
+        public string Explain(ElevatedResponse response) =>
+            $"{response.Reason}: {response.Message}{Environment.NewLine}" +
+            string.Join(Environment.NewLine,
+                Logger.Entries.Select(e => $"  {e.Level} {e.Category}: {e.Message} {e.Exception}"));
+
+        public async ValueTask DisposeAsync()
+        {
+            await _stopping.CancelAsync();
+            await Task.WhenAny(_serving, Task.Delay(TimeSpan.FromSeconds(5)));
+            _stopping.Dispose();
+            await _listener.DisposeAsync();
+        }
+    }
+
+    private static string Counter(int used, int sequence) =>
+        $"{{\"schemaVersion\":1,\"localDate\":\"2026-09-30\",\"usedSeconds\":{used},\"sequence\":{sequence}}}";
+
+    // --------------------------------------------------------- readiness
+
+    [Fact]
+    public async Task Readiness_completes_once_the_pipe_exists()
+    {
+        await using var harness = await Harness.StartAsync();
+
+        // StartAsync already awaited it; this says what was awaited.
+        Assert.True(harness.Client.IsAvailable);
+    }
+
+    [Fact]
+    public async Task A_listener_that_cannot_create_its_pipe_never_reports_ready()
+    {
+        // The failure mode worth refusing to paper over. The listener catches
+        // a creation failure and retries, so a service whose endpoint cannot
+        // be created looks alive - and a readiness signal that completed
+        // anyway would make a test green against a broker that serves
+        // nothing.
+        var logger = new RecordingLogger();
+        var name = $"KidShell.Taken.{Guid.NewGuid():n}";
+
+        // The name is occupied by a pipe that allows exactly one instance, so
+        // the listener's own Create fails every time it tries - which is what
+        // "the endpoint cannot be stood up" looks like in practice.
+        using var squatter = new NamedPipeServerStream(
+            name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+
+        await using var listener = new NamedPipeBrokerListener(
+            name,
+            BrokerPipeAccessPlan.Unprovisioned(),
+            new ElevatedBrokerServer(
+                new InMemoryPrivilegedStore(), new ParentCapabilityRegistry(), logger),
+            logger);
+
+        using var stopping = new CancellationTokenSource();
+        var serving = listener.RunAsync(stopping.Token);
+
+        var finished = await Task.WhenAny(listener.Ready, Task.Delay(TimeSpan.FromSeconds(2)));
+
+        Assert.NotSame(listener.Ready, finished);
+        Assert.False(listener.Ready.IsCompletedSuccessfully);
+
+        await stopping.CancelAsync();
+        await Task.WhenAny(serving, Task.Delay(TimeSpan.FromSeconds(5)));
+
+        // And once it has stopped, awaiting readiness answers rather than
+        // hanging until the caller's own timeout.
+        Assert.True(listener.Ready.IsCompleted);
+        Assert.False(listener.Ready.IsCompletedSuccessfully);
+    }
+
+    // -------------------------------------------------------- round trips
 
     [Fact]
     public async Task A_client_and_a_server_exchange_one_typed_message()
     {
-        var name = $"KidShell.Test.{Guid.NewGuid():n}";
-        var store = new InMemoryPrivilegedStore();
-        var logger = new RecordingLogger();
+        await using var harness = await Harness.StartAsync();
 
-        var server = new ElevatedBrokerServer(store, new ParentCapabilityRegistry(), logger);
-
-        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-
-        await using var listener = new NamedPipeBrokerListener(
-            name, BrokerPipeAccessPlan.Unprovisioned(), server, logger);
-
-        var serving = listener.RunAsync(stopping.Token);
-
-        var client = new NamedPipeElevatedBrokerClient(name, logger);
-
-        var response = await Task.Run(() => client.Send(new ElevatedRequest
+        var response = await harness.SendAsync(new ElevatedRequest
         {
             Kind = ElevatedOperationKind.Probe,
             RequestId = "round-trip"
-        }), stopping.Token);
+        });
 
-        Assert.True(response.Success, response.Message);
+        Assert.True(response.Success, harness.Explain(response));
         Assert.Equal("round-trip", response.RequestId);
 
         // A second request on a new connection. The service answers one
         // message per connection, so "it worked twice" is the property that
         // matters for a product that writes a counter on a timer.
-        var second = await Task.Run(() => client.Send(new ElevatedRequest
+        var second = await harness.SendAsync(new ElevatedRequest
         {
             Kind = ElevatedOperationKind.SaveScreenTimeState,
             RequestId = "second",
-            ProtectedPayload =
-                """{"schemaVersion":1,"localDate":"2026-09-30","usedSeconds":60,"sequence":1}""",
+            ProtectedPayload = Counter(60, 1),
             DryRun = false
-        }), stopping.Token);
+        });
 
         Assert.True(second.Success, second.Message);
-        Assert.NotNull(store.Read(ProtectedDocument.ScreenTimeState));
+        Assert.NotNull(harness.Store.Read(ProtectedDocument.ScreenTimeState));
+    }
 
-        await stopping.CancelAsync();
-        await Task.WhenAny(serving, Task.Delay(TimeSpan.FromSeconds(5)));
+    [Fact]
+    public async Task A_reply_survives_a_client_that_is_slow_to_read()
+    {
+        // THE REGRESSION TEST FOR THE CI FAILURE, and the reason it is
+        // written against the frames rather than through the client: the
+        // defect was that the server discarded a reply the client had not
+        // read yet, so the test has to be the slow reader itself.
+        //
+        // Measured before the fix: with Disconnect() and a 50ms gap the reply
+        // was lost every time. It is a real delay rather than a sleep
+        // standing in for a race - the delay IS the condition under test.
+        await using var harness = await Harness.StartAsync();
+
+        using var pipe = new NamedPipeClientStream(
+            ".", harness.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous,
+            TokenImpersonationLevel.Identification);
+
+        await pipe.ConnectAsync(5000);
+
+        await BrokerFraming.WriteAsync(
+            pipe,
+            ElevatedProtocol.Serialize(new ElevatedRequest
+            {
+                Kind = ElevatedOperationKind.Probe,
+                RequestId = "slow-reader"
+            }),
+            BrokerEndpoint.MaxRequestBytes,
+            CancellationToken.None);
+
+        await Task.Delay(TimeSpan.FromMilliseconds(250));
+
+        var line = await BrokerFraming.ReadAsync(
+            pipe, BrokerEndpoint.MaxResponseBytes, CancellationToken.None);
+
+        Assert.NotNull(line);
+
+        var response = ElevatedProtocol.DeserializeResponse(line);
+
+        Assert.NotNull(response);
+        Assert.True(response.Success, response.Message);
+        Assert.Equal("slow-reader", response.RequestId);
     }
 
     [Fact]
     public async Task A_decrement_sent_over_the_real_pipe_is_refused()
     {
         // The same rule as the unit test, proven once through the whole
-        // transport - because a rule that is enforced in a class nobody
-        // reaches is the shape of defect this pass exists for.
-        var name = $"KidShell.Test.{Guid.NewGuid():n}";
+        // transport - because a rule enforced in a class nobody reaches is
+        // the shape of defect this whole pass exists for.
         var store = new InMemoryPrivilegedStore();
+        store.Seed(ProtectedDocument.ScreenTimeState, Counter(3600, 20));
 
-        store.Seed(ProtectedDocument.ScreenTimeState,
-            """{"schemaVersion":1,"localDate":"2026-09-30","usedSeconds":3600,"sequence":20}""");
+        await using var harness = await Harness.StartAsync(store);
 
-        var logger = new RecordingLogger();
-        var server = new ElevatedBrokerServer(store, new ParentCapabilityRegistry(), logger);
-
-        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-
-        await using var listener = new NamedPipeBrokerListener(
-            name, BrokerPipeAccessPlan.Unprovisioned(), server, logger);
-
-        var serving = listener.RunAsync(stopping.Token);
-
-        var client = new NamedPipeElevatedBrokerClient(name, logger);
-
-        var response = await Task.Run(() => client.Send(new ElevatedRequest
+        var response = await harness.SendAsync(new ElevatedRequest
         {
             Kind = ElevatedOperationKind.SaveScreenTimeState,
             RequestId = "decrement",
-            ProtectedPayload =
-                """{"schemaVersion":1,"localDate":"2026-09-30","usedSeconds":0,"sequence":21}""",
+            ProtectedPayload = Counter(0, 21),
             DryRun = false
-        }), stopping.Token);
+        });
 
         Assert.False(response.Success);
         Assert.Equal(BrokerFailureReason.TransitionRejected, response.Reason);
         Assert.Contains("3600", store.Read(ProtectedDocument.ScreenTimeState)!);
-
-        await stopping.CancelAsync();
-        await Task.WhenAny(serving, Task.Delay(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]
-    public void A_client_with_no_service_fails_closed_rather_than_throwing()
+    public async Task A_slow_caller_does_not_stop_the_broker_for_everybody()
+    {
+        // The other defect the CI failure uncovered. The serve loop caught
+        // every OperationCanceledException, including its own per-exchange
+        // deadline - so a caller that connected and said nothing stopped the
+        // broker permanently, and the parent's policy could not be written
+        // again until the service restarted. One connect.
+        await using var harness = await Harness.StartAsync();
+
+        using (var silent = new NamedPipeClientStream(
+                   ".", harness.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous,
+                   TokenImpersonationLevel.Identification))
+        {
+            await silent.ConnectAsync(5000);
+
+            // Connected, and says nothing. Abandoning the connection is what
+            // a crashed caller does, and the server's deadline covers the
+            // case where it does not even do that.
+        }
+
+        var response = await harness.SendAsync(new ElevatedRequest
+        {
+            Kind = ElevatedOperationKind.Probe,
+            RequestId = "after-the-silent-one"
+        });
+
+        Assert.True(response.Success, harness.Explain(response));
+    }
+
+    [Fact]
+    public void A_client_with_no_service_fails_closed_within_a_bounded_time()
     {
         // Every development machine, and any machine where the service has
-        // stopped. The product's answer to this is to refuse, so the client's
-        // job is to report rather than to crash.
+        // stopped. The product's answer is to refuse, so the client's job is
+        // to report rather than to crash - and to do it quickly, because the
+        // screen-time counter is written on a timer and a shell that stalls
+        // for a minute per tick has replaced one failure with another.
         var client = new NamedPipeElevatedBrokerClient(
             $"KidShell.Missing.{Guid.NewGuid():n}", new RecordingLogger());
 
-        Assert.False(client.IsAvailable);
+        var started = Stopwatch.StartNew();
 
         var response = client.Send(new ElevatedRequest
         {
             Kind = ElevatedOperationKind.SaveScreenTimeState,
             RequestId = "no-service",
-            ProtectedPayload = """{"schemaVersion":1,"localDate":"2026-09-30","usedSeconds":60}"""
+            ProtectedPayload = Counter(60, 1)
         });
+
+        started.Stop();
 
         Assert.False(response.Success);
         Assert.Equal(BrokerFailureReason.ServiceUnavailable, response.Reason);
+
+        // The connect timeout plus generous room for a loaded runner.
+        Assert.True(
+            started.Elapsed < TimeSpan.FromSeconds(20),
+            $"the client took {started.Elapsed.TotalSeconds:F1}s to fail closed");
     }
 
     [Fact]
@@ -277,33 +487,23 @@ public class NamedPipeBrokerTests
     {
         // One message per connection means a client holds nothing across a
         // restart, which is what makes this work without any reconnect logic
-        // to get wrong.
-        var name = $"KidShell.Test.{Guid.NewGuid():n}";
+        // to get wrong. The store is shared, as it would be on a real
+        // machine: the service restarts, the protected documents do not.
         var store = new InMemoryPrivilegedStore();
-        var logger = new RecordingLogger();
-        var client = new NamedPipeElevatedBrokerClient(name, logger);
+        var name = $"KidShell.Test.{Guid.NewGuid():n}";
+        var client = new NamedPipeElevatedBrokerClient(name, new RecordingLogger());
 
         for (var run = 0; run < 2; run++)
         {
-            var server = new ElevatedBrokerServer(store, new ParentCapabilityRegistry(), logger);
-
-            using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-
-            await using var listener = new NamedPipeBrokerListener(
-                name, BrokerPipeAccessPlan.Unprovisioned(), server, logger);
-
-            var serving = listener.RunAsync(stopping.Token);
+            await using var harness = await Harness.StartAsync(store, name);
 
             var response = await Task.Run(() => client.Send(new ElevatedRequest
             {
                 Kind = ElevatedOperationKind.Probe,
                 RequestId = $"run-{run}"
-            }), stopping.Token);
+            }));
 
             Assert.True(response.Success, $"run {run}: {response.Message}");
-
-            await stopping.CancelAsync();
-            await Task.WhenAny(serving, Task.Delay(TimeSpan.FromSeconds(5)));
         }
     }
 
