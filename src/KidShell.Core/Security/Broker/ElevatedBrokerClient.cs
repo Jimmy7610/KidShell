@@ -170,6 +170,10 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
             return ProtectedStageResult.Reject(problem);
         }
 
+        // Staging happens when a parent saves settings: once, deliberately,
+        // not on a timer. The pre-check is kept here because a clear "the
+        // service is not installed" is worth more on that path than one
+        // avoided connection.
         if (!_broker.IsAvailable)
         {
             return ProtectedStageResult.Unavailable("Rättighetstjänsten är inte tillgänglig.");
@@ -214,11 +218,12 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
             return ProtectedWriteResult.Reject(problem);
         }
 
-        if (!_broker.IsAvailable)
-        {
-            return ProtectedWriteResult.Unavailable("Rättighetshjälparen är inte tillgänglig.");
-        }
-
+        // NO AVAILABILITY PRE-CHECK. The send is the check.
+        //
+        // Asking first meant opening the pipe twice for every write, and on
+        // a machine with no service that is two connect timeouts per
+        // screen-time tick - seconds of stall, on a timer, on exactly the
+        // machines where the product is already in trouble.
         var response = _broker.Send(new ElevatedRequest
         {
             Kind = kind,
@@ -233,6 +238,15 @@ public sealed class BrokeredProtectedStateWriter : IProtectedStateWriter
         }
 
         _logger.Warning("Storage", $"Protected write {kind} was not completed: {response.Message}");
+
+        if (response.Reason == BrokerFailureReason.ServiceUnavailable)
+        {
+            // Kept distinct from a refusal. "There is nowhere to write this"
+            // and "what you asked for is not allowed" lead to different
+            // product behaviour: the first makes enforcement unavailable,
+            // the second is a bug or an attack.
+            return ProtectedWriteResult.Unavailable(response.Message);
+        }
 
         return response.Rejected
             ? ProtectedWriteResult.Reject(response.Message)

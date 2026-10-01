@@ -142,6 +142,20 @@ public sealed class ParentPinService : IParentPinService
             return answer.Result;
         }
 
+        if (_authenticator is not null && _environment.IsProduction)
+        {
+            // A production build has a verifier and cannot reach it. Falling
+            // through to the comparison below would quietly move the check
+            // back into the process the check exists to constrain - the
+            // strictly worse option dressed as resilience. Parent Mode stays
+            // shut, which is the same answer this build already gives when
+            // the protected policy cannot be read.
+            _logger.Error("Pin",
+                "The security service is not available; Parent Mode stays closed.");
+
+            return PinVerificationResult.Incorrect;
+        }
+
         var settings = _state.Current.ParentPin;
 
         if (settings.IsConfigured)

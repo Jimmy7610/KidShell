@@ -60,27 +60,70 @@ public sealed class NamedPipeElevatedBrokerClient : IElevatedBrokerClient
         Manifest = BrokerManifestElevation.AsInvoker
     };
 
+    private readonly Lock _gate = new();
+    private bool _reachable;
+    private DateTimeOffset _lastAnswerUtc = DateTimeOffset.MinValue;
+
     /// <summary>
     /// Whether the service is listening.
     ///
-    /// A real connection attempt with a short timeout, because the question
-    /// "can this machine persist security state" has no cheaper honest
-    /// answer. A file-existence check was the old one, and it was true on
-    /// every machine where the write then failed.
+    /// A real connection attempt, because the question "can this machine
+    /// persist security state" has no cheaper honest answer. A
+    /// file-existence check was the old one, and it was true on every
+    /// machine where the write then failed.
+    ///
+    /// REMEMBERED FOR A FEW SECONDS, AND THAT IS NOT AN OPTIMISATION
+    /// -------------------------------------------------------------
+    /// The first version connected on every call, and the callers ask before
+    /// every write. On a machine with no service that is a two-second
+    /// timeout per probe, and the screen-time counter is written on a
+    /// thirty-second timer - so the shell would have stalled for seconds at
+    /// a time, repeatedly, on exactly the machines where the product is
+    /// already in trouble.
+    ///
+    /// <see cref="Send"/> updates the same answer from its own outcome, so
+    /// in steady use no extra connection is made at all: the writes
+    /// themselves are the probe.
     /// </summary>
     public bool IsAvailable
     {
         get
         {
+            lock (_gate)
+            {
+                if (DateTimeOffset.UtcNow - _lastAnswerUtc < AvailabilityMemory)
+                {
+                    return _reachable;
+                }
+            }
+
             try
             {
                 using var pipe = Connect();
+                Remember(true);
                 return true;
             }
-            catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is TimeoutException or IOException
+                                          or UnauthorizedAccessException or InvalidOperationException)
             {
+                Remember(false);
                 return false;
             }
+        }
+    }
+
+    /// <summary>
+    /// Short. Long enough that one write does not probe twice, short enough
+    /// that a service that has just started is noticed within a tick.
+    /// </summary>
+    private static readonly TimeSpan AvailabilityMemory = TimeSpan.FromSeconds(5);
+
+    private void Remember(bool reachable)
+    {
+        lock (_gate)
+        {
+            _reachable = reachable;
+            _lastAnswerUtc = DateTimeOffset.UtcNow;
         }
     }
 
@@ -114,6 +157,10 @@ public sealed class NamedPipeElevatedBrokerClient : IElevatedBrokerClient
                 return Unavailable(request, "Svaret från rättighetstjänsten kunde inte tolkas.");
             }
 
+            // The send is itself the most reliable availability answer there
+            // is, so it is the one remembered.
+            Remember(true);
+
             if (response.ProtocolVersion != BrokerEndpoint.ProtocolVersion)
             {
                 // A service from a different build. Refusing is the only safe
@@ -137,6 +184,8 @@ public sealed class NamedPipeElevatedBrokerClient : IElevatedBrokerClient
             // the caller's job is to fail closed, not to crash.
             _logger.Warning(BrokerAudit.Category,
                 "The security service could not be reached.", ex);
+
+            Remember(false);
 
             return Unavailable(request, "Rättighetstjänsten kunde inte nås.");
         }

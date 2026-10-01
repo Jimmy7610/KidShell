@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using KidShell.Core.Security.Broker;
+using KidShell.Core.Security.Storage;
 using Xunit;
 
 namespace KidShell.Core.Tests;
@@ -111,6 +112,75 @@ public class BrokerTransportDefectTests
     }
 
     // ---------------------------------------------- what replaced it
+
+    // -------------------------------------------- the cost of asking twice
+
+    [Fact]
+    public void One_protected_write_opens_the_pipe_once()
+    {
+        // The first version asked IsAvailable and then sent, which is two
+        // connections per write. On a machine with no service that is two
+        // connect timeouts every thirty seconds, because the screen-time
+        // counter is written on a timer - seconds of stall, repeatedly, on
+        // exactly the machines where the product is already in trouble.
+        var broker = new CountingBroker(new ElevatedResponse
+        {
+            RequestId = "x", Success = true
+        });
+
+        var writer = new BrokeredProtectedStateWriter(broker, new RecordingLogger());
+
+        Assert.True(writer.SaveScreenTimeState("""{"schemaVersion":1}""").Success);
+
+        Assert.Equal(1, broker.Sends);
+        Assert.Equal(0, broker.AvailabilityChecks);
+    }
+
+    [Fact]
+    public void An_unreachable_service_is_reported_as_unavailable_not_refused()
+    {
+        // The product does different things with the two. "There is nowhere
+        // to write this" makes enforcement unavailable; "what you asked for
+        // is not allowed" is a bug or an attack.
+        var broker = new CountingBroker(new ElevatedResponse
+        {
+            RequestId = "x",
+            Success = false,
+            Reason = BrokerFailureReason.ServiceUnavailable,
+            Message = "no service"
+        });
+
+        var result = new BrokeredProtectedStateWriter(broker, new RecordingLogger())
+            .SaveScreenTimeState("""{"schemaVersion":1}""");
+
+        Assert.Equal(ProtectedWriteStatus.WriterUnavailable, result.Status);
+    }
+
+    private sealed class CountingBroker : IElevatedBrokerClient
+    {
+        private readonly ElevatedResponse _response;
+
+        public CountingBroker(ElevatedResponse response) => _response = response;
+
+        public int Sends { get; private set; }
+
+        public int AvailabilityChecks { get; private set; }
+
+        public bool IsAvailable
+        {
+            get
+            {
+                AvailabilityChecks++;
+                return true;
+            }
+        }
+
+        public ElevatedResponse Send(ElevatedRequest request)
+        {
+            Sends++;
+            return _response with { RequestId = request.RequestId };
+        }
+    }
 
     [Fact]
     public void The_named_pipe_transport_needs_no_elevation_of_its_own()
