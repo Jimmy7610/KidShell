@@ -1,14 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The elevated helper.
+    The privileged broker.
 
-    A console executable, not a service: it starts when a parent confirms a
-    security change, does the typed work it was asked for, and exits. There is
-    no resident elevated process, no listening endpoint and no persistent
-    privilege - which is the point. A long-lived administrator service that
-    accepts requests is a much larger thing to get right than a short-lived
-    process that reads one conversation from its own stdin.
+    A Windows service, not a console helper. It used to be the second: a
+    process started per request, expected to be elevated, and never elevated
+    by anything - so on a real child account it printed a line to stderr and
+    exited, and every protected write failed. See
+    docs/PRIVILEGED-BROKER-SERVICE-2026-09-30.md.
+
+    Adding a consent prompt would not have fixed it. The screen-time counter
+    and the PIN throttle are written during ordinary use, and a shell a child
+    operates cannot raise a prompt on a timer. So the privilege is held once
+    by something already running, and the unprivileged side connects to it.
+
+    The cost of that is a resident LocalSystem process with an endpoint, which
+    is a much larger thing to get right than a short-lived process reading its
+    own stdin - and the authorization matrix, the caller resolution and the
+    monotonic transition rules are the work of getting it right.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -18,13 +27,18 @@
     <Platforms>AnyCPU;x64;ARM64</Platforms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
 
-    <!-- requireAdministrator: the helper must not run silently unelevated. -->
+    <!-- asInvoker, with elevation enforced in code. See app.manifest. -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\KidShell.Core\KidShell.Core.csproj" />
     <ProjectReference Include="..\KidShell.WindowsIntegration\KidShell.WindowsIntegration.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>

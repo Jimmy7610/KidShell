@@ -41,7 +41,6 @@ public sealed class ElevatedDispatcher
     private readonly IServiceControl _services;
     private readonly IFileSystem _files;
     private readonly string _workingDirectory;
-    private readonly IPrivilegedProtectedStateStore _protectedState;
 
     public ElevatedDispatcher(IKidShellLogger logger)
         : this(logger, BuildDefaults(logger))
@@ -57,7 +56,6 @@ public sealed class ElevatedDispatcher
         _services = services.Services;
         _files = services.Files;
         _workingDirectory = services.WorkingDirectory;
-        _protectedState = services.ProtectedState;
     }
 
     private static HostServices BuildDefaults(IKidShellLogger logger)
@@ -75,8 +73,7 @@ public sealed class ElevatedDispatcher
             Files = new PhysicalFileSystem(),
             WorkingDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "KidShell", "security"),
-            ProtectedState = new PrivilegedProtectedStateStore(logger)
+                "KidShell", "security")
         };
     }
 
@@ -142,34 +139,18 @@ public sealed class ElevatedDispatcher
             };
         }
 
-        // Protected state writes, handled here rather than as a security
-        // operation.
+        // Protected-state writes do NOT arrive here any more.
         //
-        // They are not Windows security mutations - nothing about the machine
-        // changes - so they are not gated on an Apply-mode context the way
-        // account and policy operations are. What they ARE is a write the
-        // child's own account must not be able to perform, which is why they
-        // live behind this boundary at all.
-        if (ProtectedDocumentFor(request.Kind) is { } document)
-        {
-            var write = _protectedState.Write(document, request.ProtectedPayload!);
-
-            if (!write.Success)
-            {
-                _logger.Warning(SecurityAuditEvents.Category,
-                    $"Protected write {request.Kind} {request.RequestId} failed: {write.Status}.");
-            }
-
-            return new ElevatedResponse
-            {
-                RequestId = request.RequestId,
-                Success = write.Success,
-                Rejected = write.Status == ProtectedWriteStatus.Rejected,
-                Message = write.Success ? "Sparat." : "Kunde inte sparas.",
-                Detail = write.Detail
-            };
-        }
-
+        // PRIVILEGED BROKER HARDENING. They used to, and the dispatcher wrote
+        // them straight through: whatever the caller sent became the
+        // document. That is safe only if the caller is trusted, and the
+        // caller is a process running as the child.
+        //
+        // They now go to ElevatedBrokerServer, which knows who is asking and
+        // what the document currently says, and which refuses a counter that
+        // goes down or a throttle that forgives itself. Keeping a second
+        // write path here would be a way around all of it, so there is not
+        // one: this dispatcher handles machine mutations and nothing else.
         var operation = Create(request);
 
         if (operation is null)
@@ -244,22 +225,6 @@ public sealed class ElevatedDispatcher
     /// the request, and no way to reach a type the helper was not compiled
     /// with.
     /// </summary>
-    /// <summary>
-    /// Which protected document a request names, or null when it names none.
-    ///
-    /// The entire mapping from request to destination, in one total switch.
-    /// The caller never contributes a path, so this is the only thing that
-    /// decides where a protected write lands.
-    /// </summary>
-    private static ProtectedDocument? ProtectedDocumentFor(ElevatedOperationKind kind) => kind switch
-    {
-        ElevatedOperationKind.SaveParentPolicy => ProtectedDocument.ParentPolicy,
-        ElevatedOperationKind.SaveScreenTimeState => ProtectedDocument.ScreenTimeState,
-        ElevatedOperationKind.SavePinThrottleState => ProtectedDocument.PinThrottleState,
-        ElevatedOperationKind.MarkProvisioned => ProtectedDocument.ProvisioningMarker,
-        _ => null
-    };
-
     private ISecurityOperation? Create(ElevatedRequest request) => request.Kind switch
     {
         ElevatedOperationKind.CreateChildAccount => new CreateChildAccountOperation(
@@ -279,6 +244,10 @@ public sealed class ElevatedDispatcher
 
         ElevatedOperationKind.InstallWatchdogService => new WatchdogServiceOperation(
             _services, _files, request.ExecutablePath!, _logger),
+
+        ElevatedOperationKind.InstallSecurityHostService => new SecurityHostServiceOperation(
+            _services, _files, request.ExecutablePath!,
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), _logger),
 
         // Assigned Access and browser policy need artifacts the caller builds
         // from settings; both are created by the caller-side factory so the
@@ -304,7 +273,4 @@ internal sealed record HostServices
     public required IFileSystem Files { get; init; }
 
     public required string WorkingDirectory { get; init; }
-
-    /// <summary>Where protected documents are written. Fixed, never a request field.</summary>
-    public required IPrivilegedProtectedStateStore ProtectedState { get; init; }
 }
