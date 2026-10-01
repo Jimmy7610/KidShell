@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Runtime;
 using KidShell.Core.Security;
+using KidShell.Core.Security.Broker;
 using KidShell.Core.Security.Storage;
 
 namespace KidShell.Core.Configuration;
@@ -75,6 +76,7 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
     private readonly IRuntimeEnvironment _environment;
     private readonly IKidShellLogger _logger;
     private readonly TimeProvider _time;
+    private readonly IParentPolicyApprovalChannel? _approval;
 
     public ProtectedConfigurationStore(
         IConfigurationStore profileStore,
@@ -82,7 +84,8 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
         IProtectedStateWriter writer,
         IRuntimeEnvironment environment,
         IKidShellLogger logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        IParentPolicyApprovalChannel? approval = null)
     {
         _profileStore = profileStore;
         _reader = reader;
@@ -90,6 +93,7 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
         _environment = environment;
         _logger = logger;
         _time = time ?? TimeProvider.System;
+        _approval = approval;
     }
 
     public string ConfigurationFilePath => _profileStore.ConfigurationFilePath;
@@ -230,7 +234,11 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
             ParentPin = configuration.ParentPin
         };
 
-        var write = _writer.SaveParentPolicy(JsonSerializer.Serialize(policy, Options));
+        var document = JsonSerializer.Serialize(policy, Options);
+
+        var write = _approval is null
+            ? _writer.SaveParentPolicy(document)
+            : StageAndApprove(document);
 
         if (!write.Success)
         {
@@ -262,5 +270,42 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
         // chosen avatar, which is a far smaller loss than a policy that half
         // committed.
         return _profileStore.Save(configuration);
+    }
+
+    /// <summary>
+    /// Proposes the policy, then asks for the authority to make it live.
+    ///
+    /// PRIVILEGED BROKER HARDENING. The write that used to happen here was
+    /// authorized by nothing but the fact that KidShell asked for it, and
+    /// KidShell runs as the child. Now the child's session can only propose:
+    /// the staged document goes to a slot nothing enforces, and an elevated
+    /// administrator turns it into the policy.
+    ///
+    /// The digest travels between the two steps so that what was approved
+    /// and what becomes live are provably the same bytes. Without it a
+    /// modified child process could stage something harmless, wait for the
+    /// parent to answer the prompt, and replace it in between.
+    /// </summary>
+    private ProtectedWriteResult StageAndApprove(string document)
+    {
+        var staged = _writer.StageParentPolicy(document);
+
+        if (!staged.IsStaged)
+        {
+            return new ProtectedWriteResult(staged.Status, staged.Detail);
+        }
+
+        var approval = _approval!.Approve(staged.Digest);
+
+        if (!approval.Success)
+        {
+            // Nothing authoritative changed, and the staged slot is not read
+            // by anything. A refused approval therefore leaves the machine
+            // exactly as it was, which is what the caller is told.
+            _logger.Warning("Storage",
+                $"A parent policy was staged and not approved ({approval.Status}).");
+        }
+
+        return approval;
     }
 }

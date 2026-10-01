@@ -1,5 +1,6 @@
 using KidShell.Core.Configuration;
 using KidShell.Core.Diagnostics;
+using KidShell.Core.Security.Broker;
 
 namespace KidShell.Core.ScreenTime;
 
@@ -59,6 +60,7 @@ public sealed class ScreenTimeEngine
     private readonly IScreenTimeStateStore _store;
     private readonly IKidShellLogger _logger;
     private readonly TimeProvider _time;
+    private readonly IScreenTimeParentAuthority? _parentAuthority;
 
     private ScreenTimeState _current;
     private long _lastTickStamp;
@@ -67,12 +69,14 @@ public sealed class ScreenTimeEngine
         IAppStateService state,
         IScreenTimeStateStore store,
         IKidShellLogger logger,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        IScreenTimeParentAuthority? parentAuthority = null)
     {
         _state = state;
         _store = store;
         _logger = logger;
         _time = time ?? TimeProvider.System;
+        _parentAuthority = parentAuthority;
 
         var load = _store.Load();
         _current = load.State;
@@ -421,6 +425,13 @@ public sealed class ScreenTimeEngine
 
         RollOverIfNewDay();
 
+        if (TryParentAuthority(a => a.GrantMinutes(minutes), $"{minutes} extra minutes"))
+        {
+            var granted = Evaluate();
+            StatusChanged?.Invoke(this, granted);
+            return granted;
+        }
+
         _current.BonusMinutes += minutes;
         Persist();
 
@@ -436,6 +447,13 @@ public sealed class ScreenTimeEngine
     {
         RollOverIfNewDay();
 
+        if (TryParentAuthority(a => a.GrantRestOfDay(), "an unlimited day"))
+        {
+            var granted = Evaluate();
+            StatusChanged?.Invoke(this, granted);
+            return granted;
+        }
+
         _current.UnlimitedForToday = true;
         Persist();
 
@@ -449,6 +467,20 @@ public sealed class ScreenTimeEngine
     /// <summary>Clears today's usage. A deliberate parent action.</summary>
     public ScreenTimeSnapshot ResetToday()
     {
+        if (TryParentAuthority(a => a.ResetToday(), "a reset"))
+        {
+            // The privileged side cleared the counter and the local state has
+            // been reloaded from it. The two flags go with it: a parent
+            // saying "start today again" is the deliberate act by somebody
+            // with authority that these were waiting for.
+            _isUsageUnknown = false;
+            _enforcementUnavailable = false;
+
+            var reset = Evaluate();
+            StatusChanged?.Invoke(this, reset);
+            return reset;
+        }
+
         _current = new ScreenTimeState
         {
             LocalDate = Today,
@@ -472,6 +504,45 @@ public sealed class ScreenTimeEngine
         var snapshot = Evaluate();
         StatusChanged?.Invoke(this, snapshot);
         return snapshot;
+    }
+
+    /// <summary>
+    /// Routes a parent's grant to the privileged side, when there is one.
+    ///
+    /// PRIVILEGED BROKER HARDENING. These three changes make the child's
+    /// situation LOOSER, which is the one direction the transition rules
+    /// refuse from the child's own session - and rightly, because a state
+    /// the child's process composes is a state the child's process chose.
+    /// So the engine does not compose one: it asks for the change, and the
+    /// privileged side applies it to the counter it holds.
+    ///
+    /// The local state is then reloaded rather than guessed at. Keeping a
+    /// second copy of what the grant must have produced is how two sides of
+    /// a boundary start disagreeing.
+    ///
+    /// Returns false when there is no privileged side - a development build,
+    /// or a test - and the caller falls back to changing the state here.
+    /// </summary>
+    private bool TryParentAuthority(Func<IScreenTimeParentAuthority, bool> act, string what)
+    {
+        if (_parentAuthority is not { IsAvailable: true })
+        {
+            return false;
+        }
+
+        if (!act(_parentAuthority))
+        {
+            _logger.Error("ScreenTime",
+                $"The security service did not apply {what}. Nothing was changed.");
+
+            return false;
+        }
+
+        var load = _store.Load();
+        _current = load.Primary ?? load.State;
+
+        _logger.Info("ScreenTime", $"The security service applied {what}.");
+        return true;
     }
 
     /// <summary>
