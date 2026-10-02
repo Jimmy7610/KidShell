@@ -33,6 +33,13 @@ if (arguments.Length == 0 || arguments.Contains("--help") || arguments.Contains(
     Console.WriteLine("  capability  --facts <f>");
     Console.WriteLine("  checkpoint  --in <f> --machine <name> --run <id>");
     Console.WriteLine("  report      --run <dir> [--out <f>]");
+    Console.WriteLine();
+    Console.WriteLine("  release-manifest --in <f> [--bundle <dir>]");
+    Console.WriteLine("  plan-install     --manifest <f> [--receipt <f>] [--architecture x64] [--production] [--repair]");
+    Console.WriteLine("  install          --manifest <f> --bundle <dir> [--program-files <d>] [--apply]");
+    Console.WriteLine("  verify-install   [--receipt <f>] [--program-files <d>] [--signature-checked]");
+    Console.WriteLine("  uninstall        [--receipt <f>] [--program-files <d>] [--apply]");
+    Console.WriteLine();
     Console.WriteLine("  --self-test");
     Console.WriteLine();
     Console.WriteLine("Reads and prints. Changes nothing on this machine.");
@@ -63,6 +70,30 @@ try
         "checkpoint" => Verbs.Checkpoint(
             Arg(arguments, "--in"), Arg(arguments, "--machine"), Arg(arguments, "--run")),
         "report" => Verbs.Report(Arg(arguments, "--run"), Arg(arguments, "--out")),
+
+        // Release and install. The mutating ones need --apply, and the script
+        // in front of them has already passed the dedicated-device interlock.
+        "release-manifest" => InstallVerbs.ReleaseManifest(
+            Arg(arguments, "--in"), Arg(arguments, "--bundle")),
+
+        "plan-install" => InstallVerbs.PlanInstall(
+            Arg(arguments, "--manifest"), Arg(arguments, "--receipt"),
+            Arg(arguments, "--architecture"),
+            arguments.Contains("--production"), arguments.Contains("--repair")),
+
+        "install" => InstallVerbs.Install(
+            Arg(arguments, "--manifest"), Arg(arguments, "--bundle"),
+            Arg(arguments, "--program-files"), Arg(arguments, "--receipt"),
+            Arg(arguments, "--program-data"), arguments.Contains("--apply")),
+
+        "verify-install" => InstallVerbs.VerifyInstall(
+            Arg(arguments, "--receipt"), Arg(arguments, "--program-files"),
+            Arg(arguments, "--program-data"), arguments.Contains("--signature-checked")),
+
+        "uninstall" => InstallVerbs.Uninstall(
+            Arg(arguments, "--receipt"), Arg(arguments, "--program-files"),
+            Arg(arguments, "--program-data"), arguments.Contains("--apply")),
+
         _ => Unknown(arguments[0])
     };
 }
