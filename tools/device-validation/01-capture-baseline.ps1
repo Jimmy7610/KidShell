@@ -22,7 +22,7 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'KidShellValidation.psm1') -Force
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$context = Get-ValidationContext
 $config = Import-ValidationConfig -Path $ConfigPath
 
 if (-not $EvidenceRoot -and $config -and $config.EvidenceDirectory) {
@@ -30,11 +30,11 @@ if (-not $EvidenceRoot -and $config -and $config.EvidenceDirectory) {
 }
 
 $run = New-ValidationRun -EvidenceRoot $EvidenceRoot
-$audit = Join-Path $repoRoot 'tools\audit-windows-state.ps1'
 
-if (-not (Test-Path $audit)) {
-    throw "The machine-state audit was not found at $audit."
-}
+# From the context. A bundle keeps the audit script beside these ones; a
+# checkout keeps it in tools\. Looking only in the second is why this script
+# would have been the next thing to fail on a dedicated machine.
+$audit = Get-ValidationAuditScript
 
 $before = Join-Path $run.Path 'before-machine-state.txt'
 
@@ -42,8 +42,15 @@ $before = Join-Path $run.Path 'before-machine-state.txt'
 
 $hash = (Get-FileHash $before -Algorithm SHA256).Hash
 
-$gitSha = ''
-try { $gitSha = (& git -C $repoRoot rev-parse HEAD 2>$null) } catch { }
+# A bundle knows exactly which build it is, from release-manifest.json, and a
+# dedicated machine has no git to ask. Reading it from the context means the
+# validation report records which commit was actually validated - which is the
+# whole reason the field is there, and it was blank in a bundle before.
+$gitSha = $context.GitSha
+
+if (-not $gitSha -and $context.Kind -eq 'Repository') {
+    try { $gitSha = (& git -C $context.Root rev-parse HEAD 2>$null) } catch { }
+}
 
 $cv = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 

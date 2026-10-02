@@ -174,7 +174,9 @@ Write-Host '  .\10-verify-pin-throttle.ps1 -RunPath <run> -Snapshot after-reboot
 
 Write-Evidence -RunPath $RunPath -Name 'reboot-persistence.json' -Data @{
     resumed     = $true
-    changed     = @($changed)
+    # ToArray() for the reason given in 07-verify-child-denials.ps1: the array
+    # subexpression operator over a generic List throws on Windows PowerShell 5.1.
+    changed     = $changed.ToArray()
     serviceNow  = $(if ($service) { [string]$service.Status } else { 'absent' })
 } | Out-Null
 
