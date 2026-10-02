@@ -340,20 +340,47 @@ if ($LASTEXITCODE -ne 0) {
 $componentsOut = Join-Path $outputDir 'components'
 New-Item -ItemType Directory -Path $componentsOut -Force | Out-Null
 
-$componentList = @(
-    'KidShell.SecurityHost',
-    'KidShell.Watchdog',
-    'KidShell.Recovery',
-    'KidShell.DeviceValidation'
-)
+# The component list and every path come from InstallationLayout, through the
+# tool the solution build just produced. Not duplicated here: two definitions of
+# where a component's output lives is exactly the arrangement that shipped
+# week-old binaries, and one of them would eventually have been updated alone.
+$layoutTool = Join-Path $repoRoot `
+    "src\KidShell.DeviceValidation\bin\$Platform\$Configuration\net10.0-windows\KidShell.DeviceValidation.exe"
+
+if (-not (Test-Path $layoutTool)) {
+    Stop-Build "KidShell.DeviceValidation.exe was not built at '$layoutTool'. The bundle's layout cannot be resolved."
+}
+
+$componentList = @(& $layoutTool layout --what components)
+
+if ($LASTEXITCODE -ne 0 -or $componentList.Count -eq 0) {
+    Stop-Build 'The installation layout could not be read from KidShell.DeviceValidation.exe.'
+}
+
+# EVERY path resolved BEFORE the copy loop starts.
+#
+# The tool lives in one of the directories this loop copies, and an executable
+# that has just exited can still be briefly locked - by the antimalware scanner,
+# usually. Invoking it from inside the loop made the copy of its own folder fail
+# intermittently: once in three runs here, which is exactly the frequency that
+# gets written off as a fluke.
+$componentPaths = [ordered]@{}
+
+foreach ($component in $componentList) {
+    $relative = (& $layoutTool layout --what build-output `
+        --component $component --configuration $Configuration --platform $Platform)
+
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Build "The build output path for $component could not be resolved."
+    }
+
+    $componentPaths[$component] = Join-Path $repoRoot $relative
+}
 
 $bundledComponents = @()
 
 foreach ($component in $componentList) {
-    # The same shape InstallationLayout.BuildOutputOf produces. One definition
-    # in C# for the tests, one here for the build, and a test that asserts the
-    # C# one matches this.
-    $dir = Join-Path $repoRoot "src\$component\bin\$Platform\$Configuration\net10.0-windows"
+    $dir = $componentPaths[$component]
 
     if (-not (Test-Path $dir)) {
         Stop-Build "The build output for $component is not at '$dir'. The bundle would have shipped without it."
@@ -443,6 +470,11 @@ Copy-Item -Path (Join-Path $repoRoot 'tools\device-validation') `
 
 Copy-Item -Path (Join-Path $repoRoot 'tools\audit-windows-state.ps1') `
     -Destination (Join-Path $outputDir 'device-validation\audit-windows-state.ps1') -Force
+
+# The documentation travels with it. The operator on the dedicated machine needs
+# the runbook more than anybody, and telling them to go and find a checkout for
+# it is how a procedure gets done from memory.
+Copy-Item -Path (Join-Path $repoRoot 'docs') -Destination (Join-Path $outputDir 'docs') -Recurse -Force
 
 # --------------------------------------------------- 9. the release manifest
 #
@@ -627,14 +659,16 @@ WHAT IS IN HERE
   components\            SecurityHost, Watchdog, Recovery, DeviceValidation
   install\               Install-KidShellLab.ps1 and friends
   device-validation\     The dedicated-device validation toolset
+  docs\                  The documentation, including the runbook below
   manifests\             signing-manifest.json: what must be signed for production
   release-manifest.json  What is in this bundle, with a digest for every file
   hashes.sha256          Covers everything above, including release-manifest.json
 
 HOW TO INSTALL THIS ON A DEDICATED TEST DEVICE
 ----------------------------------------------
-Read docs\DEDICATED-DEVICE-VALIDATION.md first. Then, on the test machine, in
-an elevated PowerShell window:
+Read docs\DEDICATED-DEVICE-VALIDATION.md in THIS folder first - the whole
+procedure is in there, Part 4 onwards. Then, on the test machine, in an elevated
+PowerShell window:
 
   cd <this folder>\install
   powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellLab.ps1

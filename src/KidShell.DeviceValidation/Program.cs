@@ -73,6 +73,10 @@ try
 
         // Release and install. The mutating ones need --apply, and the script
         // in front of them has already passed the dedicated-device interlock.
+        "layout" => InstallVerbs.Layout(
+            Arg(arguments, "--what"), Arg(arguments, "--component"),
+            Arg(arguments, "--configuration"), Arg(arguments, "--platform")),
+
         "release-manifest" => InstallVerbs.ReleaseManifest(
             Arg(arguments, "--in"), Arg(arguments, "--bundle")),
 

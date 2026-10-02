@@ -75,6 +75,83 @@ internal static class InstallVerbs
         WriteIndented = true
     };
 
+    /// <summary>
+    /// Prints a path from the layout, so a script never computes one itself.
+    ///
+    /// WHY A VERB FOR A STRING
+    /// ----------------------
+    /// build-release.ps1 has to know where a component's build output is, and
+    /// the first version of this pass had that path written out in PowerShell
+    /// as well as in <see cref="InstallationLayout"/> - two definitions, which
+    /// is precisely the arrangement that shipped week-old binaries in the first
+    /// place. One of them would eventually have been updated alone.
+    ///
+    /// So the script asks. The tool is built by the same solution build that
+    /// precedes packaging, so it is there when the bundler needs it.
+    /// </summary>
+    internal static int Layout(string? what, string? component, string? configuration, string? platform)
+    {
+        if (what is null)
+        {
+            Console.Error.WriteLine("layout needs --what (build-output, folder, install-root, policy, receipt).");
+            return 2;
+        }
+
+        KidShellComponent parsed = default;
+
+        if (component is not null &&
+            !Enum.TryParse(component.Replace("KidShell.", string.Empty), ignoreCase: true, out parsed))
+        {
+            Console.Error.WriteLine($"Unknown component '{component}'.");
+            return 2;
+        }
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+
+        switch (what)
+        {
+            case "build-output":
+                if (component is null)
+                {
+                    Console.Error.WriteLine("build-output needs --component.");
+                    return 2;
+                }
+
+                Console.WriteLine(InstallationLayout.BuildOutputOf(
+                    parsed, configuration ?? "Release", platform ?? "x64"));
+                return 0;
+
+            case "folder":
+                Console.WriteLine(InstallationLayout.FolderOf(parsed));
+                return 0;
+
+            case "components":
+                foreach (var each in InstallationLayout.FileCopied)
+                {
+                    Console.WriteLine(InstallationLayout.ProjectOf(each));
+                }
+
+                return 0;
+
+            case "install-root":
+                Console.WriteLine(InstallationLayout.InstallRoot(programFiles));
+                return 0;
+
+            case "policy":
+                Console.WriteLine(InstallationLayout.PolicyDirectory(programData));
+                return 0;
+
+            case "receipt":
+                Console.WriteLine(InstallationLayout.ReceiptFile(programData));
+                return 0;
+
+            default:
+                Console.Error.WriteLine($"Unknown --what '{what}'.");
+                return 2;
+        }
+    }
+
     /// <summary>Checks a release manifest's shape and the bundle's integrity.</summary>
     internal static int ReleaseManifest(string? manifestPath, string? bundleRoot)
     {
