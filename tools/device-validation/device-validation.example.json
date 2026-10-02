@@ -1,0 +1,32 @@
+{
+  "//": "Copy this to device-validation.json and edit it FOR THE MACHINE IT WILL RUN ON.",
+  "//1": "As written, this template refuses: DedicatedTestDevice is false and the",
+  "//2": "placeholders are detected. That is deliberate - an unedited copy must not be",
+  "//3": "mistaken for a decision somebody made.",
+  "//4": "There is no password field, and there is no field a password could live in.",
+
+  "machineName": "CHANGE-ME",
+
+  "//5": "Set this to true only on a machine you are willing to lose. It is one of six",
+  "//6": "interlock conditions, not the switch - see docs/DEDICATED-DEVICE-VALIDATION.md.",
+  "dedicatedTestDevice": false,
+
+  "//7": "The administrator you will NOT give to the child. It must stay enabled and in",
+  "//8": "Administrators at every moment; that is the rule that outranks everything.",
+  "parentAdminUser": "CHANGE-ME",
+
+  "//9": "The standard account KidShell runs as. Must not be the same account.",
+  "childUser": "CHANGE-ME",
+
+  "//10": "Captured once, after the child account exists. 03-verify-accounts.ps1 prints",
+  "//11": "it. Recorded because the pipe's access list and the store's ACL are scoped to",
+  "//12": "it, and an account deleted and recreated with the same NAME has a different",
+  "//13": "SID - which would silently validate permissions referring to nobody.",
+  "expectedChildSid": "",
+
+  "expectedWindowsEdition": "Professional",
+  "expectedBuild": "26100",
+
+  "kidShellInstallRoot": "C:\\Program Files\\KidShell",
+  "evidenceDirectory": "C:\\KidShell-Validation"
+}

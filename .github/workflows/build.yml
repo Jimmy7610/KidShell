@@ -80,7 +80,9 @@ jobs:
           # The helper and the watchdog prove they start and reject bad input.
           # Neither installs, starts or changes anything; --self-test is
           # written to be safe to run on a build agent.
-          foreach ($component in @('KidShell.SecurityHost', 'KidShell.Watchdog', 'KidShell.Recovery')) {
+          foreach ($component in @(
+              'KidShell.SecurityHost', 'KidShell.Watchdog', 'KidShell.Recovery',
+              'KidShell.DeviceValidation')) {
             $exe = "src\$component\bin\x64\Release\net10.0-windows\$component.exe"
 
             if (-not (Test-Path $exe)) {
