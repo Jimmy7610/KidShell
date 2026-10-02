@@ -153,6 +153,7 @@ Write-Step 'Checking repository state'
 
 $gitAvailable = $null -ne (Get-Command git -ErrorAction SilentlyContinue)
 $commit = 'unknown'
+$commitFull = ''
 $branch = 'unknown'
 $isDirty = $false
 
@@ -160,6 +161,12 @@ if ($gitAvailable) {
     Push-Location $repoRoot
     try {
         $commit = (& git rev-parse --short HEAD 2>$null)
+
+        # The FULL hash as well as the short one. The release manifest carries
+        # the full hash and the installer refuses a bundle without one: "which
+        # code is on that device" has to have an answer, and a short hash is an
+        # abbreviation rather than an identity.
+        $commitFull = (& git rev-parse HEAD 2>$null)
         $branch = (& git rev-parse --abbrev-ref HEAD 2>$null)
         $status = & git status --porcelain 2>$null
         $isDirty = -not [string]::IsNullOrWhiteSpace(($status | Out-String).Trim())
@@ -311,17 +318,92 @@ if ($LASTEXITCODE -ne 0) {
     }
 }
 
-# Helper and watchdog ship alongside the package: the installer places them,
-# and the security transaction registers the watchdog only on a target device.
-$toolsOut = Join-Path $outputDir 'tools'
-New-Item -ItemType Directory -Path $toolsOut -Force | Out-Null
+# ------------------------------------------------------ 7b. the components
+#
+# THE DEFECT THIS BLOCK REPLACES
+#
+# It used to copy from src\<component>\bin\<Configuration>\net10.0-windows,
+# while the build above runs with -p:Platform=x64 and MSBuild writes to
+# bin\x64\<Configuration>. On a developer's machine the unplatformed folder
+# existed from some older build, so the copy SUCCEEDED and shipped binaries a
+# week older than the commit being released - including a SecurityHost from
+# before the broker was rewritten. On a clean checkout the folder was absent,
+# Test-Path was false, and the bundle simply had no helper in it.
+#
+# Neither case produced an error, and the bundle's own README claimed all three
+# components were present either way.
+#
+# So: the path includes the platform, the component list comes from the
+# layout, and a missing output is a BUILD FAILURE rather than a skipped copy.
+# KidShell.DeviceValidation is in the list now too, which the old one predated.
 
-foreach ($component in @('KidShell.SecurityHost', 'KidShell.Watchdog', 'KidShell.Recovery')) {
-    $dir = Join-Path $repoRoot "src\$component\bin\$Configuration\net10.0-windows"
+$componentsOut = Join-Path $outputDir 'components'
+New-Item -ItemType Directory -Path $componentsOut -Force | Out-Null
 
-    if (Test-Path $dir) {
-        Copy-Item -Path $dir -Destination (Join-Path $toolsOut $component) -Recurse -Force
+# The component list and every path come from InstallationLayout, through the
+# tool the solution build just produced. Not duplicated here: two definitions of
+# where a component's output lives is exactly the arrangement that shipped
+# week-old binaries, and one of them would eventually have been updated alone.
+$layoutTool = Join-Path $repoRoot `
+    "src\KidShell.DeviceValidation\bin\$Platform\$Configuration\net10.0-windows\KidShell.DeviceValidation.exe"
+
+if (-not (Test-Path $layoutTool)) {
+    Stop-Build "KidShell.DeviceValidation.exe was not built at '$layoutTool'. The bundle's layout cannot be resolved."
+}
+
+$componentList = @(& $layoutTool layout --what components)
+
+if ($LASTEXITCODE -ne 0 -or $componentList.Count -eq 0) {
+    Stop-Build 'The installation layout could not be read from KidShell.DeviceValidation.exe.'
+}
+
+# EVERY path resolved BEFORE the copy loop starts.
+#
+# The tool lives in one of the directories this loop copies, and an executable
+# that has just exited can still be briefly locked - by the antimalware scanner,
+# usually. Invoking it from inside the loop made the copy of its own folder fail
+# intermittently: once in three runs here, which is exactly the frequency that
+# gets written off as a fluke.
+$componentPaths = [ordered]@{}
+
+foreach ($component in $componentList) {
+    $relative = (& $layoutTool layout --what build-output `
+        --component $component --configuration $Configuration --platform $Platform)
+
+    if ($LASTEXITCODE -ne 0) {
+        Stop-Build "The build output path for $component could not be resolved."
     }
+
+    $componentPaths[$component] = Join-Path $repoRoot $relative
+}
+
+$bundledComponents = @()
+
+foreach ($component in $componentList) {
+    $dir = $componentPaths[$component]
+
+    if (-not (Test-Path $dir)) {
+        Stop-Build "The build output for $component is not at '$dir'. The bundle would have shipped without it."
+    }
+
+    $exe = Join-Path $dir "$component.exe"
+
+    if (-not (Test-Path $exe)) {
+        Stop-Build "$component built no executable at '$exe'."
+    }
+
+    # Freshness, not just presence. A folder that exists is not evidence that
+    # the build just ran: that is exactly how a week-old binary shipped.
+    $age = (Get-Date) - (Get-Item $exe).LastWriteTime
+
+    if ($age.TotalHours -gt 6) {
+        Stop-Build "$component.exe is $([int]$age.TotalHours) hour(s) old. The build did not produce it; refusing to bundle a stale binary."
+    }
+
+    Copy-Item -Path $dir -Destination (Join-Path $componentsOut $component) -Recurse -Force
+
+    $bundledComponents += $component
+    Write-Host "  $component ($([int]((Get-ChildItem $dir -Recurse -File | Measure-Object Length -Sum).Sum / 1KB)) KB)"
 }
 
 # --------------------------------------------------------------- 8. sign
@@ -366,12 +448,171 @@ if ($willSign) {
     Write-Host "  Signed and verified $($signedFiles.Count) file(s)."
 }
 
-# ----------------------------------------------------------- 9. checksums
+# ------------------------------------------------------- 8b. install scripts
+#
+# The bundle carries its own installer. A bundle that has to be matched up with
+# the right version of a script from a checkout is a bundle somebody will pair
+# with the wrong one.
+
+Write-Step 'Adding the install scripts'
+
+$installOut = Join-Path $outputDir 'install'
+New-Item -ItemType Directory -Path $installOut -Force | Out-Null
+
+foreach ($script in Get-ChildItem (Join-Path $repoRoot 'tools\install') -Filter '*.ps1' -File) {
+    Copy-Item $script.FullName (Join-Path $installOut $script.Name)
+}
+
+# The validation toolset travels with it, since the dedicated-device procedure
+# needs both and they have to be the same version.
+Copy-Item -Path (Join-Path $repoRoot 'tools\device-validation') `
+    -Destination (Join-Path $outputDir 'device-validation') -Recurse -Force
+
+Copy-Item -Path (Join-Path $repoRoot 'tools\audit-windows-state.ps1') `
+    -Destination (Join-Path $outputDir 'device-validation\audit-windows-state.ps1') -Force
+
+# The documentation travels with it. The operator on the dedicated machine needs
+# the runbook more than anybody, and telling them to go and find a checkout for
+# it is how a procedure gets done from memory.
+Copy-Item -Path (Join-Path $repoRoot 'docs') -Destination (Join-Path $outputDir 'docs') -Recurse -Force
+
+# --------------------------------------------------- 9. the release manifest
+#
+# Every install step reads this rather than looking around a directory and
+# copying what it finds. A file in the bundle the manifest does not name is not
+# installed - it is reported, because something put it there.
+
+Write-Step 'Writing the release manifest'
+
+$manifestsOut = Join-Path $outputDir 'manifests'
+New-Item -ItemType Directory -Path $manifestsOut -Force | Out-Null
+
+$channel = if ($willSign) { 'Production' } else { 'DedicatedLabUnsigned' }
+
+$componentEntries = @()
+
+foreach ($component in $bundledComponents) {
+    $componentDir = Join-Path $componentsOut $component
+
+    $fileEntries = @(
+        Get-ChildItem $componentDir -Recurse -File | ForEach-Object {
+            [pscustomobject]@{
+                path   = $_.FullName.Substring($componentDir.Length + 1)
+                sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                bytes  = $_.Length
+            }
+        }
+    )
+
+    $componentEntries += [pscustomobject]@{
+        component  = ($component -replace '^KidShell\.', '')
+        bundlePath = "components\$component"
+        files      = $fileEntries
+    }
+}
+
+# The packaged app, when MSIX packaging produced one. Named in the manifest and
+# deliberately NOT file-copied by the installer: an MSIX is registered.
+$packageRoot = Join-Path $outputDir 'package'
+
+if (Test-Path $packageRoot) {
+    $packageFiles = @(
+        Get-ChildItem $packageRoot -Recurse -File |
+            Where-Object { $_.Extension -in @('.msix', '.msixbundle', '.appx', '.appxbundle', '.cer') } |
+            ForEach-Object {
+                [pscustomobject]@{
+                    path   = $_.FullName.Substring($packageRoot.Length + 1)
+                    sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                    bytes  = $_.Length
+                }
+            }
+    )
+
+    if ($packageFiles.Count -gt 0) {
+        $componentEntries += [pscustomobject]@{
+            component  = 'App'
+            bundlePath = 'package'
+            files      = $packageFiles
+        }
+    }
+    else {
+        Write-Warn 'No MSIX was produced, so the bundle has no App component and the installer will refuse it.'
+    }
+}
+
+$expectedPaths = [ordered]@{}
+
+foreach ($entry in $componentEntries) {
+    $folder = 'KidShell.' + $entry.component
+    if ($entry.component -eq 'App') { $folder = 'KidShell.App' }
+    $expectedPaths[$entry.component] = "C:\Program Files\KidShell\$folder"
+}
+
+$releaseManifest = [ordered]@{
+    schemaVersion      = 1
+    product            = 'KidShell'
+    version            = $version
+    packageVersion     = $packageVersion
+    prerelease         = $prerelease
+    gitSha             = ([string]$commitFull).Trim()
+    dirty              = [bool]$isDirty
+    architecture       = $Platform
+    buildConfiguration = $Configuration
+    buildUtc           = $startedAt.ToUniversalTime().ToString('u')
+    signed             = [bool]$willSign
+    channel            = $channel
+    packageIdentity    = $identity.GetAttribute('Name')
+    components         = $componentEntries
+    expectedInstallPaths = $expectedPaths
+}
+
+$releaseManifestPath = Join-Path $outputDir 'release-manifest.json'
+$releaseManifest | ConvertTo-Json -Depth 8 | Set-Content -Path $releaseManifestPath -Encoding utf8
+
+Write-Host "  $($componentEntries.Count) component(s), $(($componentEntries | ForEach-Object { $_.files.Count } | Measure-Object -Sum).Sum) file(s)"
+
+# -------------------------------------------------- 9b. the signing manifest
+#
+# What MUST be signed before anything here is a production release. Written by
+# the build rather than kept in prose, so it cannot drift from what the bundle
+# actually contains.
+
+$signingManifest = [ordered]@{
+    schemaVersion = 1
+    signedNow     = [bool]$willSign
+    note          = 'Everything listed here must carry a valid Authenticode or MSIX signature before this bundle may be called a production release.'
+    mustBeSigned  = @(
+        [ordered]@{ what = 'MSIX / MSIXBundle'; how = 'SignTool with the package certificate'; signed = [bool]$willSign }
+        [ordered]@{ what = 'KidShell.SecurityHost.exe'; how = 'Authenticode'; signed = [bool]$willSign }
+        [ordered]@{ what = 'KidShell.Watchdog.exe'; how = 'Authenticode'; signed = [bool]$willSign }
+        [ordered]@{ what = 'KidShell.Recovery.exe'; how = 'Authenticode'; signed = [bool]$willSign }
+        [ordered]@{ what = 'KidShell.DeviceValidation.exe'; how = 'Authenticode'; signed = [bool]$willSign }
+        [ordered]@{ what = 'every managed DLL shipped beside those executables'; how = 'Authenticode'; signed = [bool]$willSign }
+    )
+    notSignedAndWhy = @(
+        [ordered]@{
+            what = 'the PowerShell scripts under install\ and device-validation\'
+            why  = 'They are NOT Authenticode-signed by this build, and this manifest does not claim they are. Signing them would need the same certificate and an execution policy that honours it; until then they are verified by the hashes in hashes.sha256, which is a weaker guarantee and is stated as one.'
+        }
+        [ordered]@{
+            what = 'release-manifest.json and this file'
+            why  = 'Covered by hashes.sha256 rather than signed. The hash file is what an operator checks before trusting either.'
+        }
+    )
+}
+
+$signingManifest | ConvertTo-Json -Depth 6 |
+    Set-Content -Path (Join-Path $manifestsOut 'signing-manifest.json') -Encoding utf8
+
+# ----------------------------------------------------------- 9c. checksums
+#
+# Covers release-manifest.json too. The document that decides what gets
+# installed must not be the one thing nobody checked.
 
 Write-Step 'Computing checksums'
 
-$checksumPath = Join-Path $outputDir 'SHA256SUMS.txt'
-$files = Get-ChildItem -Path $outputDir -Recurse -File | Where-Object { $_.Name -ne 'SHA256SUMS.txt' }
+$checksumPath = Join-Path $outputDir 'hashes.sha256'
+$files = Get-ChildItem -Path $outputDir -Recurse -File | Where-Object { $_.Name -ne 'hashes.sha256' }
 
 $lines = foreach ($file in $files) {
     $hash = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -380,7 +621,7 @@ $lines = foreach ($file in $files) {
 }
 
 $lines | Set-Content -Path $checksumPath -Encoding utf8
-Write-Host "  $($files.Count) file(s) hashed."
+Write-Host "  $($files.Count) file(s) hashed, including release-manifest.json."
 
 # -------------------------------------------------------- 10. release note
 
@@ -414,9 +655,30 @@ PREREQUISITES
 
 WHAT IS IN HERE
 ---------------
-  package\        The MSIX, if packaging succeeded
-  tools\          The elevated helper, the watchdog and the recovery tool
-  SHA256SUMS.txt  Checksums for everything above
+  package\               The MSIX, if packaging succeeded
+  components\            SecurityHost, Watchdog, Recovery, DeviceValidation
+  install\               Install-KidShellLab.ps1 and friends
+  device-validation\     The dedicated-device validation toolset
+  docs\                  The documentation, including the runbook below
+  manifests\             signing-manifest.json: what must be signed for production
+  release-manifest.json  What is in this bundle, with a digest for every file
+  hashes.sha256          Covers everything above, including release-manifest.json
+
+HOW TO INSTALL THIS ON A DEDICATED TEST DEVICE
+----------------------------------------------
+Read docs\DEDICATED-DEVICE-VALIDATION.md in THIS folder first - the whole
+procedure is in there, Part 4 onwards. Then, on the test machine, in an elevated
+PowerShell window:
+
+  cd <this folder>\install
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellLab.ps1
+  powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellLab.ps1 -Apply
+
+The first command is a dry run and changes nothing. The second needs the
+dedicated-device marker, the confirmation phrase and an elevated window, and
+even then it installs FILES ONLY - no service, no account, no access list, no
+AppLocker, no shell change. Enabling the security is a separate, reviewable
+stage.
 
 WINDOWS LOCKDOWN
 ----------------

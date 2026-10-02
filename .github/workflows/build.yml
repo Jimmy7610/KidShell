@@ -334,8 +334,12 @@ jobs:
           # Relative links between the docs break quietly when a file is
           # renamed, and the document most likely to be read during a crisis is
           # the one nobody clicks through in review.
+          # release-artifacts and validation-results hold GENERATED copies of
+          # these documents, whose relative links are written for the
+          # repository's own layout. Checking them would fail the gate for a
+          # bundle that is correct, which is how a gate stops being believed.
           $docs = Get-ChildItem -Path . -Recurse -Filter '*.md' -File |
-            Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules|\.git)\\' }
+            Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules|\.git|release-artifacts|validation-results)\\' }
 
           $broken = @()
 

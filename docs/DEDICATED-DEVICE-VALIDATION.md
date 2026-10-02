@@ -165,7 +165,103 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\03-verify-accounts.ps1 -Ru
 
 ## Part 4 — install KidShell and the broker service
 
-Install the release to `C:\Program Files\KidShell` as the administrator.
+### 4a. Build the bundle, on the development PC
+
+```powershell
+cd C:\Path\To\KidShell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-release.ps1
+```
+
+It refuses a dirty working tree, so commit first. The bundle appears under
+`release-artifacts\kidshell-<version>-UNSIGNED-<arch>-<stamp>\` and contains
+`components\`, `install\`, `device-validation\`, `release-manifest.json` and
+`hashes.sha256`.
+
+**Check:**
+
+- [ ] The build printed all four components with a size — `KidShell.SecurityHost`,
+      `KidShell.Watchdog`, `KidShell.Recovery`, `KidShell.DeviceValidation`. If
+      any is absent the build now **stops**; it used to copy stale binaries
+      silently.
+- [ ] `release-manifest.json` exists and `hashes.sha256` covers it.
+
+### 4b. Copy it to the dedicated machine
+
+Any way you like — USB, a share, a VM folder. Then, **on the test machine**:
+
+```powershell
+cd <bundle>
+Get-Content .\hashes.sha256 | ForEach-Object {
+    $parts = $_ -split '\s+', 2
+    $actual = (Get-FileHash $parts[1] -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $parts[0]) { "MISMATCH: $($parts[1])" }
+}
+```
+
+**Stop immediately if** that prints anything. The bundle was altered in transit.
+
+### 4c. Dry run the installer
+
+Open **PowerShell as Administrator**:
+
+```powershell
+cd <bundle>\install
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellLab.ps1
+```
+
+**Expected output ends with:**
+
+```
+MANIFEST: KidShell 1.0.0-rc.1 (x64, Release)
+  commit    : <40 hex characters>
+  channel   : DedicatedLabUnsigned
+  signed    : False
+  components: 5
+  verified  : 103 file(s), 0 problem(s)
+
+PLAN: FreshInstall
+  Nothing is installed. 1.0.0-rc.1 will be installed fresh.
+  THIS BUNDLE IS UNSIGNED. ...
+
+DRY RUN COMPLETE. Nothing was written.
+```
+
+**Stop immediately if** it says `DIRTY`, reports any `PROBLEM`, any
+`HASH MISMATCH`, or `PLAN: Refused` for a reason you do not understand.
+
+### 4d. Install
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellLab.ps1 -Apply
+```
+
+It will ask for the confirmation phrase. It needs the marker from Part 1, an
+elevated window, and a bundle that is not a development build.
+
+**This installs FILES ONLY.** It creates no account, registers no service,
+applies no access list, deploys no AppLocker, configures no Assigned Access and
+changes no shell. The installer prints that list when it finishes, because the
+difference between "the binaries are on the machine" and "this computer is
+locked down" is the whole shape of the next six parts.
+
+### 4e. Verify the installation
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Test-KidShellInstallation.ps1
+```
+
+- [ ] `INSTALLATION: PASS`, or `INCOMPLETE` **only** because signatures were not
+      verified — this is an unsigned lab build, and the verifier says so rather
+      than calling a skipped check a pass.
+- [ ] All four expected binaries are where the validation scripts look for them.
+- [ ] No ordinary account has write access to the install root.
+
+**Stop immediately if** the permissions section prints
+`WRITABLE BY ORDINARY ACCOUNTS`. A LocalSystem service whose image the child can
+replace is a privilege escalation with a service name, and nothing later in this
+procedure would make up for it.
+
+### 4f. Register the broker service
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\apply\02-install-securityhost-service.ps1
@@ -456,14 +552,40 @@ directly from the administrator account; it still reads the manifests.
 
 ## Undoing it
 
-From an elevated session:
+Use the uninstaller, not a recursive delete. From an elevated session:
 
 ```powershell
-sc.exe stop KidShellSecurityHost
-sc.exe delete KidShellSecurityHost
-Remove-Item -Recurse -Force 'C:\ProgramData\KidShell'
-Remove-Item -Recurse -Force 'C:\ProgramData\KidShell-TestDevice'
+cd <bundle>\install
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-KidShellLab.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-KidShellLab.ps1 -Apply -StopServices
+```
+
+It removes exactly what the install receipt says was installed, reports anything
+under the install root that the receipt does not mention and leaves it alone, and
+**does not touch `C:\ProgramData\KidShell`**.
+
+That last part is deliberate, and it is why this replaced the
+`Remove-Item C:\ProgramData\KidShell -Recurse -Force` that used to be here.
+Under that path live the recovery manifests — the record of how to undo each
+security change — and the protected store, which may still hold the policy the
+device is running on. A blind recursive delete takes away the one thing you need
+if the uninstall itself goes wrong.
+
+When you genuinely want the installation record gone as well:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall-KidShellLab.ps1 `
+    -Apply -StopServices -RemoveState
+```
+
+That still keeps the recovery manifests and the protected store. Remove those by
+hand, after reading [RECOVERY.md](RECOVERY.md), and only once you are certain.
+
+Then the account and the marker:
+
+```powershell
 Remove-LocalUser -Name '<the child account>'
+Remove-Item -Recurse -Force 'C:\ProgramData\KidShell-TestDevice'
 ```
 
 - [ ] `Get-Service *KidShell*` returns nothing.
