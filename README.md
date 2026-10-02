@@ -388,32 +388,43 @@ dotnet test KidShell.sln -c Release
 
 Nuvarande verifierade nivå:
 
-**1316 automatiska tester passerar** i två projekt — `KidShell.Core.Tests`
-och `KidShell.WindowsIntegration.Tests`.
+**1897 automatiska tester passerar** i två projekt — `KidShell.Core.Tests`
+(1722) och `KidShell.WindowsIntegration.Tests` (175). Noll fel, noll
+överhoppade.
 
 Inget test ändrar den här datorn. Varje Windows-operation körs mot en falsk
 plattform: en kontokatalog i minnet, ett register som är en ordbok, en
-tjänstehanterare som är en lista.
+tjänstehanterare som är en lista, ett filsystem som är en ordbok.
 
-GitHub Actions kör dessutom restore, build, båda testsviterna, självtesterna för
-hjälparen och vakttjänsten, en scan efter maskinmuterande anrop, en kontroll att
-P/Invoke stannar i plattformslagret, en versionskontroll och en länkkontroll av
+GitHub Actions kör dessutom restore, build, båda testsviterna, de namngivna
+pipe-testerna en gång till i en egen process, självtesterna för rättighets-
+tjänsten, vakttjänsten, återställningsverktyget och valideringsverktyget, en
+scan efter maskinmuterande anrop, en kontroll att
+P/Invoke stannar i plattformslagret, en kontroll av att produktionsbehållaren
+fortfarande väljer de skyddade implementationerna, kontroller av tillgänglighet
+och responsiv layout, en versionskontroll och en länkkontroll av
 dokumentationen.
 
 ## Arkitektur
 
 ```text
-KidShell.App
-WinUI 3 / Windows-specifikt UI
+KidShell.App                   WinUI 3, det enda som ritar något
+KidShell.SecurityHost          rättighetstjänsten: LocalSystem, en namngiven pipe
+KidShell.Watchdog              startar om skalet, tar inga kommandon
+KidShell.Recovery              det en förälder kör när KidShell inte startar
+KidShell.DeviceValidation      besluten bakom validerings- och installationsskripten
         │
         ▼
-KidShell.Core
-konfiguration, appar, PIN, screen time,
-sessioner, webb, watchdog, säkerhetsplanering
+KidShell.WindowsIntegration    det enda projekt som får ändra Windows
+        │                      allt bakom ett gränssnitt i Platform/
+        ▼
+KidShell.Core                  konfiguration, appar, PIN, skärmtid, sessioner,
+                               webb, säkerhetsplanering, rättighetsmäklarens
+                               regler, installationslayout
         ▲
         │
-KidShell.Core.Tests
-xUnit / fake operations / ingen riktig Windows-mutation
+KidShell.Core.Tests            xUnit / falska operationer
+KidShell.WindowsIntegration.Tests   ingen riktig Windows-mutation någonstans
 ```
 
 Viktiga principer:
@@ -855,32 +866,42 @@ dotnet test KidShell.sln -c Release
 
 Current verified level:
 
-**1316 automated tests passing** across two projects — `KidShell.Core.Tests`
-and `KidShell.WindowsIntegration.Tests`.
+**1897 automated tests passing** across two projects — `KidShell.Core.Tests`
+(1722) and `KidShell.WindowsIntegration.Tests` (175). Zero failed, zero
+skipped.
 
 No test changes this machine. Every Windows operation runs against a fake
 platform: an in-memory account directory, a registry that is a dictionary, a
-service control manager that is a list.
+service control manager that is a list, a filesystem that is a dictionary.
 
-GitHub Actions also performs restore, build, both test suites, the helper and
-watchdog self-tests, a source scan for machine-changing calls, a check that
-P/Invoke stays inside the platform layer, a version-coherence check and a
-documentation link check.
+GitHub Actions also performs restore, build, both test suites, the named-pipe
+broker tests a second time in a process of their own, the self-tests for the
+security host, the watchdog, the recovery tool and the validation tool, a source
+scan for machine-changing calls, a check that P/Invoke stays inside the platform
+layer, a check that the production container still resolves the guarded
+implementations, accessibility and responsive-layout checks, a version-coherence
+check and a documentation link check.
 
 ## Architecture
 
 ```text
-KidShell.App
-WinUI 3 / Windows-specific UI
+KidShell.App                   WinUI 3, the only thing that draws anything
+KidShell.SecurityHost          the privileged broker: LocalSystem, one named pipe
+KidShell.Watchdog              restarts the shell, accepts no commands
+KidShell.Recovery              what a parent runs when KidShell will not start
+KidShell.DeviceValidation      the decisions behind the validation and install scripts
         │
         ▼
-KidShell.Core
-configuration, apps, PIN, screen time,
-sessions, web, watchdog, security planning
+KidShell.WindowsIntegration    the only project that may change Windows,
+        │                      everything behind an interface in Platform/
+        ▼
+KidShell.Core                  configuration, apps, PIN, screen time, sessions,
+                               web, security planning, the broker's rules,
+                               the installation layout
         ▲
         │
-KidShell.Core.Tests
-xUnit / fake operations / no real Windows mutation
+KidShell.Core.Tests            xUnit / fake operations
+KidShell.WindowsIntegration.Tests   no real Windows mutation anywhere
 ```
 
 Core principles:
