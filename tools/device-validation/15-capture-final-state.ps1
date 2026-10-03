@@ -25,12 +25,9 @@ Set-StrictMode -Version Latest
 
 Import-Module (Join-Path $PSScriptRoot 'KidShellValidation.psm1') -Force
 
-$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$audit = Join-Path $repoRoot 'tools\audit-windows-state.ps1'
-
-if (-not (Test-Path $audit)) {
-    throw "The machine-state audit was not found at $audit."
-}
+# From the context, for the same reason as 01-capture-baseline.ps1: the bundle
+# keeps the audit script beside these ones.
+$audit = Get-ValidationAuditScript
 
 $before = Join-Path $RunPath 'before-machine-state.txt'
 $after = Join-Path $RunPath 'after-machine-state.txt'

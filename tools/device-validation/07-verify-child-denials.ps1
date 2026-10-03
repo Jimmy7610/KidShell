@@ -241,7 +241,16 @@ if ($RunPath) {
     Write-Evidence -RunPath $RunPath -Name 'child-denials.json' -Data @{
         runAs    = "$env:USERDOMAIN\$env:USERNAME"
         elevated = [bool](Test-Elevated)
-        probes   = @($probes)
+        # ToArray(), not @($probes).
+        #
+        # On Windows PowerShell 5.1 the array subexpression operator over a
+        # generic List throws ArgumentException ("the argument types do not
+        # match"), empty or not. This line threw every time the script was given
+        # a -RunPath, which is every time Run-ReadOnlyValidation.ps1 calls it -
+        # so stage 07 recorded nothing and the whole suite reported it as
+        # "threw". Found by running the read-only suite out of a bundle; the
+        # earlier splatting defect had been masking it.
+        probes   = $probes.ToArray()
     } | Out-Null
 
     Save-ValidationStage -RunPath $RunPath -Stage $stage

@@ -160,8 +160,31 @@ try {
 }
 catch { }
 
+$context = Get-ValidationContext
+
 Write-Host ''
 Write-Host '===== KidShell preflight (read-only) =====' -ForegroundColor Cyan
+
+# Printed first, and printed at all, because the defect that made this script
+# fail on a real test machine was a path assumption. An operator who can see
+# which context was detected and which tool was resolved can tell a layout
+# problem from a missing file at a glance, instead of reading a bare
+# "not found".
+Write-Host ("Context        : {0}" -f $context.Kind)
+Write-Host ("Root           : {0}" -f $context.Root)
+Write-Host ("Decision tool  : {0}" -f $context.Tool)
+Write-Host ("Audit script   : {0}" -f $context.AuditScript)
+Write-Host ("Evidence root  : {0}" -f $context.EvidenceRoot)
+
+if (-not $context.ToolPresent) {
+    Write-Host '  the decision tool is NOT at that path' -ForegroundColor Red
+}
+
+if (-not $context.AuditPresent) {
+    Write-Host '  the audit script is NOT at that path' -ForegroundColor Red
+}
+
+Write-Host ''
 Write-Host ("Machine        : {0}" -f $preflight.machineName)
 Write-Host ("User           : {0} (elevated: {1})" -f $preflight.currentUser, $preflight.isElevated)
 Write-Host ("Windows        : {0} [{1}] build {2}.{3}" -f `
@@ -211,3 +234,13 @@ if ($RunPath) {
 
 Write-Host ''
 Write-Host 'Nothing was changed.' -ForegroundColor Green
+
+# EXPLICIT, because the last thing this script ran was the interlock evaluation,
+# and that returns non-zero when the interlock is CLOSED - which is the normal,
+# correct answer on a machine that has not been declared a test device.
+#
+# Without this the preflight exited 255 after succeeding completely, so anything
+# checking its exit code - a gate, a CI step, an operator's script - would read a
+# finished read-only report as a failure. Reporting that the interlock is shut is
+# this script doing its job, not failing at it.
+exit 0

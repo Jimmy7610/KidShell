@@ -21,7 +21,172 @@
 Set-StrictMode -Version Latest
 
 $script:Root = Split-Path -Parent $PSCommandPath
-$script:RepoRoot = Split-Path -Parent (Split-Path -Parent $script:Root)
+
+# The folder one level up. In a bundle that is the bundle root; in a checkout it
+# is tools\. Named for what it is rather than what it is assumed to be, because
+# assuming it was always the second is the whole of the defect below.
+$script:Parent = Split-Path -Parent $script:Root
+$script:RepoRoot = Split-Path -Parent $script:Parent
+
+# Declared here, not on first use. Set-StrictMode turns reading an unset variable
+# into a terminating error, so a cache only assigned inside the function it
+# caches for fails the first time it is read - which it did, and running a real
+# bundle is what caught it.
+$script:Context = $null
+
+# -------------------------------------------------------------- the context
+
+<#
+    WHERE AM I RUNNING FROM?
+
+    THE DEFECT THIS SECTION EXISTS TO END
+
+    These scripts ship inside a release bundle, and the bundle is meant to be
+    self-contained: an operator copies it to a dedicated machine that has no
+    checkout, no .NET SDK and no installed KidShell, and runs the preflight.
+
+    That did not work. build-release.ps1 copied tools\device-validation to
+    <bundle>\device-validation and put the decision tool in
+    <bundle>\components\KidShell.DeviceValidation\ with the rest of its runtime.
+    Get-ValidationTool searched beside the scripts, one level up, and three
+    build-output paths under a repository root - none of which is where the tool
+    is in a bundle. So on the WILMA test machine the preflight gathered every
+    read-only fact correctly and then died on
+    "KidShell.DeviceValidation.exe was not found".
+
+    Three other things had the same shape and would have failed next:
+    01-capture-baseline.ps1 and 15-capture-final-state.ps1 looked for
+    tools\audit-windows-state.ps1 under a repository root when the bundle keeps
+    it beside these scripts, and the evidence root defaulted to
+    <repo>\validation-results, which in a bundle resolves to a sibling of the
+    bundle rather than anywhere the operator chose.
+
+    So the context is resolved ONCE, here, and everything else asks. One place to
+    be wrong, and a gate that runs a real bundle from a real temporary directory
+    to prove it is not.
+
+    THE ONE PATH THAT CANNOT COME FROM InstallationLayout
+
+    The C# layout is the authoritative source for every installed path, and the
+    scripts use it through the tool - but they cannot use it to FIND the tool.
+    That is a bootstrap, so the bundle-relative location is a constant here. It
+    is the only one, it uses the same folder name the layout uses, and
+    tools\check-bundle-standalone.ps1 proves the two agree by running a bundle
+    rather than by comparing strings.
+#>
+
+function Get-ValidationContext {
+    <#
+        Which of the three situations this is, and where everything is in it.
+
+        Resolved once and cached, so every script in a run agrees about where it
+        is - and so the answer can be printed, which is worth more than it
+        sounds: an operator who can see "Bundle" and the resolved tool path can
+        tell a layout problem from a missing file in one glance.
+    #>
+    [CmdletBinding()]
+    param([switch] $Refresh)
+
+    if ($script:Context -and -not $Refresh) { return $script:Context }
+
+    $componentFolder = 'KidShell.DeviceValidation'
+    $exeName = 'KidShell.DeviceValidation.exe'
+
+    $kind = 'Unknown'
+    $root = $script:Parent
+    $tool = $null
+    $audit = $null
+    $evidence = $null
+    $gitSha = ''
+
+    # A bundle announces itself. release-manifest.json is written by
+    # build-release.ps1 and by nothing else.
+    $bundleManifest = Join-Path $script:Parent 'release-manifest.json'
+
+    if (Test-Path $bundleManifest) {
+        $kind = 'Bundle'
+        $root = $script:Parent
+        $tool = Join-Path $root "components\$componentFolder\$exeName"
+
+        # The bundle carries the audit script beside these ones.
+        $audit = Join-Path $script:Root 'audit-windows-state.ps1'
+
+        # Evidence stays inside the bundle folder unless the config says
+        # otherwise. A sibling of the bundle is somewhere nobody chose.
+        $evidence = Join-Path $root 'validation-results'
+
+        # The bundle knows exactly which build it is, so the report can say so.
+        try {
+            $gitSha = ([string]((Get-Content $bundleManifest -Raw | ConvertFrom-Json).gitSha)).Trim()
+        }
+        catch { }
+    }
+    elseif ((Test-Path (Join-Path $script:RepoRoot '.git')) -or
+            (Test-Path (Join-Path $script:RepoRoot 'KidShell.sln'))) {
+        $kind = 'Repository'
+        $root = $script:RepoRoot
+        $audit = Join-Path $root 'tools\audit-windows-state.ps1'
+        $evidence = Join-Path $root 'validation-results'
+
+        foreach ($candidate in @(
+                "src\$componentFolder\bin\x64\Release\net10.0-windows\$exeName",
+                "src\$componentFolder\bin\x64\Debug\net10.0-windows\$exeName",
+                "src\$componentFolder\bin\Release\net10.0-windows\$exeName")) {
+            $path = Join-Path $root $candidate
+            if (Test-Path $path) { $tool = $path; break }
+        }
+    }
+    else {
+        # Neither. Fall back to an installed release, which is where the tool
+        # lives once Install-KidShellLab.ps1 has run.
+        $kind = 'Installed'
+        $root = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'KidShell'
+        $tool = Join-Path $root "$componentFolder\$exeName"
+        $audit = Join-Path $script:Root 'audit-windows-state.ps1'
+        $evidence = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'KidShell\validation-results'
+    }
+
+    # Beside the scripts wins over everything, so an operator who drops the tool
+    # in by hand is not overruled by a layout that disagrees with their machine.
+    $beside = Join-Path $script:Root $exeName
+    if (Test-Path $beside) { $tool = $beside }
+
+    # A last resort: beside the scripts, in any context.
+    #
+    # RECORDED, not silent. A safety net that quietly rescues a wrong primary
+    # path is the same class of defect as the one this whole file exists to fix -
+    # it works, so nobody notices the path it was covering for has rotted. The
+    # first version of this fallback made the standalone gate's audit-path
+    # mutation ESCAPE, which is exactly that failure in miniature.
+    #
+    # So the context says how the answer was reached, and the gate asserts a
+    # bundle resolved it from the bundle's own convention rather than from here.
+    $auditSource = 'context'
+
+    if (-not $audit -or -not (Test-Path $audit)) {
+        $fallbackAudit = Join-Path $script:Root 'audit-windows-state.ps1'
+
+        if (Test-Path $fallbackAudit) {
+            $audit = $fallbackAudit
+            $auditSource = 'fallback'
+        }
+    }
+
+    $script:Context = [pscustomobject]@{
+        Kind         = $kind
+        Root         = $root
+        ScriptRoot   = $script:Root
+        Tool         = $tool
+        ToolPresent  = ([bool]$tool -and (Test-Path $tool))
+        AuditScript  = $audit
+        AuditPresent = ([bool]$audit -and (Test-Path $audit))
+        AuditSource  = $auditSource
+        EvidenceRoot = $evidence
+        GitSha       = $gitSha
+    }
+
+    return $script:Context
+}
 
 # ---------------------------------------------------------------- the tool
 
@@ -29,26 +194,40 @@ function Get-ValidationTool {
     <#
         The decision tool, wherever this is running from.
 
-        An installed release has it beside the other KidShell binaries. A
-        checkout has it under the build output. Both are looked for, and a
-        missing tool is an error rather than a reason to decide things here.
+        Every candidate comes from Get-ValidationContext, so there is one
+        definition of where the tool lives per situation rather than a search
+        list each caller has to keep current.
     #>
     [CmdletBinding()]
     param()
 
-    $candidates = @(
-        (Join-Path $script:Root 'KidShell.DeviceValidation.exe'),
-        (Join-Path (Split-Path -Parent $script:Root) 'KidShell.DeviceValidation.exe'),
-        (Join-Path $script:RepoRoot 'src\KidShell.DeviceValidation\bin\x64\Release\net10.0-windows\KidShell.DeviceValidation.exe'),
-        (Join-Path $script:RepoRoot 'src\KidShell.DeviceValidation\bin\x64\Debug\net10.0-windows\KidShell.DeviceValidation.exe'),
-        (Join-Path $script:RepoRoot 'src\KidShell.DeviceValidation\bin\Release\net10.0-windows\KidShell.DeviceValidation.exe')
-    )
+    $context = Get-ValidationContext
 
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) { return $candidate }
-    }
+    if ($context.ToolPresent) { return $context.Tool }
 
-    throw "KidShell.DeviceValidation.exe was not found. Build the solution, or run this from an installed release."
+    throw @"
+KidShell.DeviceValidation.exe was not found.
+
+  context  : $($context.Kind)
+  looked in: $($context.Tool)
+
+In a release bundle it belongs at components\KidShell.DeviceValidation\. If this
+IS a bundle and the file is missing, the bundle is incomplete - check it against
+hashes.sha256 and build it again rather than copying the executable by hand: it
+needs the DLLs beside it.
+"@
+}
+
+function Get-ValidationAuditScript {
+    <# The machine-state audit script, wherever this context keeps it. #>
+    [CmdletBinding()]
+    param()
+
+    $context = Get-ValidationContext
+
+    if ($context.AuditPresent) { return $context.AuditScript }
+
+    throw "audit-windows-state.ps1 was not found (context $($context.Kind), looked in $($context.AuditScript))."
 }
 
 function Invoke-ValidationTool {
@@ -130,8 +309,10 @@ function Test-DevelopmentBuild {
     [CmdletBinding()]
     param()
 
-    return (Test-Path (Join-Path $script:RepoRoot '.git')) -or
-           (Test-Path (Join-Path $script:RepoRoot 'KidShell.sln'))
+    # Asked of the context rather than recomputed, so "am I in a checkout" has
+    # one answer. A bundle is deliberately NOT a development build: being able to
+    # install a bundle on a dedicated device is the entire point of building one.
+    return (Get-ValidationContext).Kind -eq 'Repository'
 }
 
 function Get-WorkingMachineSign {
@@ -175,8 +356,12 @@ function Get-WorkingMachineSign {
 
     try {
         # A repository checkout is a developer's machine, not a test rig.
-        if (Test-Path (Join-Path $script:RepoRoot '.git')) {
-            $signs.Add('a git working copy is present on this machine')
+        # Only when these scripts are RUNNING from a checkout. A bundle that
+        # happens to sit on a machine with a checkout elsewhere is not what this
+        # sign is about, and reporting it would close the interlock on a good
+        # test device for the wrong reason.
+        if ((Get-ValidationContext).Kind -eq 'Repository') {
+            $signs.Add('these scripts are running from a git working copy')
         }
     }
     catch { }
@@ -274,7 +459,7 @@ function New-ValidationRun {
     param([string] $EvidenceRoot)
 
     if (-not $EvidenceRoot) {
-        $EvidenceRoot = Join-Path $script:RepoRoot 'validation-results'
+        $EvidenceRoot = (Get-ValidationContext).EvidenceRoot
     }
 
     $runId = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmmss'), $env:COMPUTERNAME
@@ -293,7 +478,7 @@ function Get-LatestValidationRun {
     param([string] $EvidenceRoot)
 
     if (-not $EvidenceRoot) {
-        $EvidenceRoot = Join-Path $script:RepoRoot 'validation-results'
+        $EvidenceRoot = (Get-ValidationContext).EvidenceRoot
     }
 
     if (-not (Test-Path $EvidenceRoot)) { return $null }
@@ -387,7 +572,7 @@ function Save-ValidationStage {
 }
 
 Export-ModuleMember -Function @(
-    'Get-ValidationTool', 'Invoke-ValidationTool', 'Get-ValidationConfigPath', 'Import-ValidationConfig',
+    'Get-ValidationContext', 'Get-ValidationAuditScript', 'Get-ValidationTool', 'Invoke-ValidationTool', 'Get-ValidationConfigPath', 'Import-ValidationConfig',
     'Test-Elevated', 'Test-DevelopmentBuild', 'Get-WorkingMachineSign', 'Get-InterlockFact',
     'Assert-DedicatedDevice', 'New-ValidationRun', 'Get-LatestValidationRun', 'Write-Evidence',
     'New-ValidationStage', 'Add-ValidationFinding', 'Save-ValidationStage'

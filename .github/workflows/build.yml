@@ -314,6 +314,41 @@ jobs:
           # has a stated reason, so icons and artwork are not the target.
           & ./tools/check-responsive-layout.ps1
 
+      - name: Build a lab bundle and prove it is standalone
+        shell: pwsh
+        run: |
+          # THE GATE THAT WAS MISSING.
+          #
+          # A dedicated-device bundle shipped that could not run its own
+          # preflight: the decision tool is in components\, and the validation
+          # module looked for it beside the scripts and under repository build
+          # paths. On the WILMA test machine the preflight gathered every fact
+          # correctly and then died on "KidShell.DeviceValidation.exe was not
+          # found".
+          #
+          # Everything else passed. The unit tests test the rules, not the
+          # scripts. The bundle built cleanly. hashes.sha256 verified with zero
+          # mismatches. Nothing anywhere RAN a script out of a bundle, so the one
+          # property a bundle exists for was the one property nothing checked.
+          #
+          # This builds a bundle, copies it somewhere with no repository above
+          # it, and runs the validation scripts there. -AllowDirty because a CI
+          # checkout can carry generated files; the bundle's own dirty flag still
+          # refuses an install.
+          ./tools/build-release.ps1 -AllowDirty -SkipTests
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::error::The release bundle could not be built.'
+            exit 1
+          }
+
+          ./tools/check-bundle-standalone.ps1
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host '::error::The release bundle cannot run its own validation scripts.'
+            exit 1
+          }
+
       - name: Check composition
         shell: pwsh
         run: |
