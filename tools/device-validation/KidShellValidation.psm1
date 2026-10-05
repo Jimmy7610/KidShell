@@ -246,6 +246,201 @@ function Invoke-ValidationTool {
     }
 }
 
+# ----------------------------------------------------- built-in groups by SID
+
+<#
+    WINDOWS LOCALIZES ITS BUILT-IN GROUP NAMES.
+
+    On the Swedish machine used for physical validation, Administrators is
+    "Administratörer", Users is "Användare", and Get-LocalGroup -Name
+    'Administrators' throws GroupNotFoundException. Measured on that machine and
+    on this one: every English built-in group name fails.
+
+    Three scripts asked Windows for groups by English name. Two would have
+    failed loudly during account validation. The third failed OPEN: the install
+    verifier decided whether an ordinary account could write the install root by
+    matching access-list identity strings against "Users|Everyone|Authenticated",
+    and on a localized machine nothing matches - so a check whose whole purpose
+    is catching a privilege escalation reported that there was none, whatever the
+    truth.
+
+    So nothing here names a group. Everything resolves by SID, and the SIDs come
+    from one table in KidShell.Core with tests behind it, read through the tool.
+
+    ALSO: NOT EVERY GROUP EXISTS. On Windows Home only four of the seven
+    privileged groups are present at all. An absent group is a group the child
+    cannot be in, not an error.
+#>
+
+$script:GroupSidCache = $null
+
+function Get-WellKnownGroupSid {
+    <#
+        Canonical label to SID, from the C# table.
+
+        .PARAMETER Set
+        privileged, ordinary or all.
+    #>
+    [CmdletBinding()]
+    param([ValidateSet('privileged', 'ordinary', 'all')][string] $Set = 'all')
+
+    if (-not $script:GroupSidCache) { $script:GroupSidCache = @{} }
+
+    if ($script:GroupSidCache.ContainsKey($Set)) { return $script:GroupSidCache[$Set] }
+
+    $result = Invoke-ValidationTool -Arguments @('security-groups', '--set', $Set)
+
+    if (-not $result.Accepted) {
+        throw "The built-in group table could not be read from the decision tool: $($result.Output -join '; ')"
+    }
+
+    $map = [ordered]@{}
+
+    foreach ($line in $result.Output) {
+        if ($line -is [string] -and $line -match '^(.+?)=(S-1-[0-9-]+)$') {
+            $map[$Matches[1]] = $Matches[2]
+        }
+    }
+
+    if ($map.Count -eq 0) {
+        throw 'The decision tool returned no built-in groups.'
+    }
+
+    $script:GroupSidCache[$Set] = $map
+    return $map
+}
+
+function Get-BuiltinGroupBySid {
+    <#
+        The local group with this SID, or $null when the machine has no such
+        group.
+
+        $null is an ordinary answer: Windows Home has no Power Users, no Backup
+        Operators and no Remote Desktop Users. A caller that treated absence as
+        an error would fail validation on the edition most families actually run.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $Sid)
+
+    try {
+        # By SID. Get-LocalGroup accepts one, and it is the only identifier that
+        # does not change with the display language.
+        return Get-LocalGroup -SID $Sid -ErrorAction Stop
+    }
+    catch {
+        return $null
+    }
+}
+
+function Get-LocalGroupMemberSid {
+    <#
+        What is in a built-in group, by group SID.
+
+        Returns Exists, Inspected and MemberSids rather than a bare array,
+        because "the group is not on this machine" and "the group is here and I
+        could not read it" are different answers and collapsing them into an
+        empty list is how a membership check starts failing open.
+
+        Absent IS an answer: Windows Home has no Power Users, no Backup Operators
+        and no Remote Desktop Users, so the child provably is not in them.
+        Unreadable is not an answer, and Inspected=$false says so.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $GroupSid)
+
+    $group = Get-BuiltinGroupBySid -Sid $GroupSid
+
+    if (-not $group) {
+        return [pscustomobject]@{
+            Sid = $GroupSid; Exists = $false; Inspected = $true
+            MemberSids = @(); Error = ''
+        }
+    }
+
+    $members = $null
+    $failure = ''
+
+    try {
+        $members = Get-LocalGroupMember -SID $GroupSid -ErrorAction Stop
+    }
+    catch {
+        $failure = [string]$_.Exception.Message
+
+        try {
+            # Not every build takes -SID on Get-LocalGroupMember. The group
+            # object's own Name is the LOCALIZED one, which is the correct thing
+            # to hand back to Windows - it came from Windows, and it was found
+            # by SID.
+            $members = Get-LocalGroupMember -Group $group.Name -ErrorAction Stop
+            $failure = ''
+        }
+        catch {
+            $failure = [string]$_.Exception.Message
+        }
+    }
+
+    if ($failure) {
+        return [pscustomobject]@{
+            Sid = $GroupSid; Exists = $true; Inspected = $false
+            MemberSids = @(); Error = $failure
+        }
+    }
+
+    $sids = New-Object System.Collections.Generic.List[string]
+
+    foreach ($member in $members) {
+        if ($member.SID) { $sids.Add([string]$member.SID.Value) }
+    }
+
+    return [pscustomobject]@{
+        Sid = $GroupSid; Exists = $true; Inspected = $true
+        MemberSids = $sids.ToArray(); Error = ''
+    }
+}
+
+function Test-LocalGroupMembership {
+    <#
+        Whether an account SID is in a built-in group, both named by SID.
+
+        $true in, $false out, $null when the group could not be read - and the
+        $null is the point. A caller that wants a boolean has to decide what an
+        unanswerable membership question means, instead of being handed a
+        comfortable $false.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $GroupSid,
+        [Parameter(Mandatory)][string] $MemberSid
+    )
+
+    $membership = Get-LocalGroupMemberSid -GroupSid $GroupSid
+
+    if (-not $membership.Inspected) { return $null }
+
+    return [bool]($membership.MemberSids -contains $MemberSid)
+}
+
+function Resolve-IdentityToSid {
+    <#
+        The SID behind an access-list IdentityReference.
+
+        Get-Acl hands back NTAccount objects whose Value is a LOCALIZED name, so
+        comparing that to a SID string never matches and comparing it to an
+        English name never matches either. Translating is the only thing that
+        works, and an identity that will not translate returns its raw value so a
+        caller can report it rather than silently treat it as safe.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)] $Identity)
+
+    try {
+        return [string]$Identity.Translate([Security.Principal.SecurityIdentifier]).Value
+    }
+    catch {
+        return [string]$Identity.Value
+    }
+}
+
 # ------------------------------------------------------------- the config
 
 function Get-ValidationConfigPath {
@@ -573,6 +768,8 @@ function Save-ValidationStage {
 
 Export-ModuleMember -Function @(
     'Get-ValidationContext', 'Get-ValidationAuditScript', 'Get-ValidationTool', 'Invoke-ValidationTool', 'Get-ValidationConfigPath', 'Import-ValidationConfig',
+    'Get-WellKnownGroupSid', 'Get-BuiltinGroupBySid', 'Get-LocalGroupMemberSid',
+    'Test-LocalGroupMembership', 'Resolve-IdentityToSid',
     'Test-Elevated', 'Test-DevelopmentBuild', 'Get-WorkingMachineSign', 'Get-InterlockFact',
     'Assert-DedicatedDevice', 'New-ValidationRun', 'Get-LatestValidationRun', 'Write-Evidence',
     'New-ValidationStage', 'Add-ValidationFinding', 'Save-ValidationStage'

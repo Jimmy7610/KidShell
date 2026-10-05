@@ -39,10 +39,16 @@ if ($config -and $config.ExpectedChildSid) { $childSid = $config.ExpectedChildSi
 
 $directory = 'C:\ProgramData\KidShell\policy'
 
-$wellKnown = @{
-    System         = 'S-1-5-18'
-    Administrators = 'S-1-5-32-544'
-    Users          = 'S-1-5-32-545'
+# The three principals this store's plan talks about, by SID, from the one
+# table in KidShell.Core rather than a second copy written down here. The names
+# are canonical labels for the evidence file; nothing is looked up by name,
+# because on this machine Administrators is called Administratörer.
+$allGroups = Get-WellKnownGroupSid -Set all
+
+$wellKnown = [ordered]@{
+    System         = $allGroups['System']
+    Administrators = $allGroups['Administrators']
+    Users          = $allGroups['Users']
 }
 
 $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
@@ -73,7 +79,7 @@ function Get-Rights($access, [string] $sid) {
         access, so counting it would overstate what the principal can do.
     #>
     $entries = @($access | Where-Object {
-        $_.AccessControlType -eq 'Allow' -and (Resolve-Sid $_.IdentityReference) -eq $sid
+        $_.AccessControlType -eq 'Allow' -and (Resolve-IdentityToSid $_.IdentityReference) -eq $sid
     })
 
     if ($entries.Count -eq 0) { return 'None' }
@@ -91,11 +97,6 @@ function Get-Rights($access, [string] $sid) {
     if ($names.Count -eq 4) { return 'FullControl' }
 
     return ($names -join ', ')
-}
-
-function Resolve-Sid($identity) {
-    try { return [string]$identity.Translate([Security.Principal.SecurityIdentifier]).Value }
-    catch { return [string]$identity.Value }
 }
 
 $observation = [pscustomobject]@{

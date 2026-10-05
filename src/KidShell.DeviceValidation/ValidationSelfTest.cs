@@ -173,6 +173,48 @@ public static class ValidationSelfTest
         Check(failures, "a checkpoint that does not parse is not resumed",
             !RebootCheckpoint.Load("{ not json", "KIDSHELL-TEST-01", "run-1").CanResume);
 
+        // ------------------------------------------- the built-in groups
+        //
+        // Every validation script now resolves Windows' built-in groups through
+        // this binary's `security-groups` verb, because the group NAMES are
+        // localized: on the Swedish machine used for physical validation,
+        // Administrators is "Administratörer" and asking for 'Administrators'
+        // throws. If this table is wrong or empty, the scripts have no identities
+        // at all - so the self-test that ships inside the bundle checks it.
+
+        Check(failures, "the Administrators group is S-1-5-32-544",
+            WellKnownSecurityGroups.AdministratorsSid == "S-1-5-32-544");
+
+        Check(failures, "the standard Users group is S-1-5-32-545",
+            WellKnownSecurityGroups.UsersSid == "S-1-5-32-545");
+
+        Check(failures, "Administrators counts as privileged",
+            WellKnownSecurityGroups.IsPrivileged(WellKnownSecurityGroups.AdministratorsSid));
+
+        Check(failures, "the standard Users group is not privileged",
+            !WellKnownSecurityGroups.IsPrivileged(WellKnownSecurityGroups.UsersSid));
+
+        Check(failures, "the privileged set still covers every group 03-verify-accounts checks",
+            new[] { "S-1-5-32-544", "S-1-5-32-547", "S-1-5-32-551", "S-1-5-32-555", "S-1-5-32-580", "S-1-5-32-578" }
+                .All(WellKnownSecurityGroups.IsPrivileged));
+
+        Check(failures, "the ordinary-account set covers Users, Everyone and Authenticated Users",
+            new[] { "S-1-5-32-545", "S-1-1-0", "S-1-5-11" }
+                .All(WellKnownSecurityGroups.IsOrdinaryAccount));
+
+        // The asymmetry that is the whole point: a label may be read out of this
+        // product's own table, and may never decide anything.
+        Check(failures, "a canonical label resolves to a SID",
+            WellKnownSecurityGroups.SidOf("Administrators") == WellKnownSecurityGroups.AdministratorsSid);
+
+        Check(failures, "a display name is never treated as an identity",
+            !WellKnownSecurityGroups.IsPrivileged("Administrators") &&
+            !WellKnownSecurityGroups.IsPrivileged("Administratörer") &&
+            !WellKnownSecurityGroups.LooksLikeSid("Administratörer"));
+
+        Check(failures, "every group in the table is identified by a well-formed SID",
+            WellKnownSecurityGroups.All.All(g => WellKnownSecurityGroups.LooksLikeSid(g.Sid)));
+
         // ------------------------------------------------------ verdict
 
         if (failures.Count > 0)

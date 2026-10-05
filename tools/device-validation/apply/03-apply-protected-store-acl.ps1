@@ -112,12 +112,17 @@ function New-Rule([string] $sid, $rights) {
         [Security.AccessControl.AccessControlType]::Allow)
 }
 
-$acl.AddAccessRule((New-Rule 'S-1-5-18' ([Security.AccessControl.FileSystemRights]::FullControl)))
-$acl.AddAccessRule((New-Rule 'S-1-5-32-544' ([Security.AccessControl.FileSystemRights]::FullControl)))
+# From the one table, rather than two more SID literals written out here. These
+# were already SIDs and already correct; they come from the shared table now so
+# that there is exactly one place where a built-in group is defined.
+$groupSids = Get-WellKnownGroupSid -Set all
+
+$acl.AddAccessRule((New-Rule $groupSids['System'] ([Security.AccessControl.FileSystemRights]::FullControl)))
+$acl.AddAccessRule((New-Rule $groupSids['Administrators'] ([Security.AccessControl.FileSystemRights]::FullControl)))
 $acl.AddAccessRule((New-Rule $childSid ([Security.AccessControl.FileSystemRights]::ReadAndExecute)))
 
 # Owner set to Administrators, so the parent can always repair it.
-$acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+$acl.SetOwner((New-Object Security.Principal.SecurityIdentifier($groupSids['Administrators'])))
 
 Set-Acl -Path $directory -AclObject $acl
 

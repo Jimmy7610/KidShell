@@ -113,6 +113,7 @@ if ($signaturesChecked) { $arguments += '--signature-checked' }
 
 $output = & $tool @arguments 2>&1
 $code = $LASTEXITCODE
+$toolCode = $code
 
 $output | Where-Object { $_ -notmatch '^\s*[{}\[\]"]' } | ForEach-Object { Write-Host $_ }
 
@@ -158,8 +159,42 @@ if ($missing -gt 0) {
 Write-Host ''
 Write-Host '--- permissions ---'
 
-if (Test-Path $installRoot) {
-    $usersSid = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545')
+# THIS CHECK USED TO FAIL OPEN.
+#
+# It compared each access rule's IdentityReference.Value - a LOCALIZED NTAccount
+# name such as 'BUILTIN\Användare' - first against a SID string, which can never
+# match a name, and then against the regex 'Users|Everyone|Authenticated', which
+# matches no Swedish name either. So on a localized machine the one check whose
+# job is to catch "an ordinary account can replace a LocalSystem service's
+# binary" printed "no ordinary account has write access to the install root"
+# whatever the access list actually said.
+#
+# Now: every identity is translated to its SID and compared against the SIDs the
+# decision tool reports. And if the SID set cannot be obtained, the check is
+# declared NOT PERFORMED rather than performed against a guess - this script's
+# own rule is that a skipped check is not a pass.
+
+$permissionsChecked = $false
+$ordinaryAccountSids = @{}
+
+$groupResult = & $tool @('security-groups', '--set', 'ordinary') 2>&1
+
+if ($LASTEXITCODE -eq 0) {
+    foreach ($line in $groupResult) {
+        if ($line -is [string] -and $line -match '^(.+?)=(S-1-[0-9-]+)$') {
+            $ordinaryAccountSids[$Matches[2]] = $Matches[1]
+        }
+    }
+}
+
+if ($ordinaryAccountSids.Count -eq 0) {
+    Write-Host '  NOT PERFORMED: the ordinary-account SIDs could not be read from the decision tool.' -ForegroundColor Yellow
+    Write-Host '  A permission check made against a guessed identity list would be worse than none.' -ForegroundColor Yellow
+}
+elseif (-not (Test-Path $installRoot)) {
+    Write-Host '  the install root does not exist.'
+}
+else {
     $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor
                  [Security.AccessControl.FileSystemRights]::Modify -bor
                  [Security.AccessControl.FileSystemRights]::FullControl -bor
@@ -167,15 +202,36 @@ if (Test-Path $installRoot) {
 
     try {
         $acl = Get-Acl $installRoot
+        $writable = @()
+        $untranslatable = @()
 
-        $writable = @($acl.Access | Where-Object {
-            $_.AccessControlType -eq 'Allow' -and
-            ([int]$_.FileSystemRights -band [int]$writeMask) -ne 0 -and
-            (
-                $_.IdentityReference.Value -eq $usersSid.Value -or
-                $_.IdentityReference.Value -match 'Users|Everyone|Authenticated'
-            )
-        })
+        foreach ($rule in $acl.Access) {
+            if ($rule.AccessControlType -ne 'Allow') { continue }
+            if (([int]$rule.FileSystemRights -band [int]$writeMask) -eq 0) { continue }
+
+            $sid = $null
+
+            try {
+                $sid = [string]$rule.IdentityReference.Translate(
+                    [Security.Principal.SecurityIdentifier]).Value
+            }
+            catch {
+                # An identity that will not translate is reported, not ignored.
+                # Silently skipping it is how the old check lost its meaning.
+                $untranslatable += [string]$rule.IdentityReference.Value
+                continue
+            }
+
+            if ($ordinaryAccountSids.ContainsKey($sid)) {
+                $writable += [pscustomobject]@{
+                    Label  = $ordinaryAccountSids[$sid]
+                    Sid    = $sid
+                    Rights = $rule.FileSystemRights
+                }
+            }
+        }
+
+        $permissionsChecked = ($untranslatable.Count -eq 0)
 
         if ($writable.Count -gt 0) {
             # A LocalSystem service whose image an ordinary account can replace
@@ -183,19 +239,46 @@ if (Test-Path $installRoot) {
             Write-Host '  WRITABLE BY ORDINARY ACCOUNTS:' -ForegroundColor Red
 
             foreach ($rule in $writable) {
-                Write-Host "    $($rule.IdentityReference) $($rule.FileSystemRights)" -ForegroundColor Red
+                Write-Host ("    {0} ({1}) {2}" -f $rule.Label, $rule.Sid, $rule.Rights) -ForegroundColor Red
             }
+
+            # Found, so it counts. Printing an escalation in red and then exiting
+            # PASS is the same defect in a different costume.
+            if ($code -eq 0) { $code = 1 }
         }
         else {
-            Write-Host '  no ordinary account has write access to the install root.'
+            Write-Host ("  no ordinary account has write access to the install root ({0} checked by SID)." `
+                -f ($ordinaryAccountSids.Keys -join ', '))
+        }
+
+        foreach ($identity in $untranslatable) {
+            Write-Host "  could not resolve the identity '$identity' to a SID, so it was not judged." -ForegroundColor Yellow
         }
     }
     catch {
         Write-Host "  could not read the access list: $($_.Exception.GetType().Name)" -ForegroundColor Yellow
     }
 }
-else {
-    Write-Host '  the install root does not exist.'
+
+if (-not $permissionsChecked -and $code -eq 0) {
+    # INCOMPLETE, not PASS.
+    $code = 2
+}
+
+# The decision tool printed its own verdict above, before the access list was
+# read. If what was found here contradicts it, say so here in words - an exit
+# code that disagrees with the verdict on screen is a verdict nobody will see.
+if ($code -ne $toolCode) {
+    Write-Host ''
+
+    if ($code -eq 2) {
+        Write-Host 'INSTALLATION: INCOMPLETE' -ForegroundColor Yellow
+        Write-Host '  The permission check above did not run to a conclusion, so the verdict printed earlier does not stand.' -ForegroundColor Yellow
+    }
+    else {
+        Write-Host 'INSTALLATION: FAIL' -ForegroundColor Red
+        Write-Host '  An ordinary account can write the install root. The verdict printed earlier does not stand.' -ForegroundColor Red
+    }
 }
 
 Write-Host ''

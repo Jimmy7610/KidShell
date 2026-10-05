@@ -1,10 +1,20 @@
+using KidShell.Core.Security.Validation;
+
 namespace KidShell.Core.Security.AppControl;
 
-/// <summary>Security identifiers AppLocker rules are written against.</summary>
+/// <summary>
+/// Security identifiers AppLocker rules are written against.
+///
+/// These were four separate SID literals across this assembly and the
+/// integration layer. They are now one: <see cref="WellKnownSecurityGroups"/>.
+/// Two copies of a security identity are two chances for one of them to be
+/// wrong, and the copy nobody is looking at is the one that rots.
+/// </summary>
 public static class WellKnownSids
 {
     /// <summary>Everyone. The audience when no account has been chosen yet.</summary>
-    public const string Everyone = "S-1-1-0";
+    public static readonly string Everyone =
+        WellKnownSecurityGroups.SidOf("Everyone")!;
 
     /// <summary>
     /// BUILTIN\Administrators.
@@ -14,7 +24,8 @@ public static class WellKnownSids
     /// what keeps an administrator able to repair a machine whose policy is
     /// wrong - including the machine where the repair tool is itself blocked.
     /// </summary>
-    public const string Administrators = "S-1-5-32-544";
+    public static readonly string Administrators =
+        WellKnownSecurityGroups.AdministratorsSid;
 }
 
 /// <summary>

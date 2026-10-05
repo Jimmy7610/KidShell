@@ -46,12 +46,38 @@ if ($existing) {
 }
 
 # Before anything, and regardless of -Apply.
-$administrators = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue)
+#
+# BY SID. This used to ask for the group named 'Administrators', which on Swedish
+# Windows is called Administratörer and therefore did not exist: the lookup
+# returned nothing, no enabled administrator was found, and this script refused
+# to run on precisely the machine it was written for.
+$groupSids = Get-WellKnownGroupSid -Set all
+$administratorsSid = $groupSids['Administrators']
+$usersSid = $groupSids['Users']
+
+$administrators = Get-LocalGroupMemberSid -GroupSid $administratorsSid
+
+if (-not $administrators.Exists) {
+    Write-Host "REFUSED: the Administrators group ($administratorsSid) does not exist on this machine." -ForegroundColor Red
+    exit 1
+}
+
+if (-not $administrators.Inspected) {
+    # Refusing is the only safe answer. Creating the child account when the
+    # recovery path cannot be confirmed is the first step towards a computer
+    # nobody can sign in to.
+    Write-Host "REFUSED: the Administrators group ($administratorsSid) could not be enumerated: $($administrators.Error)" -ForegroundColor Red
+    Write-Host 'The recovery path cannot be confirmed, so nothing will be created.' -ForegroundColor Red
+    exit 1
+}
+
 $enabledAdmins = @()
 
-foreach ($member in $administrators) {
-    $name = ($member.Name -split '\\')[-1]
-    $user = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
+foreach ($memberSid in $administrators.MemberSids) {
+    # By SID as well. A member's Name is 'MACHINE\user' for a local account and
+    # something else entirely for a domain or Microsoft account, so splitting it
+    # and hoping is not identification.
+    $user = Get-LocalUser -SID $memberSid -ErrorAction SilentlyContinue
 
     if ($user -and $user.Enabled) { $enabledAdmins += $user.Name }
 }
@@ -69,6 +95,7 @@ if (-not $Apply) {
     Write-Host 'DRY RUN. Nothing was created.' -ForegroundColor Yellow
     Write-Host ("With -Apply this would create the local account '{0}':" -f $config.ChildUser)
     Write-Host '  enabled, password never expires, NOT in any privileged group.'
+    Write-Host ("  added to the standard users group {0}, resolved by SID" -f $usersSid)
     Write-Host ''
     return
 }
@@ -88,13 +115,39 @@ $created = New-LocalUser -Name $config.ChildUser `
     -PasswordNeverExpires `
     -ErrorAction Stop
 
-# Deliberately NOT added to any group. New-LocalUser does not add to Users on
-# its own in every edition, so it is added explicitly and nothing else is.
+# Deliberately NOT added to any group but the standard one. New-LocalUser does
+# not add to Users on its own in every edition, so it is added explicitly and
+# nothing else is.
+#
+# Targeted by SID (S-1-5-32-545), both for the group and for the new account.
+# The group's display name is localized; neither of these identities is.
+$addedToUsers = $false
+
 try {
-    Add-LocalGroupMember -Group 'Users' -Member $created.Name -ErrorAction Stop
+    Add-LocalGroupMember -SID $usersSid -Member $created.SID -ErrorAction Stop
+    $addedToUsers = $true
 }
 catch {
-    Write-Host "Note: could not add to Users ($($_.Exception.Message)). Check the membership by hand." -ForegroundColor Yellow
+    $firstFailure = [string]$_.Exception.Message
+
+    try {
+        # Older builds of this cmdlet have no -SID. Find the group by SID anyway
+        # and hand Windows back the localized name it gave us.
+        $usersGroup = Get-BuiltinGroupBySid -Sid $usersSid
+
+        if (-not $usersGroup) { throw "no group with SID $usersSid exists on this machine" }
+
+        Add-LocalGroupMember -Group $usersGroup.Name -Member $created.SID -ErrorAction Stop
+        $addedToUsers = $true
+    }
+    catch {
+        Write-Host ("Note: could not add to the standard users group {0} ({1}; {2}). Check the membership by hand." `
+            -f $usersSid, $firstFailure, $_.Exception.Message) -ForegroundColor Yellow
+    }
+}
+
+if ($addedToUsers) {
+    Write-Host ("Added to the standard users group {0}." -f $usersSid) -ForegroundColor Green
 }
 
 Write-Host ''

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using KidShell.Core.Deployment;
+using KidShell.Core.Security.Validation;
 
 namespace KidShell.DeviceValidation;
 
@@ -150,6 +151,42 @@ internal static class InstallVerbs
                 Console.Error.WriteLine($"Unknown --what '{what}'.");
                 return 2;
         }
+    }
+
+    /// <summary>
+    /// Prints the built-in groups the toolset reasons about, as label and SID.
+    ///
+    /// WHY THE SCRIPTS ASK FOR THIS
+    /// ---------------------------
+    /// Windows localizes its built-in group names. On the Swedish machine used
+    /// for physical validation, `Get-LocalGroup -Name 'Administrators'` throws.
+    /// So no script may name a group; every one of them resolves by SID, and
+    /// this is where the SIDs come from - one table, in C#, with tests, rather
+    /// than a copy in each script that needs one.
+    /// </summary>
+    internal static int SecurityGroups(string? set)
+    {
+        var groups = (set ?? "all").ToLowerInvariant() switch
+        {
+            "privileged" => WellKnownSecurityGroups.Privileged,
+            "ordinary" => WellKnownSecurityGroups.OrdinaryAccounts,
+            "all" => WellKnownSecurityGroups.All,
+            _ => null
+        };
+
+        if (groups is null)
+        {
+            Console.Error.WriteLine($"Unknown --set '{set}'. Use privileged, ordinary or all.");
+            return 2;
+        }
+
+        // label=SID, one per line, so a script can read it without a parser.
+        foreach (var group in groups)
+        {
+            Console.WriteLine($"{group.Label}={group.Sid}");
+        }
+
+        return 0;
     }
 
     /// <summary>Checks a release manifest's shape and the bundle's integrity.</summary>

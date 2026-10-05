@@ -46,26 +46,46 @@ function Get-Account([string] $name) {
     catch { return $null }
 }
 
-$privilegedGroups = @(
-    'Administrators', 'Power Users', 'Backup Operators',
-    'Remote Desktop Users', 'Remote Management Users', 'Hyper-V Administrators'
-)
+# The privileged groups, by SID, from the one table in KidShell.Core.
+#
+# These used to be six English strings. Windows localizes built-in group names,
+# so on the Swedish validation machine every one of those lookups threw
+# GroupNotFoundException, the catch swallowed it, and the child was reported as
+# being in no privileged group because no group could be found at all.
+#
+# The labels below are for reading. The SID is what is asked for.
+$privilegedGroups = Get-WellKnownGroupSid -Set privileged
+$administratorsSid = (Get-WellKnownGroupSid -Set all)['Administrators']
 
 function Get-GroupMembership([string] $sid) {
+    <#
+        Which privileged groups this account is in, as canonical labels, plus
+        any group that could not be read at all.
+
+        Absence is not failure: Windows Home has no Power Users, Backup Operators
+        or Remote Desktop Users, and an account provably is not in a group the
+        machine does not have. A group that EXISTS and will not enumerate is a
+        different matter and is reported, because "I could not look" must never
+        be presented as "there is nothing there".
+    #>
     $found = New-Object System.Collections.Generic.List[string]
+    $unreadable = New-Object System.Collections.Generic.List[string]
+    $absent = New-Object System.Collections.Generic.List[string]
 
-    foreach ($group in $privilegedGroups) {
-        try {
-            $members = Get-LocalGroupMember -Group $group -ErrorAction Stop
+    foreach ($label in $privilegedGroups.Keys) {
+        $membership = Get-LocalGroupMemberSid -GroupSid $privilegedGroups[$label]
 
-            if ($members | Where-Object { [string]$_.SID -eq $sid }) {
-                $found.Add($group)
-            }
-        }
-        catch { }
+        if (-not $membership.Exists) { $absent.Add($label); continue }
+        if (-not $membership.Inspected) { $unreadable.Add($label); continue }
+
+        if ($membership.MemberSids -contains $sid) { $found.Add($label) }
     }
 
-    return $found.ToArray()
+    return [pscustomobject]@{
+        Groups     = $found.ToArray()
+        Unreadable = $unreadable.ToArray()
+        Absent     = $absent.ToArray()
+    }
 }
 
 $parent = Get-Account $config.ParentAdminUser
@@ -73,12 +93,21 @@ $child = Get-Account $config.ChildUser
 
 $evidence = [pscustomobject]@{
     checked = $true
+
+    # The mapping this run actually used. Written down so a run on Swedish
+    # Windows and a run on English Windows produce the same document, and so a
+    # reader can see that the decision was made from SIDs.
+    privilegedGroupSids = $privilegedGroups
+
     parent  = [pscustomobject]@{
         name    = $config.ParentAdminUser
         exists  = [bool]$parent
         enabled = $false
         sid     = ''
         groups  = @()
+        groupsUnreadable = @()
+        groupsAbsent     = @()
+        inAdministrators = $null
     }
     child   = [pscustomobject]@{
         name            = $config.ChildUser
@@ -86,20 +115,36 @@ $evidence = [pscustomobject]@{
         enabled         = $false
         sid             = ''
         groups          = @()
+        groupsUnreadable = @()
+        groupsAbsent     = @()
         sidMatchesConfig = $false
     }
 }
 
 if ($parent) {
+    $membership = Get-GroupMembership ([string]$parent.SID)
+
     $evidence.parent.enabled = [bool]$parent.Enabled
     $evidence.parent.sid = [string]$parent.SID
-    $evidence.parent.groups = @(Get-GroupMembership ([string]$parent.SID))
+    $evidence.parent.groups = @($membership.Groups)
+    $evidence.parent.groupsUnreadable = @($membership.Unreadable)
+    $evidence.parent.groupsAbsent = @($membership.Absent)
+
+    # Asked of the Administrators group by SID, not inferred from the label list
+    # above. The recovery path is the single most important fact in this stage,
+    # so it is established directly and it may come back $null.
+    $evidence.parent.inAdministrators =
+        Test-LocalGroupMembership -GroupSid $administratorsSid -MemberSid ([string]$parent.SID)
 }
 
 if ($child) {
+    $membership = Get-GroupMembership ([string]$child.SID)
+
     $evidence.child.enabled = [bool]$child.Enabled
     $evidence.child.sid = [string]$child.SID
-    $evidence.child.groups = @(Get-GroupMembership ([string]$child.SID))
+    $evidence.child.groups = @($membership.Groups)
+    $evidence.child.groupsUnreadable = @($membership.Unreadable)
+    $evidence.child.groupsAbsent = @($membership.Absent)
     $evidence.child.sidMatchesConfig =
         ($config.ExpectedChildSid -and [string]$child.SID -eq $config.ExpectedChildSid)
 }
@@ -116,13 +161,19 @@ else {
             -Detail "The parent administrator account '$($parent.Name)' is disabled. A second enabled administrator must exist at every moment."
     }
 
-    if ('Administrators' -notin $evidence.parent.groups) {
+    # By SID. The string 'Administrators' appears nowhere in this decision,
+    # because on this machine the group is called Administratörer.
+    if ($null -eq $evidence.parent.inAdministrators) {
         Add-ValidationFinding -Stage $stage -Status Fail `
-            -Detail "The parent account '$($parent.Name)' is not in Administrators, so there is no recovery path."
+            -Detail "The Administrators group ($administratorsSid) could not be read, so the parent's recovery path could not be confirmed. An unconfirmed recovery path is treated as no recovery path."
+    }
+    elseif (-not $evidence.parent.inAdministrators) {
+        Add-ValidationFinding -Stage $stage -Status Fail `
+            -Detail "The parent account '$($parent.Name)' is not in Administrators ($administratorsSid), so there is no recovery path."
     }
     else {
         Add-ValidationFinding -Stage $stage -Status Pass `
-            -Detail "The parent account '$($parent.Name)' is an enabled administrator."
+            -Detail "The parent account '$($parent.Name)' is an enabled administrator (member of $administratorsSid)."
     }
 }
 
@@ -138,14 +189,34 @@ else {
     }
 
     $privileged = @($evidence.child.groups)
+    $unreadable = @($evidence.child.groupsUnreadable)
 
     if ($privileged.Count -gt 0) {
         Add-ValidationFinding -Stage $stage -Status Fail `
             -Detail "The child account is in: $($privileged -join ', '). It must be a plain standard user."
     }
+    elseif ($unreadable.Count -gt 0) {
+        # Not a pass. The question "is the child privileged" was not answered for
+        # these groups, and the whole point of this pass is that an unanswered
+        # security question must not read as a clean one.
+        Add-ValidationFinding -Stage $stage -Status Fail `
+            -Detail "These privileged groups exist on this machine and could not be enumerated: $($unreadable -join ', '). The child's privileges are unknown, not clean."
+    }
     else {
+        $absent = @($evidence.child.groupsAbsent)
+        $note = ''
+
+        # Windows Home has no Power Users, Backup Operators or Remote Desktop
+        # Users. Saying so is honest, and stops a reader wondering whether the
+        # check silently skipped them.
+        if ($absent.Count -gt 0) {
+            $note = " Not present on this edition, so membership is impossible: $($absent -join ', ')."
+        }
+
+        # Enabled-ness is the finding above, and saying "enabled" here as well
+        # produced a Pass that contradicted the Fail two lines up.
         Add-ValidationFinding -Stage $stage -Status Pass `
-            -Detail "The child account '$($child.Name)' is an enabled standard user in no privileged group."
+            -Detail "The child account '$($child.Name)' is in no privileged group.$note"
     }
 
     if (-not $config.ExpectedChildSid) {
