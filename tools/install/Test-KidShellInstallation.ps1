@@ -195,10 +195,24 @@ elseif (-not (Test-Path $installRoot)) {
     Write-Host '  the install root does not exist.'
 }
 else {
-    $writeMask = [Security.AccessControl.FileSystemRights]::Write -bor
-                 [Security.AccessControl.FileSystemRights]::Modify -bor
-                 [Security.AccessControl.FileSystemRights]::FullControl -bor
-                 [Security.AccessControl.FileSystemRights]::WriteData
+    # Do NOT use composite rights such as Modify or FullControl as the mask.
+    # FileSystemRights is a flags enum: Modify contains read bits too, so testing
+    # "rule -band Modify" makes a harmless ReadAndExecute ACE look writable.
+    # WILMA caught exactly that false positive:
+    #   Users (S-1-5-32-545) ReadAndExecute, Synchronize
+    #
+    # Build the danger mask only from the atomic capabilities that can alter the
+    # tree, its contents, or its ACL/ownership. Write, Modify and FullControl all
+    # contain one or more of these bits, so genuinely writable ACEs are still
+    # caught without overlapping ordinary read/execute rights.
+    $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                 [Security.AccessControl.FileSystemRights]::AppendData -bor
+                 [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                 [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                 [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                 [Security.AccessControl.FileSystemRights]::Delete -bor
+                 [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                 [Security.AccessControl.FileSystemRights]::TakeOwnership
 
     try {
         $acl = Get-Acl $installRoot
