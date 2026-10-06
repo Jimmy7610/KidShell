@@ -106,7 +106,7 @@ to hash anything, or to touch the disk.
 | Display name | KidShell Security Host |
 | Account | `LocalSystem` |
 | Start type | Automatic |
-| Image | `%ProgramFiles%\KidShell\KidShell.SecurityHost.exe` |
+| Image | `%ProgramFiles%\KidShell\KidShell.SecurityHost\KidShell.SecurityHost.exe` |
 
 `LocalSystem` rather than a virtual service account, which would be narrower
 and is the usual advice. It is not usable here: the protected store's access
