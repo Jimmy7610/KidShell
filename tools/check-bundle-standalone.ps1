@@ -205,6 +205,35 @@ Import-Module '$($validation -replace "'", "''")\KidShellValidation.psm1' -Force
         Fail 'The module reported a bundle as a development build.'
     }
 
+    # --------------------------------------- installed service path contract
+    #
+    # The lab installer puts each helper under its component directory. WILMA
+    # exposed a drift where the SecurityHost apply script still looked for the
+    # old flat path under C:\Program Files\KidShell and therefore refused a
+    # correctly installed bundle. Keep the bundle's apply script aligned with
+    # the install layout before it reaches a physical device.
+    Write-Host ''
+    Write-Host '--- SecurityHost install path contract ---'
+
+    $securityHostApply = Join-Path $validation 'apply\02-install-securityhost-service.ps1'
+
+    if (-not (Test-Path $securityHostApply)) {
+        Fail 'The bundle has no SecurityHost service installer.'
+    }
+    else {
+        $serviceText = [System.IO.File]::ReadAllText($securityHostApply, [System.Text.Encoding]::UTF8)
+        $canonical = "Join-Path `$installRoot 'KidShell.SecurityHost\KidShell.SecurityHost.exe'"
+        $obsolete = "Join-Path `$installRoot 'KidShell.SecurityHost.exe'"
+
+        if (-not $serviceText.Contains($canonical)) {
+            Fail 'The SecurityHost service installer does not target the component directory used by the lab installer.'
+        }
+
+        if ($serviceText.Contains($obsolete)) {
+            Fail 'The SecurityHost service installer still contains the obsolete flat install path.'
+        }
+    }
+
     # ------------------------------------------------------- 2. preflight
 
     Write-Host ''
