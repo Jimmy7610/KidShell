@@ -128,10 +128,22 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         return [.. accounts.OrderBy(a => a.Username, StringComparer.OrdinalIgnoreCase)];
     }
 
-    private HashSet<string> ReadAdministratorSids()
+    private HashSet<string> ReadAdministratorSids() =>
+        ReadGroupMemberSids(WellKnownSecurityGroups.AdministratorsSid) ?? [];
+
+    /// <summary>
+    /// The SIDs in a built-in group, by the group's SID, or null when the group
+    /// could not be read.
+    ///
+    /// NULL RATHER THAN EMPTY when the read fails. An empty set means "the group
+    /// is here and nobody is in it"; the difference matters because an unreadable
+    /// Administrators group returning empty would report every administrator as a
+    /// standard user.
+    /// </summary>
+    private HashSet<string>? ReadGroupMemberSids(string groupSid)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var groupName = AdministratorsGroupName();
+        var groupName = GroupNameFromSid(groupSid);
         var buffer = IntPtr.Zero;
         var handle = IntPtr.Zero;
 
@@ -142,10 +154,9 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
             // group at all - so the call would fail and every administrator
             // would be reported as a standard user.
             _logger.Warning(SecurityAuditEvents.Category,
-                $"The Administrators group ({WellKnownSecurityGroups.AdministratorsSid}) could not be named on this " +
-                "machine, so its membership was not read. No account's administrator status is established.");
+                $"The group {groupSid} could not be named on this machine, so its membership was not read.");
 
-            return result;
+            return null;
         }
 
         try
@@ -155,7 +166,10 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
 
             if (status is not (NerrSuccess or ErrorMoreData))
             {
-                return result;
+                _logger.Warning(SecurityAuditEvents.Category,
+                    $"NetLocalGroupGetMembers returned {status} for {groupSid}, so its membership is unknown.");
+
+                return null;
             }
 
             var size = Marshal.SizeOf<LocalGroupMembersInfo0>();
@@ -172,7 +186,9 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         }
         catch (Exception ex)
         {
-            _logger.Warning(SecurityAuditEvents.Category, "Could not read the Administrators group.", ex);
+            _logger.Warning(SecurityAuditEvents.Category, $"Could not read the group {groupSid}.", ex);
+
+            return null;
         }
         finally
         {
@@ -185,6 +201,41 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         return result;
     }
 
+    /// <inheritdoc />
+    public Task<bool?> IsInStandardUsersGroupAsync(
+        string sid, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sid);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var members = ReadGroupMemberSids(WellKnownSecurityGroups.UsersSid);
+
+        // Null all the way out. The caller has to decide what an unanswered
+        // membership question means, rather than being handed a false.
+        return Task.FromResult(members is null ? null : (bool?)members.Contains(sid));
+    }
+
+    /// <summary>
+    /// A built-in group's name on this Windows, from its SID, or null.
+    ///
+    /// NEVER A GUESSED ENGLISH NAME. The net API takes a name, so a name has to
+    /// be produced - but on this machine the Administrators group is called
+    /// Administratörer, and a lookup of "Administrators" does not fail loudly: it
+    /// returns no members, and no members reads as "nobody is an administrator".
+    /// </summary>
+    private static string? GroupNameFromSid(string groupSid)
+    {
+        try
+        {
+            var sid = new SecurityIdentifier(groupSid);
+            return ((NTAccount)sid.Translate(typeof(NTAccount))).Value.Split('\\').Last();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// The local Administrators group under whatever name this Windows uses,
     /// resolved from the well-known SID, or null when it cannot be resolved.
@@ -195,18 +246,8 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
     /// of "Administrators" does not fail loudly, it returns no members, and no
     /// members reads as "no administrators".
     /// </summary>
-    private static string? AdministratorsGroupName()
-    {
-        try
-        {
-            var sid = new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null);
-            return ((NTAccount)sid.Translate(typeof(NTAccount))).Value.Split('\\').Last();
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    private static string? AdministratorsGroupName() =>
+        GroupNameFromSid(WellKnownSecurityGroups.AdministratorsSid);
 
     private static string? ResolveSid(string username)
     {

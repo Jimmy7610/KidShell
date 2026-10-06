@@ -57,6 +57,54 @@ if (-not $Root) {
 
 $Root = (Resolve-Path $Root).Path
 
+function Get-CodeLines {
+    <#
+        A file's lines with every comment blanked out, line numbers preserved.
+
+        Line comments and block comments alike. This gate originally skipped only
+        line comments, which was luck rather than design: the sibling gate
+        tools\check-child-account-recovery.ps1 did the same and immediately
+        flagged the example of the bad code inside its own documentation.
+
+        (This comment may not contain a block-comment delimiter: PowerShell block
+        comments do not nest, so the closing one would end the comment early.)
+    #>
+    param([Parameter(Mandatory)][string] $Text, [switch] $CStyle)
+
+    $out = New-Object System.Collections.Generic.List[string]
+    $inBlock = $false
+    $open = if ($CStyle) { '/*' } else { '<#' }
+    $close = if ($CStyle) { '*/' } else { '#>' }
+
+    foreach ($line in ($Text -split "`r?`n")) {
+        $kept = $line
+
+        if ($inBlock) {
+            $at = $kept.IndexOf($close)
+
+            if ($at -ge 0) { $kept = $kept.Substring($at + 2); $inBlock = $false }
+            else { $kept = '' }
+        }
+
+        while ($kept.Contains($open)) {
+            $start = $kept.IndexOf($open)
+            $end = $kept.IndexOf($close, $start + 2)
+
+            if ($end -ge 0) { $kept = $kept.Substring(0, $start) + $kept.Substring($end + 2) }
+            else { $kept = $kept.Substring(0, $start); $inBlock = $true; break }
+        }
+
+        if ($CStyle) {
+            if ($kept -match '^\s*(//|\*)') { $kept = '' }
+        }
+        elseif ($kept -match '^\s*#') { $kept = '' }
+
+        $out.Add($kept)
+    }
+
+    return $out.ToArray()
+}
+
 $problems = @()
 $checks = 0
 
@@ -111,12 +159,12 @@ foreach ($script in $scripts) {
     $relative = $script.FullName.Substring($Root.Length).TrimStart('\')
 
     # Comments are allowed to name the groups. Nothing else is.
-    $lines = $source -split "`r?`n"
+    $lines = Get-CodeLines -Text $source
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
 
-        if ($line -match '^\s*#') { continue }
+        if (-not $line.Trim()) { continue }
 
         foreach ($rule in $forbidden) {
             $checks++
@@ -158,15 +206,16 @@ Write-Host ("Sources : {0}" -f $sources.Count)
 
 foreach ($source in $sources) {
     $text = [System.IO.File]::ReadAllText($source.FullName, [System.Text.Encoding]::UTF8)
-    $relative = $source.FullName.Substring($Root.Length).TrimStart('')
-    $lines = $text -split "`r?`n"
+    $relative = $source.FullName.Substring($Root.Length).TrimStart('\')
+
+    # Comments and doc comments are allowed to name the groups; the explanations
+    # of this defect have to be able to say what it was. /* */ blocks included.
+    $lines = Get-CodeLines -Text $text -CStyle
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
 
-        # Comments and doc comments are allowed to name the groups; the
-        # explanations of this defect have to be able to say what it was.
-        if ($line -match '^\s*(//|/\*|\*)') { continue }
+        if (-not $line.Trim()) { continue }
 
         foreach ($rule in $forbiddenCSharp) {
             $checks++
