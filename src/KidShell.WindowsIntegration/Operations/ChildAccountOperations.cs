@@ -156,6 +156,32 @@ public sealed class CreateChildAccountOperation : SecurityOperationBase
             return OperationOutcome.Fail($"Kontot \"{_username}\" är avstängt.");
         }
 
+        // The standard Users group, checked rather than assumed.
+        //
+        // NetUserAdd at level 1 with USER_PRIV_USER is documented to place the
+        // account in the local Users group, and this operation relied on that
+        // without ever looking. On WILMA the validation script's equivalent step
+        // failed and the stage was still reported as finished, so the assumption
+        // is verified here too: an account that is not in Users is a
+        // half-configured machine, and null means unverified, which is not a pass.
+        var inUsers = await _accounts
+            .IsInStandardUsersGroupAsync(account.Sid, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (inUsers is null)
+        {
+            return OperationOutcome.Fail(
+                $"Det gick inte att läsa om kontot \"{_username}\" finns i standardgruppen Users. "
+                + "Kontot lämnas som det är.");
+        }
+
+        if (inUsers == false)
+        {
+            return OperationOutcome.Fail(
+                $"Kontot \"{_username}\" skapades men hamnade inte i standardgruppen Users, "
+                + "så det är inte färdigt att användas.");
+        }
+
         _createdSid = account.Sid;
 
         return OperationOutcome.Ok($"Kontot \"{_username}\" finns och är ett standardkonto.");

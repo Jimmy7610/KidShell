@@ -189,6 +189,91 @@ internal static class InstallVerbs
         return 0;
     }
 
+    /// <summary>
+    /// Decides what to do about the child account, from facts a script observed.
+    ///
+    /// THE SCRIPT OBSERVES, THIS DECIDES, THE SCRIPT ACTS, THEN THE SCRIPT
+    /// RE-OBSERVES. The decision is here rather than in PowerShell because it
+    /// has eight states to get right and every one of them can be tested from
+    /// a test assembly, which no amount of care in a script can be.
+    ///
+    /// Prints KEY=VALUE lines, so a script reads it without a JSON parser, and
+    /// returns a distinct exit code per result rather than a bare 1.
+    /// </summary>
+    internal static int ChildAccountPlan(
+        string? name,
+        string? sid,
+        string? expectedSid,
+        string? exists,
+        string? enabled,
+        string? inUsers,
+        string? privileged,
+        string? unreadable,
+        string? recoveryAdmin)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            Console.Error.WriteLine("child-account-plan needs --name.");
+            return 2;
+        }
+
+        var facts = new ChildAccountFacts
+        {
+            ConfiguredName = name,
+            Exists = IsTrue(exists),
+            Enabled = IsTrue(enabled),
+            Sid = sid ?? string.Empty,
+            ExpectedSid = expectedSid ?? string.Empty,
+
+            // Deliberately tri-state. "unknown" is how a script says it could
+            // not read the membership, and it must not arrive here as false.
+            InStandardUsersGroup = Tristate(inUsers),
+            PrivilegedGroupSids = SplitSids(privileged),
+            UnreadablePrivilegedGroupSids = SplitSids(unreadable),
+            EnabledRecoveryAdministratorExists = IsTrue(recoveryAdmin)
+        };
+
+        var plan = ChildAccountSetupPlan.Decide(facts);
+
+        Console.WriteLine($"ACTION={plan.Action}");
+        Console.WriteLine($"RESULT={plan.ResultIfActionSucceeds}");
+        Console.WriteLine($"ADD_USERS={plan.AddStandardUsersMembership}");
+        Console.WriteLine($"NEEDS_PASSWORD={plan.NeedsPassword}");
+        Console.WriteLine($"USERS_SID={WellKnownSecurityGroups.UsersSid}");
+
+        foreach (var reason in plan.Reasons)
+        {
+            Console.WriteLine($"REASON={reason}");
+        }
+
+        // 0 only when there is a safe thing to do, so a script that ignores the
+        // text still cannot act on a refusal.
+        return plan.Refused
+            ? ChildAccountSetupPlan.ExitCodeOf(ChildAccountResult.Refused)
+            : 0;
+    }
+
+    private static bool IsTrue(string? value) =>
+        value is not null &&
+        (value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1");
+
+    private static bool? Tristate(string? value)
+    {
+        if (value is null ||
+            value.Equals("unknown", StringComparison.OrdinalIgnoreCase) ||
+            value.Length == 0)
+        {
+            return null;
+        }
+
+        return IsTrue(value);
+    }
+
+    private static IReadOnlyList<string> SplitSids(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : [.. value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+
     /// <summary>Checks a release manifest's shape and the bundle's integrity.</summary>
     internal static int ReleaseManifest(string? manifestPath, string? bundleRoot)
     {

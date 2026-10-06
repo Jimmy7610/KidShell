@@ -215,6 +215,67 @@ public static class ValidationSelfTest
         Check(failures, "every group in the table is identified by a well-formed SID",
             WellKnownSecurityGroups.All.All(g => WellKnownSecurityGroups.LooksLikeSid(g.Sid)));
 
+        // ------------------------------------------ the child account plan
+        //
+        // apply\01-create-child-account.ps1 asks this binary what to do, so if
+        // the decision is wrong the script is wrong on a physical device. The
+        // state below is the one WILMA is in: the account exists, is enabled, has
+        // the right SID, and is not in the built-in Users group because the add
+        // failed at parameter binding.
+
+        var partial = new ChildAccountFacts
+        {
+            ConfiguredName = "KidShellChild",
+            Exists = true,
+            Enabled = true,
+            Sid = "S-1-5-21-3382208030-1057815629-3599114088-1003",
+            ExpectedSid = "S-1-5-21-3382208030-1057815629-3599114088-1003",
+            InStandardUsersGroup = false,
+            EnabledRecoveryAdministratorExists = true
+        };
+
+        Check(failures, "a partially created child account is repaired, not reported as finished",
+            ChildAccountSetupPlan.Decide(partial).Action == ChildAccountAction.Repair);
+
+        Check(failures, "repairing never asks to recreate the account or change its SID",
+            !ChildAccountSetupPlan.Decide(partial).NeedsPassword);
+
+        Check(failures, "an absent child account is created",
+            ChildAccountSetupPlan.Decide(partial with { Exists = false }).Action == ChildAccountAction.Create);
+
+        Check(failures, "a correct child account is a no-op",
+            ChildAccountSetupPlan.Decide(partial with { InStandardUsersGroup = true }).Action
+                == ChildAccountAction.None);
+
+        Check(failures, "a privileged child account is refused",
+            ChildAccountSetupPlan.Decide(partial with { PrivilegedGroupSids = ["S-1-5-32-544"] }).Refused);
+
+        Check(failures, "a disabled child account is refused rather than enabled",
+            ChildAccountSetupPlan.Decide(partial with { Enabled = false }).Refused);
+
+        Check(failures, "unknown Users membership is not treated as missing",
+            ChildAccountSetupPlan.Decide(partial with { InStandardUsersGroup = null }).Refused);
+
+        Check(failures, "a SID that disagrees with the config is refused",
+            ChildAccountSetupPlan.Decide(partial with { ExpectedSid = "S-1-5-21-9-9-9-1001" }).Refused);
+
+        Check(failures, "no recovery administrator refuses even when there is nothing to do",
+            ChildAccountSetupPlan.Decide(partial with
+            {
+                InStandardUsersGroup = true, EnabledRecoveryAdministratorExists = false
+            }).Refused);
+
+        // A half-built account must never leave with a success code.
+        Check(failures, "a created account with no Users membership is PARTIAL, not success",
+            ChildAccountSetupPlan.ResultOfFailedMembership(accountWasJustCreated: true)
+                == ChildAccountResult.Partial);
+
+        Check(failures, "every non-success result has a non-zero exit code",
+            ChildAccountSetupPlan.ExitCodeOf(ChildAccountResult.Success) == 0 &&
+            ChildAccountSetupPlan.ExitCodeOf(ChildAccountResult.Partial) != 0 &&
+            ChildAccountSetupPlan.ExitCodeOf(ChildAccountResult.Refused) != 0 &&
+            ChildAccountSetupPlan.ExitCodeOf(ChildAccountResult.Failed) != 0);
+
         // ------------------------------------------------------ verdict
 
         if (failures.Count > 0)

@@ -121,6 +121,25 @@ internal sealed class FakeAccountService : ILocalAccountService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// What <see cref="IsInStandardUsersGroupAsync"/> answers.
+    ///
+    /// True by default, because a real NetUserAdd does place a standard account
+    /// in Users and the tests that are not about this want the ordinary case.
+    /// Null is the interesting one: it is "could not read", and it must not be
+    /// treated as a pass.
+    /// </summary>
+    public bool? InStandardUsersGroup { get; set; } = true;
+
+    public int UsersGroupQueryCount { get; private set; }
+
+    public Task<bool?> IsInStandardUsersGroupAsync(string sid, CancellationToken cancellationToken = default)
+    {
+        UsersGroupQueryCount++;
+
+        return Task.FromResult(InStandardUsersGroup);
+    }
+
     // ------------------------------------------------------------ fixtures
 
     public static LocalAccount Parent(bool enabled = true) => new()

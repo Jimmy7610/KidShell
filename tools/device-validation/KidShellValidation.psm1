@@ -420,6 +420,134 @@ function Test-LocalGroupMembership {
     return [bool]($membership.MemberSids -contains $MemberSid)
 }
 
+function Add-LocalGroupMemberBySid {
+    <#
+        Adds an account to a built-in group, both named by SID, and VERIFIES the
+        result by reading the membership back.
+
+        WHY THIS IS NOT A ONE-LINER
+
+        Add-LocalGroupMember's -Member parameter is typed LocalPrincipal[], and
+        LocalPrincipal has exactly two constructors: one empty, one taking a
+        string. A SecurityIdentifier object therefore has no conversion to it,
+        and passing one fails at parameter binding:
+
+            Cannot bind parameter 'Member'. Cannot convert the
+            "S-1-5-21-..." value of type
+            "System.Security.Principal.SecurityIdentifier" to type
+            "Microsoft.PowerShell.Commands.LocalPrincipal".
+
+        That is what happened on WILMA: the child account was created and never
+        added to Users, because both the attempt and its fallback passed a
+        SecurityIdentifier.
+
+        Measured on this machine: a SecurityIdentifier never binds; a SID STRING
+        binds but arrives as a Name with an empty SID; a LocalUser object binds
+        with both Name and SID populated. Which of those the cmdlet then
+        RESOLVES cannot be established without performing a real add - -WhatIf
+        short-circuits before resolution - so this function does not bet on one.
+        It tries them in order of how much identity they carry, and then asks
+        Windows whether the membership exists.
+
+        THE VERIFICATION IS THE POINT. "The cmdlet did not throw" is not
+        evidence; "the SID is in the group" is.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string] $GroupSid,
+        [Parameter(Mandatory)][string] $MemberSid
+    )
+
+    $attempts = New-Object System.Collections.Generic.List[string]
+
+    # Already there? Then this is a no-op success, not an add. Re-running a
+    # repair must be safe.
+    $before = Get-LocalGroupMemberSid -GroupSid $GroupSid
+
+    if (-not $before.Exists) {
+        return [pscustomobject]@{
+            Added = $false; Verified = $false
+            Attempts = @("the group $GroupSid does not exist on this machine")
+            Error = "no group with SID $GroupSid exists on this machine"
+        }
+    }
+
+    if ($before.Inspected -and ($before.MemberSids -contains $MemberSid)) {
+        return [pscustomobject]@{
+            Added = $false; Verified = $true
+            Attempts = @('already a member; nothing was changed')
+            Error = ''
+        }
+    }
+
+    $group = Get-BuiltinGroupBySid -Sid $GroupSid
+    $user = Get-LocalUser -SID $MemberSid -ErrorAction SilentlyContinue
+
+    if (-not $user) {
+        return [pscustomobject]@{
+            Added = $false; Verified = $false
+            Attempts = @("no local account with SID $MemberSid")
+            Error = "no local account with SID $MemberSid exists on this machine"
+        }
+    }
+
+    # In order of how much identity each form carries. The LocalUser object
+    # first: it is the only one that binds with its SID populated.
+    $members = @(
+        @{ Label = 'the LocalUser object'; Value = $user },
+        @{ Label = 'the SID as a string'; Value = $MemberSid },
+        @{ Label = 'MACHINE\name'; Value = ("{0}\{1}" -f $env:COMPUTERNAME, $user.Name) }
+    )
+
+    foreach ($member in $members) {
+        # The group by SID where the cmdlet supports it, otherwise by the
+        # localized name that was itself found by SID. Never by an English name.
+        $byGroupSid = $true
+
+        foreach ($pass in 1, 2) {
+            try {
+                if ($pass -eq 1) {
+                    Add-LocalGroupMember -SID $GroupSid -Member $member.Value -ErrorAction Stop
+                }
+                else {
+                    if (-not $group) { break }
+                    $byGroupSid = $false
+                    Add-LocalGroupMember -Group $group.Name -Member $member.Value -ErrorAction Stop
+                }
+            }
+            catch {
+                $attempts.Add(("{0} via {1}: {2}" -f $member.Label,
+                    $(if ($pass -eq 1) { "-SID $GroupSid" } else { "-Group '$($group.Name)'" }),
+                    $_.Exception.Message.Split([char]10)[0]))
+
+                continue
+            }
+
+            # It did not throw. That is not the same as it having worked.
+            $after = Get-LocalGroupMemberSid -GroupSid $GroupSid
+
+            if ($after.Inspected -and ($after.MemberSids -contains $MemberSid)) {
+                $attempts.Add(("{0} via {1}: accepted and VERIFIED by SID" -f $member.Label,
+                    $(if ($byGroupSid) { "-SID $GroupSid" } else { "-Group '$($group.Name)'" })))
+
+                return [pscustomobject]@{
+                    Added = $true; Verified = $true
+                    Attempts = $attempts.ToArray(); Error = ''
+                }
+            }
+
+            $attempts.Add(("{0}: the cmdlet reported success and the SID is still not in the group" `
+                -f $member.Label))
+        }
+    }
+
+    [pscustomobject]@{
+        Added = $false; Verified = $false
+        Attempts = $attempts.ToArray()
+        Error = "no identity form was accepted for $MemberSid in $GroupSid"
+    }
+}
+
 function Resolve-IdentityToSid {
     <#
         The SID behind an access-list IdentityReference.
@@ -769,7 +897,7 @@ function Save-ValidationStage {
 Export-ModuleMember -Function @(
     'Get-ValidationContext', 'Get-ValidationAuditScript', 'Get-ValidationTool', 'Invoke-ValidationTool', 'Get-ValidationConfigPath', 'Import-ValidationConfig',
     'Get-WellKnownGroupSid', 'Get-BuiltinGroupBySid', 'Get-LocalGroupMemberSid',
-    'Test-LocalGroupMembership', 'Resolve-IdentityToSid',
+    'Test-LocalGroupMembership', 'Resolve-IdentityToSid', 'Add-LocalGroupMemberBySid',
     'Test-Elevated', 'Test-DevelopmentBuild', 'Get-WorkingMachineSign', 'Get-InterlockFact',
     'Assert-DedicatedDevice', 'New-ValidationRun', 'Get-LatestValidationRun', 'Write-Evidence',
     'New-ValidationStage', 'Add-ValidationFinding', 'Save-ValidationStage'

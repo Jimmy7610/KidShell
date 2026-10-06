@@ -35,6 +35,10 @@ if (arguments.Length == 0 || arguments.Contains("--help") || arguments.Contains(
     Console.WriteLine("  report      --run <dir> [--out <f>]");
     Console.WriteLine();
     Console.WriteLine("  security-groups  [--set privileged|ordinary|all]");
+    Console.WriteLine("  child-account-plan --name <n> [--sid <s>] [--expected-sid <s>] [--exists true|false]");
+    Console.WriteLine("                     [--enabled true|false] [--in-users true|false|unknown]");
+    Console.WriteLine("                     [--privileged <sid,sid>] [--unreadable <sid,sid>]");
+    Console.WriteLine("                     [--recovery-admin true|false]");
     Console.WriteLine("  release-manifest --in <f> [--bundle <dir>]");
     Console.WriteLine("  plan-install     --manifest <f> [--receipt <f>] [--architecture x64] [--production] [--repair]");
     Console.WriteLine("  install          --manifest <f> --bundle <dir> [--program-files <d>] [--apply]");
@@ -75,6 +79,14 @@ try
         // Release and install. The mutating ones need --apply, and the script
         // in front of them has already passed the dedicated-device interlock.
         "security-groups" => InstallVerbs.SecurityGroups(Arg(arguments, "--set")),
+
+        // Decides what to do about the child account. Reads nothing and changes
+        // nothing: the script observes Windows and passes what it saw.
+        "child-account-plan" => InstallVerbs.ChildAccountPlan(
+            Arg(arguments, "--name"), Arg(arguments, "--sid"), Arg(arguments, "--expected-sid"),
+            Arg(arguments, "--exists"), Arg(arguments, "--enabled"), Arg(arguments, "--in-users"),
+            Arg(arguments, "--privileged"), Arg(arguments, "--unreadable"),
+            Arg(arguments, "--recovery-admin")),
 
         "layout" => InstallVerbs.Layout(
             Arg(arguments, "--what"), Arg(arguments, "--component"),

@@ -61,6 +61,18 @@ public interface ILocalAccountService
     Task SetAdministratorAsync(string sid, bool isAdministrator, CancellationToken cancellationToken = default);
 
     Task SetEnabledAsync(string sid, bool isEnabled, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether the account is in the built-in Users group (S-1-5-32-545), or
+    /// null when that could not be read.
+    ///
+    /// NULL IS NOT FALSE. It exists because a child account that was created and
+    /// never placed in the standard Users group is a half-configured machine, and
+    /// on WILMA exactly that was reported as a completed stage. The creating
+    /// operation now verifies this rather than assuming NetUserAdd did it, and a
+    /// null means "unverified", which is not a pass.
+    /// </summary>
+    Task<bool?> IsInStandardUsersGroupAsync(string sid, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A registry hive KidShell is allowed to name.</summary>
