@@ -41,15 +41,26 @@ Write-Host '===== KidShell installation (read-only) =====' -ForegroundColor Cyan
 Write-Host "Install root : $installRoot"
 
 function Find-Tool {
-    $candidates = @(
-        (Join-Path $installRoot 'KidShell.DeviceValidation\KidShell.DeviceValidation.exe'),
-        (Join-Path $PSScriptRoot 'KidShell.DeviceValidation.exe'),
-        (Join-Path (Split-Path -Parent $PSScriptRoot) 'components\KidShell.DeviceValidation\KidShell.DeviceValidation.exe'),
-        (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'src\KidShell.DeviceValidation\bin\x64\Release\net10.0-windows\KidShell.DeviceValidation.exe')
-    )
+    # Resolve candidates one at a time. Do not construct deeper fallback paths
+    # eagerly: a verifier copied to a shallow directory such as C:\KidShell-VerifierFix
+    # has no grandparent path, and Join-Path rejects an empty -Path before the
+    # already-installed candidate can even be tested.
+    $installed = Join-Path $installRoot 'KidShell.DeviceValidation\KidShell.DeviceValidation.exe'
+    if (Test-Path $installed) { return $installed }
 
-    foreach ($candidate in $candidates) {
-        if (Test-Path $candidate) { return $candidate }
+    $beside = Join-Path $PSScriptRoot 'KidShell.DeviceValidation.exe'
+    if (Test-Path $beside) { return $beside }
+
+    $parent = Split-Path -Parent $PSScriptRoot
+    if ($parent) {
+        $bundle = Join-Path $parent 'components\KidShell.DeviceValidation\KidShell.DeviceValidation.exe'
+        if (Test-Path $bundle) { return $bundle }
+
+        $grandParent = Split-Path -Parent $parent
+        if ($grandParent) {
+            $repository = Join-Path $grandParent 'src\KidShell.DeviceValidation\bin\x64\Release\net10.0-windows\KidShell.DeviceValidation.exe'
+            if (Test-Path $repository) { return $repository }
+        }
     }
 
     return $null
