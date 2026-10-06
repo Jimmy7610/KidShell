@@ -89,21 +89,14 @@ if ($service) {
         $observed.imageSha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
 
         if ($childSid) {
-            # WILMA exposed two defects in the first version of this check.
+            # WILMA exposed two defects in the first version of this check:
+            # composite FileSystemRights values overlapped harmless read bits,
+            # and one untranslatable localized App Package identity caused the
+            # whole check to fall into catch and report the child writable.
             #
-            # 1. FileSystemRights.Modify and FullControl are composite flag
-            #    values containing read bits, so a plain ReadAndExecute ACE
-            #    overlapped the old "write mask" and looked writable.
-            # 2. Every ACE was translated inside one Where-Object expression.
-            #    Localized App Package identities can fail translation; one
-            #    harmless read-only ACE then threw the WHOLE check into catch,
-            #    which conservatively reported the child writable.
-            #
-            # Examine only ACEs that carry an atomic mutation capability, then
-            # translate those identities one at a time. Also include the
-            # ordinary-account well-known SIDs: a child can inherit rights from
-            # Users/Everyone/Authenticated Users even when its own SID has no
-            # explicit ACE.
+            # Use only atomic mutation capabilities. Check the child's own SID
+            # plus the ordinary principals through which a standard interactive
+            # user can inherit access.
             $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
                          [Security.AccessControl.FileSystemRights]::AppendData -bor
                          [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
@@ -114,16 +107,46 @@ if ($service) {
                          [Security.AccessControl.FileSystemRights]::TakeOwnership
 
             try {
-                $ordinarySids = @{}
-                $ordinarySids[$childSid] = 'child'
+                $ordinarySids = @(
+                    $childSid,
+                    'S-1-5-11',
+                    'S-1-1-0',
+                    'S-1-5-4',
+                    'S-1-5-32-545'
+                )
 
-                $groupResult = Invoke-ValidationTool -Arguments @('security-groups', '--set', 'ordinary')
+                $acl = Get-Acl $exe
+                $writable = @()
+                $untranslatableWriteAce = $false
 
-                if ($groupResult.ExitCode -eq 0) {
-                    foreach ($line in $groupResult.Output) {
-                        if ($line -is [string] -and $line -match '^(.+?)=(S-1-[0-9-]+)
+                foreach ($rule in $acl.Access) {
+                    if ($rule.AccessControlType -ne 'Allow') { continue }
+                    if (([int]$rule.FileSystemRights -band [int]$writeMask) -eq 0) { continue }
+
+                    try {
+                        $sid = [string]$rule.IdentityReference.Translate(
+                            [Security.Principal.SecurityIdentifier]).Value
+                    }
+                    catch {
+                        # Only an unresolvable WRITE-capable ACE is uncertainty.
+                        # Read-only localized App Package ACEs never reach here.
+                        $untranslatableWriteAce = $true
+                        continue
+                    }
+
+                    if ($ordinarySids -contains $sid) {
+                        $writable += $rule
+                    }
+                }
+
+                $observed.imageChildWritable = ($writable.Count -gt 0 -or $untranslatableWriteAce)
+            }
+            catch {
+                # Could not complete the check, so it is not claimed safe.
+                $observed.imageChildWritable = $true
+            }
+        }
     }
-
     # A restart action in the SCM. Absent is a resilience gap, not a hole,
     # because the product fails closed without the service.
     try {
