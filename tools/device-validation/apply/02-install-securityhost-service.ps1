@@ -41,7 +41,7 @@ $installRoot = 'C:\Program Files\KidShell'
 
 if ($config -and $config.KidShellInstallRoot) { $installRoot = $config.KidShellInstallRoot }
 
-$image = Join-Path $installRoot 'KidShell.SecurityHost.exe'
+$image = Join-Path $installRoot 'KidShell.SecurityHost\KidShell.SecurityHost.exe'
 
 Write-Host ''
 Write-Host '===== Install the security service =====' -ForegroundColor Cyan
