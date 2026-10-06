@@ -89,24 +89,60 @@ if ($service) {
         $observed.imageSha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
 
         if ($childSid) {
-            # Effective access, not the text of the list: whether the CHILD's
-            # SID appears with anything that could replace the binary.
+            # WILMA exposed two defects in the first version of this check:
+            # composite FileSystemRights values overlapped harmless read bits,
+            # and one untranslatable localized App Package identity caused the
+            # whole check to fall into catch and report the child writable.
+            #
+            # Use only atomic mutation capabilities. Check the child's own SID
+            # plus the ordinary principals through which a standard interactive
+            # user can inherit access.
+            $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                         [Security.AccessControl.FileSystemRights]::AppendData -bor
+                         [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                         [Security.AccessControl.FileSystemRights]::Delete -bor
+                         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                         [Security.AccessControl.FileSystemRights]::TakeOwnership
+
             try {
+                $ordinarySids = @(
+                    $childSid,
+                    'S-1-5-11',
+                    'S-1-1-0',
+                    'S-1-5-4',
+                    'S-1-5-32-545'
+                )
+
                 $acl = Get-Acl $exe
+                $writable = @()
+                $untranslatableWriteAce = $false
 
-                $writable = @($acl.Access | Where-Object {
-                    $_.AccessControlType -eq 'Allow' -and
-                    [string]$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $childSid -and
-                    ($_.FileSystemRights -band ([Security.AccessControl.FileSystemRights]::Write -bor
-                                                [Security.AccessControl.FileSystemRights]::Modify -bor
-                                                [Security.AccessControl.FileSystemRights]::FullControl -bor
-                                                [Security.AccessControl.FileSystemRights]::WriteData))
-                })
+                foreach ($rule in $acl.Access) {
+                    if ($rule.AccessControlType -ne 'Allow') { continue }
+                    if (([int]$rule.FileSystemRights -band [int]$writeMask) -eq 0) { continue }
 
-                $observed.imageChildWritable = ($writable.Count -gt 0)
+                    try {
+                        $sid = [string]$rule.IdentityReference.Translate(
+                            [Security.Principal.SecurityIdentifier]).Value
+                    }
+                    catch {
+                        # Only an unresolvable WRITE-capable ACE is uncertainty.
+                        # Read-only localized App Package ACEs never reach here.
+                        $untranslatableWriteAce = $true
+                        continue
+                    }
+
+                    if ($ordinarySids -contains $sid) {
+                        $writable += $rule
+                    }
+                }
+
+                $observed.imageChildWritable = ($writable.Count -gt 0 -or $untranslatableWriteAce)
             }
             catch {
-                # Could not resolve it, so it is not claimed safe.
+                # Could not complete the check, so it is not claimed safe.
                 $observed.imageChildWritable = $true
             }
         }

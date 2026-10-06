@@ -232,6 +232,52 @@ else {
     }
 }
 
+# ------------------------------------------ service ACL mask regression
+#
+# WILMA then exposed the same flags-enum trap in the SecurityHost verifier.
+# Keep that script from reintroducing composite write flags, and prove the
+# exact Program Files RX shape does not overlap the mutation mask.
+$serviceVerifier = Join-Path $Root 'tools\device-validation\04-verify-securityhost-service.ps1'
+
+if (-not (Test-Path $serviceVerifier)) {
+    $problems += 'The SecurityHost service verifier is missing, so its binary ACL semantics could not be checked.'
+}
+else {
+    $serviceText = [System.IO.File]::ReadAllText($serviceVerifier, [System.Text.Encoding]::UTF8)
+    $serviceCode = (Get-CodeLines -Text $serviceText) -join "`n"
+
+    if ($serviceCode -match '\$writeMask\s*=([\s\S]*?)(?=\n\s*try\s*\{)') {
+        $maskSource = $Matches[1]
+
+        if ($maskSource -match 'FileSystemRights\]::(Modify|FullControl|ReadAndExecute|Read|ExecuteFile)') {
+            $problems += 'The SecurityHost verifier write mask contains a composite/read right. A read-only service-binary ACE can be falsely classified as writable.'
+        }
+    }
+    else {
+        $problems += 'The SecurityHost verifier write mask could not be located, so its semantics were not checked.'
+    }
+
+    $serviceDangerMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                         [Security.AccessControl.FileSystemRights]::AppendData -bor
+                         [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                         [Security.AccessControl.FileSystemRights]::Delete -bor
+                         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                         [Security.AccessControl.FileSystemRights]::TakeOwnership
+
+    $programFilesReadOnly = [Security.AccessControl.FileSystemRights]::ReadAndExecute -bor
+                            [Security.AccessControl.FileSystemRights]::Synchronize
+
+    if (([int]$programFilesReadOnly -band [int]$serviceDangerMask) -ne 0) {
+        $problems += 'The SecurityHost ACL danger mask classifies Program Files ReadAndExecute, Synchronize as writable.'
+    }
+
+    if (([int][Security.AccessControl.FileSystemRights]::WriteData -band [int]$serviceDangerMask) -eq 0) {
+        $problems += 'The SecurityHost ACL danger mask does not catch WriteData.'
+    }
+}
+
 # -------------------------------------------------------------- the C# lint
 
 # The same assumption in C#. Most of this codebase already resolves groups from
