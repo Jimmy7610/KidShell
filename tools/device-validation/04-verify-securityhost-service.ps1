@@ -89,24 +89,132 @@ if ($service) {
         $observed.imageSha256 = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
 
         if ($childSid) {
-            # Effective access, not the text of the list: whether the CHILD's
-            # SID appears with anything that could replace the binary.
+            # WILMA exposed two defects in the first version of this check.
+            #
+            # 1. FileSystemRights.Modify and FullControl are composite flag
+            #    values containing read bits, so a plain ReadAndExecute ACE
+            #    overlapped the old "write mask" and looked writable.
+            # 2. Every ACE was translated inside one Where-Object expression.
+            #    Localized App Package identities can fail translation; one
+            #    harmless read-only ACE then threw the WHOLE check into catch,
+            #    which conservatively reported the child writable.
+            #
+            # Examine only ACEs that carry an atomic mutation capability, then
+            # translate those identities one at a time. Also include the
+            # ordinary-account well-known SIDs: a child can inherit rights from
+            # Users/Everyone/Authenticated Users even when its own SID has no
+            # explicit ACE.
+            $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                         [Security.AccessControl.FileSystemRights]::AppendData -bor
+                         [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                         [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                         [Security.AccessControl.FileSystemRights]::Delete -bor
+                         [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                         [Security.AccessControl.FileSystemRights]::TakeOwnership
+
             try {
+                $ordinarySids = @{}
+                $ordinarySids[$childSid] = 'child'
+
+                $groupResult = Invoke-ValidationTool -Arguments @('security-groups', '--set', 'ordinary')
+
+                if ($groupResult.ExitCode -eq 0) {
+                    foreach ($line in $groupResult.Output) {
+                        if ($line -is [string] -and $line -match '^(.+?)=(S-1-[0-9-]+)
+    }
+
+    # A restart action in the SCM. Absent is a resilience gap, not a hole,
+    # because the product fails closed without the service.
+    try {
+        $failure = & sc.exe qfailure $serviceName 2>&1 | Out-String
+        $observed.recoveryConfigured = ($failure -match 'RESTART')
+    }
+    catch { }
+
+    Write-Host ("Installed  : yes (status {0}, start {1})" -f $service.Status, $observed.startType)
+    Write-Host ("Account    : {0}" -f $observed.account)
+    Write-Host ("Image      : {0}" -f $observed.imagePath)
+    Write-Host ("Image hash : {0}" -f $observed.imageSha256)
+}
+else {
+    Write-Host 'Installed  : no'
+}
+
+$observedPath = Join-Path ([System.IO.Path]::GetTempPath()) ("kidshell-service-$([guid]::NewGuid().ToString('n')).json")
+
+try {
+    $observed | ConvertTo-Json -Depth 5 | Set-Content -Path $observedPath -Encoding utf8
+
+    $arguments = @('expect', '--kind', 'service', '--observed', $observedPath)
+    $resolved = Get-ValidationConfigPath -Path $ConfigPath
+    if ($resolved) { $arguments += @('--config', $resolved) }
+
+    $result = Invoke-ValidationTool -Arguments $arguments
+
+    # The tool prints the human lines and then the stage as JSON. The JSON is
+    # what the report consumes, so it is written straight through rather than
+    # re-derived here.
+    $jsonStart = -1
+    for ($i = 0; $i -lt $result.Output.Count; $i++) {
+        if ($result.Output[$i] -match '^\{') { $jsonStart = $i; break }
+    }
+
+    if ($jsonStart -lt 0) {
+        $result.Output | ForEach-Object { Write-Host $_ }
+        throw 'The decision tool did not produce a stage.'
+    }
+
+    $result.Output[0..($jsonStart - 1)] | ForEach-Object { Write-Host $_ }
+
+    if ($RunPath) {
+        $stageJson = ($result.Output[$jsonStart..($result.Output.Count - 1)] -join "`n")
+
+        Write-Evidence -RunPath $RunPath -Name 'service.json' -Data $observed | Out-Null
+        Write-Evidence -RunPath $RunPath -Name 'securityhost-service.stage.json' `
+            -Data ($stageJson | ConvertFrom-Json) | Out-Null
+    }
+}
+finally {
+    if (Test-Path $observedPath) { Remove-Item $observedPath -Force }
+}
+
+Write-Host ''
+Write-Host 'Nothing was changed.' -ForegroundColor Green
+) {
+                            $ordinarySids[$Matches[2]] = $Matches[1]
+                        }
+                    }
+                }
+
                 $acl = Get-Acl $exe
+                $writable = @()
+                $untranslatableWriteAce = $false
 
-                $writable = @($acl.Access | Where-Object {
-                    $_.AccessControlType -eq 'Allow' -and
-                    [string]$_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -eq $childSid -and
-                    ($_.FileSystemRights -band ([Security.AccessControl.FileSystemRights]::Write -bor
-                                                [Security.AccessControl.FileSystemRights]::Modify -bor
-                                                [Security.AccessControl.FileSystemRights]::FullControl -bor
-                                                [Security.AccessControl.FileSystemRights]::WriteData))
-                })
+                foreach ($rule in $acl.Access) {
+                    if ($rule.AccessControlType -ne 'Allow') { continue }
+                    if (([int]$rule.FileSystemRights -band [int]$writeMask) -eq 0) { continue }
 
-                $observed.imageChildWritable = ($writable.Count -gt 0)
+                    try {
+                        $sid = [string]$rule.IdentityReference.Translate(
+                            [Security.Principal.SecurityIdentifier]).Value
+                    }
+                    catch {
+                        # A WRITE-capable ACE whose identity cannot be resolved
+                        # cannot honestly be declared safe.
+                        $untranslatableWriteAce = $true
+                        continue
+                    }
+
+                    if ($ordinarySids.ContainsKey($sid)) {
+                        $writable += $rule
+                    }
+                }
+
+                $observed.imageChildWritable = ($writable.Count -gt 0 -or $untranslatableWriteAce)
             }
             catch {
-                # Could not resolve it, so it is not claimed safe.
+                # Could not complete the check, so it is not claimed safe.
                 $observed.imageChildWritable = $true
             }
         }
