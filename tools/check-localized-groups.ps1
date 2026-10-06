@@ -177,6 +177,61 @@ foreach ($script in $scripts) {
     }
 }
 
+# ----------------------------------------------- install ACL mask regression
+#
+# WILMA exposed a second verifier bug: FileSystemRights.Modify is a composite
+# flags value that contains read bits. Using it in a bitwise "danger mask"
+# therefore classified a plain ReadAndExecute ACE as writable. Prove the mask's
+# semantics here so that exact regression cannot silently return.
+$installVerifier = Join-Path $Root 'tools\install\Test-KidShellInstallation.ps1'
+
+if (-not (Test-Path $installVerifier)) {
+    $problems += 'The install verifier is missing, so its ACL write-mask semantics could not be checked.'
+}
+else {
+    $verifierText = [System.IO.File]::ReadAllText($installVerifier, [System.Text.Encoding]::UTF8)
+    $verifierCode = (Get-CodeLines -Text $verifierText) -join "`n"
+
+    if ($verifierCode -match '\$writeMask\s*=([\s\S]*?)(?=\n\s*try\s*\{)') {
+        $maskSource = $Matches[1]
+
+        if ($maskSource -match 'FileSystemRights\]::(Modify|FullControl|ReadAndExecute|Read|ExecuteFile)') {
+            $problems += 'The install verifier write mask contains a composite/read right. Read-only ACEs can overlap it and be falsely classified as writable.'
+        }
+    }
+    else {
+        $problems += 'The install verifier write mask could not be located, so its semantics were not checked.'
+    }
+
+    $dangerMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                  [Security.AccessControl.FileSystemRights]::AppendData -bor
+                  [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                  [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+                  [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+                  [Security.AccessControl.FileSystemRights]::Delete -bor
+                  [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                  [Security.AccessControl.FileSystemRights]::TakeOwnership
+
+    $wilmaReadOnly = [Security.AccessControl.FileSystemRights]::ReadAndExecute -bor
+                     [Security.AccessControl.FileSystemRights]::Synchronize
+
+    if (([int]$wilmaReadOnly -band [int]$dangerMask) -ne 0) {
+        $problems += 'The ACL danger mask classifies WILMA''s ReadAndExecute, Synchronize ACE as writable.'
+    }
+
+    if (([int][Security.AccessControl.FileSystemRights]::WriteData -band [int]$dangerMask) -eq 0) {
+        $problems += 'The ACL danger mask does not catch WriteData.'
+    }
+
+    if (([int][Security.AccessControl.FileSystemRights]::Modify -band [int]$dangerMask) -eq 0) {
+        $problems += 'The ACL danger mask does not catch Modify.'
+    }
+
+    if (([int][Security.AccessControl.FileSystemRights]::FullControl -band [int]$dangerMask) -eq 0) {
+        $problems += 'The ACL danger mask does not catch FullControl.'
+    }
+}
+
 # -------------------------------------------------------------- the C# lint
 
 # The same assumption in C#. Most of this codebase already resolves groups from
