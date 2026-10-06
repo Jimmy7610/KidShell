@@ -2,6 +2,7 @@ using System.Xml.Linq;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Security.Readiness;
 using KidShell.Core.Security.Transactions;
+using KidShell.Core.Security.Validation;
 using KidShell.WindowsIntegration.Platform;
 
 namespace KidShell.WindowsIntegration.Operations;
@@ -138,7 +139,7 @@ public sealed class AppLockerDeploymentOperation : SecurityOperationBase
         // Every enforced collection must allow the local Administrators group
         // everything. Without it, a failed rollback locks the parent out of the
         // tool they would use to fix it.
-        const string administratorsSid = "S-1-5-32-544";
+        var administratorsSid = WellKnownSecurityGroups.AdministratorsSid;
 
         foreach (var collection in collections.Where(c =>
                      (string?)c.Attribute("EnforcementMode") == "Enabled"))

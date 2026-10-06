@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 using System.Security.Principal;
 using KidShell.Core.Diagnostics;
 using KidShell.Core.Security.Readiness;
+using KidShell.Core.Security.Validation;
 
 namespace KidShell.WindowsIntegration.Platform;
 
@@ -134,6 +135,19 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         var buffer = IntPtr.Zero;
         var handle = IntPtr.Zero;
 
+        if (groupName is null)
+        {
+            // There is no name to ask for. Previously this fell back to the
+            // literal "Administrators", which on this Swedish machine names no
+            // group at all - so the call would fail and every administrator
+            // would be reported as a standard user.
+            _logger.Warning(SecurityAuditEvents.Category,
+                $"The Administrators group ({WellKnownSecurityGroups.AdministratorsSid}) could not be named on this " +
+                "machine, so its membership was not read. No account's administrator status is established.");
+
+            return result;
+        }
+
         try
         {
             var status = NetLocalGroupGetMembers(null, groupName, LocalGroupMembersLevel0,
@@ -172,10 +186,16 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
     }
 
     /// <summary>
-    /// The local Administrators group under whatever name this Windows uses.
-    /// Resolved from the well-known SID so a Swedish machine works.
+    /// The local Administrators group under whatever name this Windows uses,
+    /// resolved from the well-known SID, or null when it cannot be resolved.
+    ///
+    /// NULL, NOT "Administrators". The net API takes a name, so a name has to be
+    /// produced - but guessing the English one is how this family of defects
+    /// works: on this machine the group is called Administratörer, and a lookup
+    /// of "Administrators" does not fail loudly, it returns no members, and no
+    /// members reads as "no administrators".
     /// </summary>
-    private static string AdministratorsGroupName()
+    private static string? AdministratorsGroupName()
     {
         try
         {
@@ -184,7 +204,7 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         }
         catch
         {
-            return "Administrators";
+            return null;
         }
     }
 
@@ -287,7 +307,13 @@ public sealed class WindowsLocalAccountService : ILocalAccountService
         var account = await FindBySidAsync(sid, cancellationToken).ConfigureAwait(false)
                       ?? throw new InvalidOperationException($"No local account with SID {sid}.");
 
-        var group = AdministratorsGroupName();
+        // Refusing beats guessing. Changing administrator membership against a
+        // guessed group name either does nothing or does it somewhere else.
+        var group = AdministratorsGroupName()
+                    ?? throw new InvalidOperationException(
+                        $"The Administrators group ({WellKnownSecurityGroups.AdministratorsSid}) could not be named " +
+                        "on this machine, so its membership was not changed.");
+
         var member = new LocalGroupMembersInfo3 { lgrmi3_domainandname = $"{Environment.MachineName}\\{account.Username}" };
 
         var status = isAdministrator

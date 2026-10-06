@@ -21,7 +21,7 @@ namespace KidShell.Core.Security.AppControl;
 public static class AppLockerPolicyWriter
 {
     /// <summary>Everyone. The default audience when no specific SID is given.</summary>
-    public const string EveryoneSid = "S-1-1-0";
+    public static readonly string EveryoneSid = WellKnownSids.Everyone;
 
     /// <summary>
     /// Enforcement mode for a generated policy.

@@ -34,6 +34,7 @@ if (arguments.Length == 0 || arguments.Contains("--help") || arguments.Contains(
     Console.WriteLine("  checkpoint  --in <f> --machine <name> --run <id>");
     Console.WriteLine("  report      --run <dir> [--out <f>]");
     Console.WriteLine();
+    Console.WriteLine("  security-groups  [--set privileged|ordinary|all]");
     Console.WriteLine("  release-manifest --in <f> [--bundle <dir>]");
     Console.WriteLine("  plan-install     --manifest <f> [--receipt <f>] [--architecture x64] [--production] [--repair]");
     Console.WriteLine("  install          --manifest <f> --bundle <dir> [--program-files <d>] [--apply]");
@@ -73,6 +74,8 @@ try
 
         // Release and install. The mutating ones need --apply, and the script
         // in front of them has already passed the dedicated-device interlock.
+        "security-groups" => InstallVerbs.SecurityGroups(Arg(arguments, "--set")),
+
         "layout" => InstallVerbs.Layout(
             Arg(arguments, "--what"), Arg(arguments, "--component"),
             Arg(arguments, "--configuration"), Arg(arguments, "--platform")),
