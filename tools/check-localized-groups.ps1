@@ -278,6 +278,249 @@ else {
     }
 }
 
+# ------------------------------------ protected-store ACL regression
+#
+# WILMA exposed the same flags-enum trap in 05-verify-protected-store.ps1:
+# ReadAndExecute,Synchronize was reported as FullControl because the verifier
+# used composite FileSystemRights values as bit-test masks.
+$storeVerifier = Join-Path $Root 'tools\device-validation\05-verify-protected-store.ps1'
+
+if (-not (Test-Path $storeVerifier)) {
+    $problems += 'The protected-store verifier is missing, so its ACL mask semantics could not be checked.'
+}
+else {
+    $storeText = [System.IO.File]::ReadAllText($storeVerifier, [System.Text.Encoding]::UTF8)
+    $storeCode = (Get-CodeLines -Text $storeText) -join "`n"
+
+    foreach ($maskName in 'writeMask', 'deleteMask', 'readMask', 'changeMask') {
+        if ($storeCode -notmatch ('\
+
+# The same assumption in C#. Most of this codebase already resolves groups from
+# well-known SIDs, but WindowsLocalAccountService.AdministratorsGroupName() ended
+# its try/catch with `return "Administrators";` - a fallback to a name that
+# names no group on this machine, which would have made every administrator read
+# as a standard user. Nothing in the suite could have caught that, so:
+$forbiddenCSharp = @(
+    @{
+        Pattern = 'return\s+"(Administrators|Users|Power Users|Backup Operators|Remote Desktop Users|Remote Management Users|Hyper-V Administrators|Everyone|Guests)"'
+        Reason  = 'a built-in group name is being returned as a fallback; on a localized Windows it names nothing and the caller reads an empty group as an empty answer'
+    },
+    @{
+        Pattern = '(==|!=)\s*"(Administrators|Users|Everyone|Authenticated Users|Guests)"'
+        Reason  = 'a built-in group is being compared by name rather than by SID'
+    },
+    @{
+        Pattern = '\.Equals\("(Administrators|Users|Everyone|Authenticated Users|Guests)"'
+        Reason  = 'a built-in group is being compared by name rather than by SID'
+    }
+)
+
+$sources = @(Get-ChildItem (Join-Path $Root 'src') -Recurse -File -Filter '*.cs' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -notmatch '\\(bin|obj)\\' })
+
+Write-Host ("Sources : {0}" -f $sources.Count)
+
+foreach ($source in $sources) {
+    $text = [System.IO.File]::ReadAllText($source.FullName, [System.Text.Encoding]::UTF8)
+    $relative = $source.FullName.Substring($Root.Length).TrimStart('\')
+
+    # Comments and doc comments are allowed to name the groups; the explanations
+    # of this defect have to be able to say what it was. /* */ blocks included.
+    $lines = Get-CodeLines -Text $text -CStyle
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $line = $lines[$i]
+
+        if (-not $line.Trim()) { continue }
+
+        foreach ($rule in $forbiddenCSharp) {
+            $checks++
+
+            if ($line -match $rule.Pattern) {
+                $problems += "$relative`:$($i + 1) - $($rule.Reason)"
+                $problems += "    $($line.Trim())"
+            }
+        }
+    }
+}
+
+# ----------------------------------------------------------------- the proof
+#
+# Reported through $problems, never by throwing. An unhandled throw here would
+# abort before the lint's findings were printed and still exit non-zero, so a
+# genuine lint failure would look identical to a missing tool.
+
+if ($LintOnly) {
+    Write-Host ''
+    Write-Host '--- runtime proof SKIPPED (-LintOnly) ---' -ForegroundColor Yellow
+}
+else {
+    try {
+
+Write-Host ''
+Write-Host '--- resolving the groups on THIS machine ---'
+
+Import-Module (Join-Path $Root 'tools\device-validation\KidShellValidation.psm1') -Force
+
+$groups = Get-WellKnownGroupSid -Set all
+
+foreach ($label in 'Administrators', 'Users') {
+    $sid = $groups[$label]
+    $group = Get-BuiltinGroupBySid -Sid $sid
+
+    if (-not $group) {
+        $problems += "$label ($sid) could not be resolved by SID on this machine. Every account check depends on this working."
+        continue
+    }
+
+    # The localized name, printed so the evidence shows WHICH name the English
+    # lookup would have needed to be.
+    Write-Host ("  {0,-16} {1,-14} -> '{2}'" -f $label, $sid, $group.Name)
+
+    if ($group.Name -eq $label) {
+        Write-Host ("    this Windows calls it the English name, so nothing is proved here") -ForegroundColor Yellow
+    }
+}
+
+# Membership resolution has to work too: knowing the group exists is not the
+# same as being able to answer "is this account in it".
+$administrators = Get-LocalGroupMemberSid -GroupSid $groups['Administrators']
+
+if (-not $administrators.Exists) {
+    $problems += 'The Administrators group does not exist on this machine, which cannot be true. The SID resolution is broken.'
+}
+elseif (-not $administrators.Inspected) {
+    $problems += "The Administrators group could not be enumerated: $($administrators.Error)"
+}
+else {
+    Write-Host ("  members of {0}: {1}" -f $groups['Administrators'], $administrators.MemberSids.Count)
+
+    if ($administrators.MemberSids.Count -eq 0) {
+        # Not possible on a working Windows, and exactly what the old English
+        # lookup produced: an empty membership that reads as "no administrators".
+        $problems += 'The Administrators group reports no members at all. That is what the defect being fixed looked like.'
+    }
+}
+
+# A group that genuinely is not here. Absence must be an answer, not an error.
+$absent = Get-LocalGroupMemberSid -GroupSid 'S-1-5-32-547'   # Power Users
+
+if (-not $absent.Exists) {
+    Write-Host '  Power Users (S-1-5-32-547) is not present on this edition, and that is reported as absence, not failure.'
+}
+elseif (-not $absent.Inspected) {
+    $problems += "Power Users exists here and could not be enumerated: $($absent.Error)"
+}
+
+# ----------------------------------------- and that the English names fail
+
+Write-Host ''
+Write-Host '--- what the old code asked for ---'
+
+$englishFailures = 0
+$englishNames = @('Administrators', 'Users', 'Power Users', 'Backup Operators', 'Remote Desktop Users')
+
+foreach ($name in $englishNames) {
+    try {
+        $null = Get-LocalGroup -Name $name -ErrorAction Stop
+        Write-Host ("  '{0}' resolves by name on this machine" -f $name)
+    }
+    catch {
+        $englishFailures++
+        Write-Host ("  '{0}' -> {1}" -f $name, $_.Exception.GetType().Name) -ForegroundColor DarkGray
+    }
+}
+
+Write-Host ("  {0} of {1} English names do not resolve here." -f $englishFailures, $englishNames.Count)
+
+if ($englishFailures -eq 0) {
+    # This machine is English, or the groups all happen to exist under their
+    # English names. The lint above still holds; this half of the gate simply
+    # cannot demonstrate anything, and saying so is the honest outcome.
+    Write-Host ''
+    Write-Host '  NOTE: every English name resolves on this machine, so the runtime half of this' -ForegroundColor Yellow
+    Write-Host '  gate proves nothing. Run it on a localized Windows to see it bite.' -ForegroundColor Yellow
+}
+
+    }
+    catch {
+        $problems += "The runtime proof could not run: $($_.Exception.Message)"
+    }
+}
+
+# ---------------------------------------------------------------- the verdict
+
+if ($problems.Count -gt 0) {
+    Write-Host ''
+
+    foreach ($problem in $problems) {
+        Write-Host "::error::$problem"
+    }
+
+    Write-Host ''
+    Write-Host "Localized group check FAILED with $($problems.Count) problem(s)." -ForegroundColor Red
+    exit 1
+}
+
+Write-Host ''
+Write-Host ("Checked {0} line/rule pair(s) across {1} script(s) and {2} C# source(s); every built-in group is resolved by SID." `
+    -f $checks, $scripts.Count, $sources.Count) -ForegroundColor Green
+Write-Host 'Nothing was changed.' -ForegroundColor Green
+
+exit 0
+ + $maskName + '\s*=')) {
+            $problems += "The protected-store verifier is missing $maskName."
+        }
+    }
+
+    if ($storeCode -match '\$(writeMask|deleteMask|changeMask)\s*=([\s\S]*?)(?=\n\s*\$|\n\s*function)') {
+        # Individual source checks below catch any forbidden composite mutation
+        # flag no matter which mutation mask it appears in.
+    }
+
+    foreach ($bad in 'Write', 'Modify', 'FullControl', 'ReadAndExecute', 'Read') {
+        if ($storeCode -match ('\$(writeMask|deleteMask|changeMask)\s*=([\s\S]*?)FileSystemRights\]::' + $bad + '\b')) {
+            $problems += "The protected-store verifier mutation masks contain composite/read right '$bad'."
+        }
+    }
+
+    $storeWriteMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
+                      [Security.AccessControl.FileSystemRights]::AppendData -bor
+                      [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+                      [Security.AccessControl.FileSystemRights]::WriteAttributes
+
+    $storeDeleteMask = [Security.AccessControl.FileSystemRights]::Delete -bor
+                       [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
+
+    $storeChangeMask = [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+                       [Security.AccessControl.FileSystemRights]::TakeOwnership
+
+    $storeReadMask = [Security.AccessControl.FileSystemRights]::ReadData -bor
+                     [Security.AccessControl.FileSystemRights]::ReadExtendedAttributes -bor
+                     [Security.AccessControl.FileSystemRights]::ReadAttributes -bor
+                     [Security.AccessControl.FileSystemRights]::ReadPermissions -bor
+                     [Security.AccessControl.FileSystemRights]::ExecuteFile
+
+    $wilmaChildReadOnly = [Security.AccessControl.FileSystemRights]::ReadAndExecute -bor
+                          [Security.AccessControl.FileSystemRights]::Synchronize
+
+    if (([int]$wilmaChildReadOnly -band [int]$storeWriteMask) -ne 0) {
+        $problems += 'The protected-store write mask classifies WILMA child ReadAndExecute,Synchronize as writable.'
+    }
+
+    if (([int]$wilmaChildReadOnly -band [int]$storeDeleteMask) -ne 0) {
+        $problems += 'The protected-store delete mask classifies WILMA child ReadAndExecute,Synchronize as deletable.'
+    }
+
+    if (([int]$wilmaChildReadOnly -band [int]$storeChangeMask) -ne 0) {
+        $problems += 'The protected-store change-permissions mask classifies WILMA child ReadAndExecute,Synchronize as permission-changing.'
+    }
+
+    if (([int]$wilmaChildReadOnly -band [int]$storeReadMask) -eq 0) {
+        $problems += 'The protected-store read mask does not recognize WILMA child ReadAndExecute,Synchronize as readable.'
+    }
+}
+
 # -------------------------------------------------------------- the C# lint
 
 # The same assumption in C#. Most of this codebase already resolves groups from
