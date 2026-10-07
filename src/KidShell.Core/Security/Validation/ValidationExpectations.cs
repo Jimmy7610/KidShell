@@ -146,6 +146,17 @@ public static class ProtectedStoreExpectation
             }
         }
 
+        // A completely correct observation used to return an empty findings
+        // array. ValidationStage deliberately treats an empty stage as NOT RUN,
+        // so real hardware with the exact planned ACL and all five child
+        // denials observed could never produce PASS. Record an explicit pass
+        // only when there is literally nothing left to report.
+        if (findings.Count == 0)
+        {
+            findings.Add(ValidationFinding.Pass(
+                "The protected store matches the plan and all required child write/delete attempts were refused."));
+        }
+
         return [.. findings];
     }
 }

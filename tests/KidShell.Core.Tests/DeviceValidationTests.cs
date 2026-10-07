@@ -496,12 +496,12 @@ public class ValidationExpectationTests
     public void A_correctly_permissioned_store_with_every_probe_denied_passes()
     {
         var findings = ProtectedStoreExpectation.Compare(Plan, Correct(), AllDenied());
+        var stage = new ValidationStage { Name = "x", Findings = findings };
 
-        Assert.Equal(ValidationStageStatus.Pass,
-            new ValidationStage { Name = "x", Findings = findings.Length == 0
-                ? [ValidationFinding.Pass("ok")] : findings }.Status);
-
-        Assert.Empty(findings);
+        Assert.Equal(ValidationStageStatus.Pass, stage.Status);
+        Assert.Single(findings);
+        Assert.Equal(ValidationStageStatus.Pass, findings[0].Status);
+        Assert.Contains("all required child", findings[0].Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
