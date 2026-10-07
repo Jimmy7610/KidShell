@@ -51,26 +51,29 @@ $wellKnown = [ordered]@{
     Users          = $allGroups['Users']
 }
 
+# FileSystemRights is a flags enum, and several friendly names such as
+# Write/Modify/FullControl are composites that contain read bits. WILMA proved
+# that using those composites as bit-test masks turns a plain
+# ReadAndExecute,Synchronize ACE into Write/Delete/ChangePermissions.
+#
+# These masks therefore contain ONLY the atomic capabilities represented by
+# KidShell's ProtectedStoreRights abstraction.
 $writeMask = [Security.AccessControl.FileSystemRights]::WriteData -bor
              [Security.AccessControl.FileSystemRights]::AppendData -bor
-             [Security.AccessControl.FileSystemRights]::Write -bor
-             [Security.AccessControl.FileSystemRights]::Modify -bor
-             [Security.AccessControl.FileSystemRights]::FullControl
+             [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+             [Security.AccessControl.FileSystemRights]::WriteAttributes
 
 $deleteMask = [Security.AccessControl.FileSystemRights]::Delete -bor
-              [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
-              [Security.AccessControl.FileSystemRights]::Modify -bor
-              [Security.AccessControl.FileSystemRights]::FullControl
+              [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles
 
 $readMask = [Security.AccessControl.FileSystemRights]::ReadData -bor
-            [Security.AccessControl.FileSystemRights]::Read -bor
-            [Security.AccessControl.FileSystemRights]::ReadAndExecute -bor
-            [Security.AccessControl.FileSystemRights]::Modify -bor
-            [Security.AccessControl.FileSystemRights]::FullControl
+            [Security.AccessControl.FileSystemRights]::ReadExtendedAttributes -bor
+            [Security.AccessControl.FileSystemRights]::ReadAttributes -bor
+            [Security.AccessControl.FileSystemRights]::ReadPermissions -bor
+            [Security.AccessControl.FileSystemRights]::ExecuteFile
 
 $changeMask = [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
-              [Security.AccessControl.FileSystemRights]::TakeOwnership -bor
-              [Security.AccessControl.FileSystemRights]::FullControl
+              [Security.AccessControl.FileSystemRights]::TakeOwnership
 
 function Get-Rights($access, [string] $sid) {
     <#
