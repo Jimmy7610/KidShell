@@ -250,8 +250,8 @@ $willSign = [bool]($Sign -or $LabSign)
 if ($willSign) {
     $manifestPublisher = $identity.GetAttribute('Publisher')
     $expectedSubject = [Security.Cryptography.X509Certificates.X500DistinguishedName]::new($manifestPublisher)
-    $expectedSubjectHex = [Convert]::ToHexString($expectedSubject.RawData)
-    $actualSubjectHex = [Convert]::ToHexString($signingCertificate.SubjectName.RawData)
+    $expectedSubjectHex = [BitConverter]::ToString($expectedSubject.RawData)
+    $actualSubjectHex = [BitConverter]::ToString($signingCertificate.SubjectName.RawData).Replace('-', '').Replace('-', '')
 
     if ($actualSubjectHex -ne $expectedSubjectHex) {
         Stop-Build "The certificate subject does not match Package.appxmanifest Publisher. Certificate: '$($signingCertificate.Subject)'. Manifest: '$manifestPublisher'."
