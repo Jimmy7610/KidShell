@@ -47,9 +47,12 @@ if (-not $OutputPath) {
     $OutputPath = Join-Path $artifactRoot 'KidShell-DedicatedLab-Public.cer'
 }
 
+$expectedSubject = [Security.Cryptography.X509Certificates.X500DistinguishedName]::new($publisher)
+$expectedSubjectHex = [Convert]::ToHexString($expectedSubject.RawData)
+
 $existing = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object {
-        $_.Subject -eq $publisher -and
+        [Convert]::ToHexString($_.SubjectName.RawData) -eq $expectedSubjectHex -and
         $_.HasPrivateKey -and
         $_.NotAfter -gt (Get-Date).AddDays(30)
     } |
@@ -67,9 +70,9 @@ else {
         throw 'The lab certificate could not be created.'
     }
 
-    if ($cert.Subject -ne $publisher) {
+    if ([Convert]::ToHexString($cert.SubjectName.RawData) -ne $expectedSubjectHex) {
         Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
-        throw "The generated certificate subject '$($cert.Subject)' does not exactly match the package Publisher '$publisher'."
+        throw "The generated certificate subject '$($cert.Subject)' does not match the package Publisher '$publisher'."
     }
 
     Write-Host "Created KidShell lab certificate: $($cert.Thumbprint)"
