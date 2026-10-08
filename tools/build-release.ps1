@@ -473,6 +473,8 @@ if ($willSign) {
         @(Get-ChildItem -Path $outputDir -Include *.msix, *.msixbundle, *.exe -Recurse -File)
     }
 
+    $toSign = @($toSign)
+
     if ($toSign.Count -eq 0) {
         Stop-Build 'Signing was requested but there were no KidShell files to sign.'
     }
