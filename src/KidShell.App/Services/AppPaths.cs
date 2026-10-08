@@ -68,15 +68,21 @@ public static class AppPaths
     public static string DevelopmentPolicyDirectory => Path.Combine(DataDirectory, "policy");
 
     /// <summary>
-    /// The elevated helper, beside KidShell in the package.
+    /// The installed elevated approval helper.
     ///
-    /// Nothing starts it unless a protected write is attempted, and Windows
-    /// will not elevate it without a prompt. On a machine where it is absent
-    /// the broker reports itself unavailable and a production build fails
-    /// closed, which is the correct behaviour rather than a degraded one.
+    /// KidShell.App is MSIX-packaged, while SecurityHost is installed
+    /// machine-wide as a LocalSystem service under Program Files. Looking for
+    /// the helper beside the packaged app therefore always reports it missing
+    /// on a real child account even when the service is installed and running.
+    ///
+    /// Routine protected writes use the named-pipe service directly. This
+    /// executable path is only for the deliberate parent-policy approval flow,
+    /// which launches the installed helper with runas so an administrator can
+    /// approve the staged policy.
     /// </summary>
     public static string SecurityHostPath => Path.Combine(
-        AppContext.BaseDirectory, "KidShell.SecurityHost.exe");
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        "KidShell", "KidShell.SecurityHost", "KidShell.SecurityHost.exe");
 
     /// <summary>
     /// Where generated policy artifacts are written for review. Nothing here
