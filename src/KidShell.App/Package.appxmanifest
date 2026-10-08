@@ -7,7 +7,7 @@
 
   <Identity
     Name="KidShell.Barnlage.Dev"
-    Publisher="CN=KidShell Development"
+    Publisher="CN=KidShell Development, OID.2.25.311729368913984317654407730594956997722=1"
     Version="1.0.0.0" />
 
   <Properties>
