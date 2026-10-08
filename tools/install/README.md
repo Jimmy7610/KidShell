@@ -12,6 +12,8 @@ Part 4 before running any of it.
 | Script | What it does |
 | --- | --- |
 | `Install-KidShellLab.ps1` | Installs a bundle. Dry run unless `-Apply`. **Files only.** |
+| `Trust-KidShellLabCertificate.ps1` | DedicatedLabSigned only. Dry run unless `-Apply`; trusts the bundle's public lab certificate in LocalMachine\\TrustedPeople. |
+| `Install-KidShellAppLab.ps1` | DedicatedLabSigned only. Run non-elevated as the configured child to register the real MSIX for that user. |
 | `Uninstall-KidShellLab.ps1` | Removes what the receipt lists. Dry run unless `-Apply`. |
 | `Test-KidShellInstallation.ps1` | Read-only. PASS / FAIL / INCOMPLETE. |
 
@@ -55,12 +57,18 @@ would be the one that actually ran.
 
 ## Signing
 
-Nothing this build produces is signed. `manifests/signing-manifest.json` in each
-bundle lists what must be signed before any of it is a production release, and
-separately lists what is **not** signed and why — including these scripts, which
-are covered by `hashes.sha256` rather than by Authenticode. That is a weaker
-guarantee and the manifest says so rather than implying otherwise.
+There are now two lab channels and one production boundary:
 
-An unsigned bundle cannot be installed by a production install path at all. On
-the lab path it is allowed, labelled in the bundle name, labelled by the
-installer, and recorded as unsigned in the install receipt.
+- `DedicatedLabUnsigned`: no signing material. Useful for file/service validation,
+  but Windows will not register the real executable MSIX for the standard child.
+- `DedicatedLabSigned`: the KidShell MSIX is signed by a local self-signed lab
+  certificate. The public certificate is carried in
+  `manifests/KidShell-DedicatedLab-Public.cer`; the private key stays on the
+  development PC. This exists only so the dedicated child account can run the
+  real packaged app.
+- `Production`: separate production signing authority. A lab-signed bundle is
+  explicitly refused by the production install path.
+
+The PowerShell scripts are still covered by `hashes.sha256`, not Authenticode.
+The signed lab channel does not make them production artifacts and is labelled
+**LAB-SIGNED - dedicated device only** throughout the bundle.

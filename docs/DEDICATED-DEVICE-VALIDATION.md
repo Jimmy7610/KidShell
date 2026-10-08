@@ -185,6 +185,62 @@ It refuses a dirty working tree, so commit first. The bundle appears under
       silently.
 - [ ] `release-manifest.json` exists and `hashes.sha256` covers it.
 
+#### When the real child MSIX must run: build DedicatedLabSigned
+
+Windows will not register KidShell's executable MSIX for the standard child from
+the unsigned lab channel. For physical app-flow validation, create a local lab
+certificate once on the **development PC**:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\new-lab-signing-certificate.ps1
+```
+
+The script prints the thumbprint and exports only the public certificate to
+`release-artifacts\KidShell-DedicatedLab-Public.cer`. The private key is
+non-exportable and remains in `Cert:\CurrentUser\My`.
+
+Then build with tests and the explicit lab-signing boundary:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-release.ps1 `
+    -LabSign `
+    -CertificateThumbprint <thumbprint>
+```
+
+The bundle is labelled `LABSIGNED`, its release channel is
+`DedicatedLabSigned`, and it contains the public certificate at:
+
+```text
+manifests\KidShell-DedicatedLab-Public.cer
+```
+
+This is **not production signing**. The production install path refuses this
+channel.
+
+On the dedicated test device, while signed in as the administrator, trust that
+public certificate only after the normal dedicated-device interlock is open:
+
+```powershell
+cd <bundle>\install
+
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Trust-KidShellLabCertificate.ps1
+
+# after reviewing the dry run:
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Trust-KidShellLabCertificate.ps1 -Apply
+```
+
+Then sign out, sign in as the configured child, open an ordinary **non-elevated**
+PowerShell and register the real KidShell package for that child:
+
+```powershell
+cd <bundle>\install
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-KidShellAppLab.ps1
+```
+
+That script refuses an administrator, refuses the wrong SID, refuses unsigned
+and production bundles, and requires the MSIX signature to be trusted before it
+calls `Add-AppxPackage`.
+
 ### 4b. Copy it to the dedicated machine
 
 Any way you like — USB, a share, a VM folder. Then, **on the test machine**:

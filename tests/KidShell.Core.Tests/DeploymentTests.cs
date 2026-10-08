@@ -307,6 +307,29 @@ public class ReleaseManifestTests
     }
 
     [Fact]
+    public void Lab_signed_requires_a_signature_and_unsigned_lab_rejects_one()
+    {
+        Assert.Contains(
+            (Valid() with { Channel = ReleaseChannel.DedicatedLabSigned, Signed = false }).Problems(),
+            p => p.Contains("DedicatedLabSigned", StringComparison.Ordinal));
+
+        Assert.Contains(
+            (Valid() with { Channel = ReleaseChannel.DedicatedLabUnsigned, Signed = true }).Problems(),
+            p => p.Contains("DedicatedLabUnsigned", StringComparison.Ordinal));
+
+        Assert.True(
+            (Valid() with { Channel = ReleaseChannel.DedicatedLabSigned, Signed = true }).IsWellFormed);
+    }
+
+    [Fact]
+    public void Production_requires_a_signature()
+    {
+        Assert.Contains(
+            (Valid() with { Channel = ReleaseChannel.Production, Signed = false }).Problems(),
+            p => p.Contains("Production must be signed", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void It_round_trips_through_json()
     {
         var parsed = ReleaseManifest.Parse(Valid().ToJson());
@@ -487,6 +510,27 @@ public class InstallPolicyTests
 
         Assert.Contains(decision.Explanations,
             e => e.Contains("UNSIGNED", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_lab_signed_bundle_is_allowed_only_as_lab_and_says_so_loudly()
+    {
+        var bundle = Bundle() with
+        {
+            Channel = ReleaseChannel.DedicatedLabSigned,
+            Signed = true
+        };
+
+        var lab = InstallPolicy.Decide(bundle, null, "x64", production: false);
+
+        Assert.True(lab.Allowed, string.Join("; ", lab.Explanations));
+        Assert.Contains(lab.Explanations,
+            e => e.Contains("LAB-SIGNED", StringComparison.Ordinal));
+
+        var production = InstallPolicy.Decide(bundle, null, "x64", production: true);
+
+        Assert.False(production.Allowed);
+        Assert.Contains(InstallRefusal.ChannelMismatch, production.Refusals);
     }
 
     [Fact]
