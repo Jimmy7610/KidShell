@@ -32,7 +32,11 @@
     x64 (default) or ARM64.
 
 .PARAMETER Sign
-    Require signing. Fails if no signing material is supplied.
+    Require production signing. Fails if no signing material is supplied.
+
+.PARAMETER LabSign
+    Sign for a dedicated validation device with a local lab certificate.
+    The resulting bundle is channel DedicatedLabSigned and is never production.
 
 .PARAMETER CertificateThumbprint
     Thumbprint of a certificate in Cert:\CurrentUser\My. The private key stays
@@ -64,6 +68,8 @@ param(
     [string] $Platform = 'x64',
 
     [switch] $Sign,
+
+    [switch] $LabSign,
 
     [string] $CertificateThumbprint,
 
@@ -214,18 +220,36 @@ if ($CertificateThumbprint) {
     }
 }
 
-if ($Sign -and -not $signingCertificate) {
-    # The boundary. "Sign if you can" is how unsigned builds reach users.
-    Stop-Build '-Sign was requested but no signing material was supplied. Pass -CertificateThumbprint.'
+if ($Sign -and $LabSign) {
+    Stop-Build '-Sign and -LabSign are mutually exclusive. Production signing and lab signing are different trust boundaries.'
 }
 
-if ($Sign -and $SkipTests) {
+if (($Sign -or $LabSign) -and -not $signingCertificate) {
+    # The boundary. "Sign if you can" is how an unsigned build reaches users.
+    Stop-Build 'Signing was requested but no signing material was supplied. Pass -CertificateThumbprint.'
+}
+
+if ($CertificateThumbprint -and -not ($Sign -or $LabSign)) {
+    Stop-Build 'A certificate was supplied without -Sign or -LabSign. Refusing to guess which trust boundary you intended.'
+}
+
+if (($Sign -or $LabSign) -and $SkipTests) {
     Stop-Build 'Refusing to sign a build whose tests were skipped.'
 }
 
-$willSign = $null -ne $signingCertificate
+$willSign = [bool]($Sign -or $LabSign)
 
-if (-not $willSign) {
+if ($willSign) {
+    $manifestPublisher = $identity.GetAttribute('Publisher')
+    if (-not [string]::Equals($signingCertificate.Subject, $manifestPublisher, [StringComparison]::OrdinalIgnoreCase)) {
+        Stop-Build "The certificate subject does not match Package.appxmanifest Publisher. Certificate: '$($signingCertificate.Subject)'. Manifest: '$manifestPublisher'."
+    }
+
+    if ($LabSign) {
+        Write-Host '  LAB SIGNING selected. This certificate grants no production release authority.' -ForegroundColor Yellow
+    }
+}
+else {
     Write-Host '  No signing material. The package will be marked UNSIGNED.' -ForegroundColor Yellow
 }
 
@@ -287,7 +311,7 @@ foreach ($component in @('KidShell.SecurityHost', 'KidShell.Watchdog')) {
 Write-Step 'Packaging'
 
 $stamp = $startedAt.ToString('yyyyMMdd-HHmmss')
-$label = if ($willSign) { $productVersion } else { "$productVersion-UNSIGNED" }
+$label = if ($LabSign) { "$productVersion-LABSIGNED" } elseif ($Sign) { $productVersion } else { "$productVersion-UNSIGNED" }
 $outputDir = Join-Path $artifactRoot "kidshell-$label-$Platform-$stamp"
 
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
@@ -426,13 +450,24 @@ if ($willSign) {
         # /fd SHA256 and an RFC 3161 timestamp, so the signature outlives the
         # certificate. The thumbprint selects the key from the store; no
         # password is passed, echoed or logged.
-        & $signtool.FullName sign `
-            /sha1 $CertificateThumbprint `
-            /fd SHA256 `
-            /tr $TimestampUrl `
-            /td SHA256 `
-            /q `
-            $file.FullName
+        if ($LabSign) {
+            # A local lab certificate deliberately has no production timestamp
+            # dependency. Its short validity is part of the lab boundary.
+            & $signtool.FullName sign `
+                /sha1 $CertificateThumbprint `
+                /fd SHA256 `
+                /q `
+                $file.FullName
+        }
+        else {
+            & $signtool.FullName sign `
+                /sha1 $CertificateThumbprint `
+                /fd SHA256 `
+                /tr $TimestampUrl `
+                /td SHA256 `
+                /q `
+                $file.FullName
+        }
 
         if ($LASTEXITCODE -ne 0) { Stop-Build "Signing failed for $($file.Name)." }
 
@@ -487,7 +522,7 @@ Write-Step 'Writing the release manifest'
 $manifestsOut = Join-Path $outputDir 'manifests'
 New-Item -ItemType Directory -Path $manifestsOut -Force | Out-Null
 
-$channel = if ($willSign) { 'Production' } else { 'DedicatedLabUnsigned' }
+$channel = if ($LabSign) { 'DedicatedLabSigned' } elseif ($Sign) { 'Production' } else { 'DedicatedLabUnsigned' }
 
 $componentEntries = @()
 
@@ -633,9 +668,18 @@ Build:        $Configuration / $Platform
 Commit:       $commit$(if ($isDirty) { ' (DIRTY WORKING TREE)' })
 Built:        $($startedAt.ToString('yyyy-MM-dd HH:mm:ss'))
 Tests:        $testCount
-Signing:      $(if ($willSign) { "signed and verified ($($signedFiles.Count) file(s))" } else { 'UNSIGNED' })
+Signing:      $(if ($LabSign) { "LAB-SIGNED and verified ($($signedFiles.Count) file(s))" } elseif ($Sign) { "PRODUCTION-SIGNED and verified ($($signedFiles.Count) file(s))" } else { 'UNSIGNED' })
 
-$(if (-not $willSign) { @"
+$(if ($LabSign) { @"
+THIS BUILD IS LAB-SIGNED AND IS NOT FIT FOR DISTRIBUTION
+--------------------------------------------------------
+The signature exists only so Windows can deploy the real KidShell package on
+a dedicated validation device. The certificate is a local test trust anchor,
+not production release authority.
+
+Do not give this package or its lab certificate to anybody as a release.
+"@ } elseif (-not $willSign) { @"
+
 THIS BUILD IS NOT SIGNED AND IS NOT FIT FOR DISTRIBUTION
 --------------------------------------------------------
 An unsigned MSIX installs only on a machine with developer mode enabled or
@@ -702,7 +746,7 @@ Write-Host '========================================================' -Foregroun
 Write-Host "  Configuration : $Configuration / $Platform"
 Write-Host "  Commit        : $commit$(if ($isDirty) { ' (dirty)' })"
 Write-Host "  Tests         : $testCount"
-Write-Host "  Signing       : $(if ($willSign) { 'signed and verified' } else { 'UNSIGNED - development only' })"
+Write-Host "  Signing       : $(if ($LabSign) { 'LAB-SIGNED - dedicated device only' } elseif ($Sign) { 'PRODUCTION-SIGNED' } else { 'UNSIGNED - development only' })"
 Write-Host "  Artifacts     : $outputDir"
 Write-Host "  Files         : $($files.Count)"
 Write-Host "  Elapsed       : $($elapsed.ToString('mm\:ss'))"
@@ -713,7 +757,11 @@ if ($warnings.Count -gt 0) {
     foreach ($warning in $warnings) { Write-Host "    - $warning" -ForegroundColor Yellow }
 }
 
-if (-not $willSign) {
+if ($LabSign) {
+    Write-Host ''
+    Write-Host '  THIS BUILD IS LAB-SIGNED AND IS NOT FIT FOR DISTRIBUTION.' -ForegroundColor Yellow
+}
+elseif (-not $willSign) {
     Write-Host ''
     Write-Host '  THIS BUILD IS UNSIGNED AND IS NOT FIT FOR DISTRIBUTION.' -ForegroundColor Yellow
 }
