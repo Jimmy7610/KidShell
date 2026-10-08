@@ -447,7 +447,22 @@ if ($willSign) {
 
     if (-not $signtool) { Stop-Build 'signtool.exe was not found. Install the Windows SDK.' }
 
-    $toSign = Get-ChildItem -Path $outputDir -Include *.msix, *.msixbundle, *.exe -Recurse -File
+    $toSign = if ($LabSign) {
+        # Lab signing exists to make the real MSIX deployable on the dedicated
+        # child account. It does not pretend the standalone service binaries
+        # have production Authenticode signatures.
+        @(
+            Get-ChildItem -Path (Join-Path $outputDir 'package') -Include *.msix, *.msixbundle -Recurse -File |
+                Where-Object { $_.Name -like 'KidShell.App_*' }
+        )
+    }
+    else {
+        @(Get-ChildItem -Path $outputDir -Include *.msix, *.msixbundle, *.exe -Recurse -File)
+    }
+
+    if ($toSign.Count -eq 0) {
+        Stop-Build 'Signing was requested but there were no KidShell files to sign.'
+    }
 
     foreach ($file in $toSign) {
         # /fd SHA256 and an RFC 3161 timestamp, so the signature outlives the
@@ -629,11 +644,11 @@ $signingManifest = [ordered]@{
     note          = 'Everything listed here must carry a valid Authenticode or MSIX signature before this bundle may be called a production release.'
     mustBeSigned  = @(
         [ordered]@{ what = 'MSIX / MSIXBundle'; how = 'SignTool with the package certificate'; signed = [bool]$willSign }
-        [ordered]@{ what = 'KidShell.SecurityHost.exe'; how = 'Authenticode'; signed = [bool]$willSign }
-        [ordered]@{ what = 'KidShell.Watchdog.exe'; how = 'Authenticode'; signed = [bool]$willSign }
-        [ordered]@{ what = 'KidShell.Recovery.exe'; how = 'Authenticode'; signed = [bool]$willSign }
-        [ordered]@{ what = 'KidShell.DeviceValidation.exe'; how = 'Authenticode'; signed = [bool]$willSign }
-        [ordered]@{ what = 'every managed DLL shipped beside those executables'; how = 'Authenticode'; signed = [bool]$willSign }
+        [ordered]@{ what = 'KidShell.SecurityHost.exe'; how = 'Authenticode'; signed = [bool]$Sign }
+        [ordered]@{ what = 'KidShell.Watchdog.exe'; how = 'Authenticode'; signed = [bool]$Sign }
+        [ordered]@{ what = 'KidShell.Recovery.exe'; how = 'Authenticode'; signed = [bool]$Sign }
+        [ordered]@{ what = 'KidShell.DeviceValidation.exe'; how = 'Authenticode'; signed = [bool]$Sign }
+        [ordered]@{ what = 'every managed DLL shipped beside those executables'; how = 'Authenticode'; signed = $false }
     )
     notSignedAndWhy = @(
         [ordered]@{
