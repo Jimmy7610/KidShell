@@ -6,7 +6,7 @@ namespace KidShell.Core.Deployment;
 /// <summary>
 /// What a build is allowed to claim about itself.
 ///
-/// THREE CHANNELS, AND NOTHING BETWEEN THEM
+/// FOUR CHANNELS, AND NOTHING BETWEEN THEM
 /// ----------------------------------------
 /// The point of naming them is that a lab build must be impossible to mistake
 /// for a production one. Not hard to mistake - impossible: a different package
@@ -29,10 +29,20 @@ public enum ReleaseChannel
     DedicatedLabUnsigned = 1,
 
     /// <summary>
-    /// A build for other people. Must be signed; an unsigned one cannot be
-    /// installed, not merely discouraged.
+    /// A bundle for a dedicated validation device, signed with a local lab
+    /// certificate whose public half is trusted only on that test device.
+    ///
+    /// Signing here solves Windows package deployment and lets the child
+    /// account run the real MSIX. It does NOT make the bundle a production
+    /// release and must never be treated as one.
     /// </summary>
-    Production = 2
+    DedicatedLabSigned = 2,
+
+    /// <summary>
+    /// A build for other people. Must be signed with production signing
+    /// material; a lab certificate is explicitly the wrong channel.
+    /// </summary>
+    Production = 3
 }
 
 /// <summary>
@@ -197,6 +207,26 @@ public sealed record ReleaseManifest
         if (string.IsNullOrWhiteSpace(Architecture))
         {
             problems.Add("The manifest does not say which architecture it is for.");
+        }
+
+        // Signing and channel are one claim, not two independent flags. A
+        // signed lab bundle is useful precisely because Windows will deploy it,
+        // but calling that Production would turn a local test key into release
+        // authority. Refuse contradictory manifests before install policy even
+        // considers them.
+        if (Channel == ReleaseChannel.DedicatedLabUnsigned && Signed)
+        {
+            problems.Add("DedicatedLabUnsigned cannot claim to be signed.");
+        }
+
+        if (Channel == ReleaseChannel.DedicatedLabSigned && !Signed)
+        {
+            problems.Add("DedicatedLabSigned must be signed.");
+        }
+
+        if (Channel == ReleaseChannel.Production && !Signed)
+        {
+            problems.Add("Production must be signed.");
         }
 
         if (Components.Count == 0)
