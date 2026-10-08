@@ -47,16 +47,9 @@ if (-not $OutputPath) {
     $OutputPath = Join-Path $artifactRoot 'KidShell-DedicatedLab-Public.cer'
 }
 
-function ConvertTo-Hex([byte[]] $Bytes) {
-    return ([BitConverter]::ToString($Bytes)).Replace('-', '')
-}
-
-$expectedSubject = New-Object Security.Cryptography.X509Certificates.X500DistinguishedName($publisher)
-$expectedSubjectHex = ConvertTo-Hex $expectedSubject.RawData
-
 $existing = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object {
-        (ConvertTo-Hex $_.SubjectName.RawData) -eq $expectedSubjectHex -and
+        [string]::Equals($_.Subject.Trim(), $publisher.Trim(), [StringComparison]::OrdinalIgnoreCase) -and
         $_.HasPrivateKey -and
         $_.NotAfter -gt (Get-Date).AddDays(30)
     } |
@@ -74,7 +67,7 @@ else {
         throw 'The lab certificate could not be created.'
     }
 
-    if ((ConvertTo-Hex $cert.SubjectName.RawData) -ne $expectedSubjectHex) {
+    if (-not [string]::Equals($cert.Subject.Trim(), $publisher.Trim(), [StringComparison]::OrdinalIgnoreCase)) {
         Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
         throw "The generated certificate subject '$($cert.Subject)' does not match the package Publisher '$publisher'."
     }

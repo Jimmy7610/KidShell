@@ -249,11 +249,15 @@ $willSign = [bool]($Sign -or $LabSign)
 
 if ($willSign) {
     $manifestPublisher = $identity.GetAttribute('Publisher')
-    $expectedSubject = New-Object Security.Cryptography.X509Certificates.X500DistinguishedName($manifestPublisher)
-    $expectedSubjectHex = ([BitConverter]::ToString($expectedSubject.RawData)).Replace('-', '')
-    $actualSubjectHex = ([BitConverter]::ToString($signingCertificate.SubjectName.RawData)).Replace('-', '')
 
-    if ($actualSubjectHex -ne $expectedSubjectHex) {
+    # MSIX requires the certificate subject to match the manifest Publisher.
+    # Compare the canonical subject text that Windows exposes rather than DER
+    # bytes: equivalent X.500 names can have different binary encodings even
+    # when Windows renders them identically.
+    if (-not [string]::Equals(
+        $signingCertificate.Subject.Trim(),
+        $manifestPublisher.Trim(),
+        [StringComparison]::OrdinalIgnoreCase)) {
         Stop-Build "The certificate subject does not match Package.appxmanifest Publisher. Certificate: '$($signingCertificate.Subject)'. Manifest: '$manifestPublisher'."
     }
 
