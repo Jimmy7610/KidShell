@@ -341,6 +341,12 @@ public static class InstallPolicy
                 "THIS BUNDLE IS UNSIGNED. It is a dedicated-lab build: automatic updates stay off, " +
                 "and nothing about it may be presented as a release.");
         }
+        else if (manifest.Channel == ReleaseChannel.DedicatedLabSigned)
+        {
+            explanations.Add(
+                "THIS BUNDLE IS LAB-SIGNED. The signature exists only so Windows can deploy the real package " +
+                "on a dedicated test device. It is not production signing and nothing about it may be presented as a release.");
+        }
 
         return new InstallDecision(action, [], explanations);
     }
