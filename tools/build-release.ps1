@@ -57,6 +57,9 @@
 
 .EXAMPLE
     .\tools\build-release.ps1 -Sign -CertificateThumbprint ABC123... -TimestampUrl http://timestamp.digicert.com
+
+.EXAMPLE
+    .\tools\build-release.ps1 -LabSign -CertificateThumbprint ABC123...
 #>
 
 [CmdletBinding()]
@@ -522,6 +525,14 @@ Write-Step 'Writing the release manifest'
 $manifestsOut = Join-Path $outputDir 'manifests'
 New-Item -ItemType Directory -Path $manifestsOut -Force | Out-Null
 
+if ($LabSign) {
+    # Only the public half travels with the bundle. The private key remains
+    # non-exported in the developer's CurrentUser certificate store.
+    $labCerPath = Join-Path $manifestsOut 'KidShell-DedicatedLab-Public.cer'
+    Export-Certificate -Cert $signingCertificate -FilePath $labCerPath -Force | Out-Null
+    Write-Host "  Lab public certificate: $labCerPath"
+}
+
 $channel = if ($LabSign) { 'DedicatedLabSigned' } elseif ($Sign) { 'Production' } else { 'DedicatedLabUnsigned' }
 
 $componentEntries = @()
@@ -704,7 +715,7 @@ WHAT IS IN HERE
   install\               Install-KidShellLab.ps1 and friends
   device-validation\     The dedicated-device validation toolset
   docs\                  The documentation, including the runbook below
-  manifests\             signing-manifest.json: what must be signed for production
+  manifests\             signing metadata$(if ($LabSign) { ' + the PUBLIC lab certificate' } else { '' })
   release-manifest.json  What is in this bundle, with a digest for every file
   hashes.sha256          Covers everything above, including release-manifest.json
 
