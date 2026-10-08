@@ -227,9 +227,14 @@ if ($Sign -and $LabSign) {
     Stop-Build '-Sign and -LabSign are mutually exclusive. Production signing and lab signing are different trust boundaries.'
 }
 
-if (($Sign -or $LabSign) -and -not $signingCertificate) {
-    # The boundary. "Sign if you can" is how an unsigned build reaches users.
-    Stop-Build 'Signing was requested but no signing material was supplied. Pass -CertificateThumbprint.'
+if ($Sign -and -not $signingCertificate) {
+    # Keep this exact production guard wording: CI asserts the release boundary
+    # has not been weakened during refactoring.
+    Stop-Build '-Sign was requested but no signing material was supplied. Pass -CertificateThumbprint.'
+}
+
+if ($LabSign -and -not $signingCertificate) {
+    Stop-Build '-LabSign was requested but no signing material was supplied. Pass -CertificateThumbprint.'
 }
 
 if ($CertificateThumbprint -and -not ($Sign -or $LabSign)) {
