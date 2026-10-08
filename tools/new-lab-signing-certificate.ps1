@@ -48,11 +48,11 @@ if (-not $OutputPath) {
 }
 
 $expectedSubject = [Security.Cryptography.X509Certificates.X500DistinguishedName]::new($publisher)
-$expectedSubjectHex = [Convert]::ToHexString($expectedSubject.RawData)
+$expectedSubjectHex = [BitConverter]::ToString($expectedSubject.RawData)
 
 $existing = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object {
-        [Convert]::ToHexString($_.SubjectName.RawData) -eq $expectedSubjectHex -and
+        [BitConverter]::ToString($_.SubjectName.RawData).Replace('-', '').Replace('-', '') -eq $expectedSubjectHex -and
         $_.HasPrivateKey -and
         $_.NotAfter -gt (Get-Date).AddDays(30)
     } |
@@ -70,7 +70,7 @@ else {
         throw 'The lab certificate could not be created.'
     }
 
-    if ([Convert]::ToHexString($cert.SubjectName.RawData) -ne $expectedSubjectHex) {
+    if ([BitConverter]::ToString($cert.SubjectName.RawData) -ne $expectedSubjectHex).Replace('-', '') {
         Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
         throw "The generated certificate subject '$($cert.Subject)' does not match the package Publisher '$publisher'."
     }
