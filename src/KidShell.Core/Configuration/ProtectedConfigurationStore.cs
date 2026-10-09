@@ -252,7 +252,13 @@ public sealed class ProtectedConfigurationStore : IConfigurationStore
         // A first save on a fresh device also records that the device has been
         // set up, so the next absence of a policy is a missing policy rather
         // than another first run.
-        if (string.IsNullOrWhiteSpace(_reader.Read(ProtectedDocument.ProvisioningMarker)))
+        // With an approval channel the privileged commit writes the
+        // provisioning marker as part of the administrator-approved
+        // transition. Asking the child-side writer to do it afterwards is
+        // both redundant and correctly refused by the broker authorization
+        // matrix. Direct/development stores still own their marker here.
+        if (_approval is null &&
+            string.IsNullOrWhiteSpace(_reader.Read(ProtectedDocument.ProvisioningMarker)))
         {
             var marker = _writer.MarkProvisioned(
                 ProtectedPolicyTrustEvaluator.MarkerDocument(_time.GetUtcNow()));
