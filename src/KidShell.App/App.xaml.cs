@@ -77,15 +77,39 @@ public partial class App : Application
         // usable: a development build falls back loudly, a production build
         // refuses.
         //
-        // The two implementations are told apart by the BUILD, not by
-        // configuration, for the same reason the runtime environment is.
+        // Prefer the real protected store whenever this machine has actually
+        // been provisioned, even in a Debug build. Installed pilot/debug
+        // packages run under the child account too, so choosing LocalState
+        // purely from #if DEBUG would silently make child-writable data
+        // authoritative on a machine whose ProgramData boundary is healthy.
+        //
+        // Development LocalState remains available only when the real store
+        // is not trustworthy and this is a development build. Release never
+        // falls back.
         services.AddSingleton<IProtectedStateReader>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
+            var protectedReader = new FileSystemProtectedStateReader(
+                AppPaths.ProtectedPolicyDirectory, logger);
 
-            return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
-                ? new DevelopmentProtectedStateReader(AppPaths.DevelopmentPolicyDirectory, logger)
-                : new FileSystemProtectedStateReader(AppPaths.ProtectedPolicyDirectory, logger);
+            if (protectedReader.Probe().IsTrustworthy)
+            {
+                logger.Info("Storage",
+                    "Using the provisioned machine-wide protected policy store.");
+                return protectedReader;
+            }
+
+            if (sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment)
+            {
+                logger.Warning("Storage",
+                    "The machine-wide protected store is not trustworthy; " +
+                    "this development build is using the child-writable development store.");
+
+                return new DevelopmentProtectedStateReader(
+                    AppPaths.DevelopmentPolicyDirectory, logger);
+            }
+
+            return protectedReader;
         });
 
         // OPSV RETEST 2, FINDING 01. Reading and writing are different
@@ -117,10 +141,15 @@ public partial class App : Application
         services.AddSingleton<IProtectedStateWriter>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
+            var reader = sp.GetRequiredService<IProtectedStateReader>();
 
-            return sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment
+            // The writer must follow the selected storage boundary, not the
+            // build configuration. A Debug package on a provisioned child PC
+            // therefore uses the LocalSystem broker just like Release.
+            return reader is DevelopmentProtectedStateReader
                 ? sp.GetRequiredService<DirectProtectedStateWriter>()
-                : new BrokeredProtectedStateWriter(sp.GetRequiredService<IElevatedBrokerClient>(), logger);
+                : new BrokeredProtectedStateWriter(
+                    sp.GetRequiredService<IElevatedBrokerClient>(), logger);
         });
 
         // Who may turn a proposed policy into the live one.
@@ -135,8 +164,9 @@ public partial class App : Application
         services.AddSingleton<IParentPolicyApprovalChannel>(sp =>
         {
             var logger = sp.GetRequiredService<IKidShellLogger>();
+            var reader = sp.GetRequiredService<IProtectedStateReader>();
 
-            if (sp.GetRequiredService<IRuntimeEnvironment>().IsDevelopment)
+            if (reader is DevelopmentProtectedStateReader)
             {
                 return new LocalParentPolicyApprovalChannel(
                     sp.GetRequiredService<DirectProtectedStateWriter>(), logger);
