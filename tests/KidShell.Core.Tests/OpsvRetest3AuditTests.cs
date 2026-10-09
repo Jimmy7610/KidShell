@@ -167,6 +167,35 @@ public class OpsvRetest3AuditTests
     }
 
     [Fact]
+    public void Finding_2_an_approved_first_policy_marks_the_machine_provisioned()
+    {
+        var store = new InMemoryPrivilegedStore();
+        var time = new FakeTimeProvider(Start);
+        var server = new ElevatedBrokerServer(
+            store, new ParentCapabilityRegistry(time), new RecordingLogger(), time);
+
+        var document = JsonSerializer.Serialize(new ParentPolicyDocument(), Camel);
+
+        var staged = server.Handle(
+            Line(Request(ElevatedOperationKind.StageParentPolicy) with
+            {
+                ProtectedPayload = document
+            }), Child);
+
+        Assert.True(staged.Success);
+
+        var committed = server.Handle(
+            Line(Request(ElevatedOperationKind.CommitStagedParentPolicy) with
+            {
+                ExpectedDigest = staged.StagedDigest
+            }), Administrator);
+
+        Assert.True(committed.Success);
+        Assert.Contains("\"provisioned\":true",
+            store.Read(ProtectedDocument.ProvisioningMarker)!);
+    }
+
+    [Fact]
     public void Finding_2_a_refused_approval_leaves_the_user_file_byte_for_byte()
     {
         // The transaction property, re-checked now that the authoritative
