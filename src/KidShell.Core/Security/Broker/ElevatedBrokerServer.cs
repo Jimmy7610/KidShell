@@ -304,6 +304,28 @@ public sealed class ElevatedBrokerServer : IElevatedBrokerServer
             return Reject(SafeId(request), BrokerFailureReason.StorageFailed, "Kunde inte sparas.");
         }
 
+        // Provisioning is an administrator-approved transition, not a child
+        // operation. The child may stage a first policy, but only this
+        // elevated commit is allowed to turn "never set up" into
+        // "provisioned". Keeping the marker here preserves the authorization
+        // matrix while ensuring a successful first onboarding does not leave
+        // the machine looking unprovisioned.
+        if (string.IsNullOrWhiteSpace(_store.Read(ProtectedDocument.ProvisioningMarker)))
+        {
+            var marker = _store.Write(
+                ProtectedDocument.ProvisioningMarker,
+                ProtectedPolicyTrustEvaluator.MarkerDocument(_time.GetUtcNow()));
+
+            if (!marker.Success)
+            {
+                _logger.Error(BrokerAudit.Category,
+                    "The parent policy was committed, but the provisioning marker could not be written.");
+
+                return Reject(SafeId(request), BrokerFailureReason.StorageFailed,
+                    "Policyn sparades men enheten kunde inte markeras som konfigurerad.");
+            }
+        }
+
         _store.ClearStaged();
 
         // The rules changed, so every authority that was granted under the
